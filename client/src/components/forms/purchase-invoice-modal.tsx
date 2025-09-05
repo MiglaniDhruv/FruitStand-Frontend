@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -29,14 +29,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { Plus, Trash2 } from "lucide-react";
 
-const invoiceSchema = z.object({
-  vendorId: z.string().min(1, "Vendor is required"),
-  invoiceDate: z.string().min(1, "Invoice date is required"),
+const invoiceItemSchema = z.object({
   item: z.string().min(1, "Item is required"),
   weight: z.string().min(1, "Weight is required"),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
+});
+
+const invoiceSchema = z.object({
+  vendorId: z.string().min(1, "Vendor is required"),
+  invoiceDate: z.string().min(1, "Invoice date is required"),
+  items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   commission: z.string().default("0"),
   labour: z.string().default("0"),
   truckFreight: z.string().default("0"),
@@ -68,10 +73,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      item: "",
-      weight: "",
-      rate: "",
-      amount: "0",
+      items: [{ item: "", weight: "", rate: "", amount: "0" }],
       commission: "0",
       labour: "0",
       truckFreight: "0",
@@ -86,6 +88,11 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       totalLessExpenses: "0",
       netAmount: "0",
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "items",
   });
 
   const { data: vendors } = useQuery<any[]>({
@@ -117,8 +124,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   });
 
   // Watch form fields for calculations
-  const watchedWeight = form.watch("weight");
-  const watchedRate = form.watch("rate");
+  const watchedItems = form.watch("items");
   const watchedCommission = form.watch("commission");
   const watchedLabour = form.watch("labour");
   const watchedTruckFreight = form.watch("truckFreight");
@@ -130,9 +136,11 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const watchedAdvance = form.watch("advance");
 
   // Calculate derived values
-  const weight = parseFloat(watchedWeight) || 0;
-  const rate = parseFloat(watchedRate) || 0;
-  const amount = weight * rate;
+  const totalSelling = watchedItems.reduce((sum, item) => {
+    const weight = parseFloat(item.weight) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    return sum + (weight * rate);
+  }, 0);
   
   const commission = parseFloat(watchedCommission) || 0;
   const labour = parseFloat(watchedLabour) || 0;
@@ -145,27 +153,32 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const advance = parseFloat(watchedAdvance) || 0;
   
   const totalExpense = commission + labour + truckFreight + crateFreight + postExpenses + draftExpenses + vatav + otherExpenses + advance;
-  const totalSelling = amount;
   const totalLessExpenses = totalSelling - totalExpense;
   const netAmount = totalLessExpenses;
 
   // Update calculated fields when dependent values change
   useEffect(() => {
-    form.setValue("amount", amount.toFixed(2));
+    // Update individual item amounts
+    watchedItems.forEach((item, index) => {
+      const weight = parseFloat(item.weight) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const amount = weight * rate;
+      if (parseFloat(item.amount) !== amount) {
+        form.setValue(`items.${index}.amount`, amount.toFixed(2));
+      }
+    });
+
+    // Update totals
     form.setValue("totalExpense", totalExpense.toFixed(2));
     form.setValue("totalSelling", totalSelling.toFixed(2));
     form.setValue("totalLessExpenses", totalLessExpenses.toFixed(2));
     form.setValue("netAmount", netAmount.toFixed(2));
-  }, [form, amount, totalExpense, totalSelling, totalLessExpenses, netAmount]);
+  }, [form, watchedItems, totalExpense, totalSelling, totalLessExpenses, netAmount]);
 
   const onSubmit = (data: InvoiceFormData) => {
     const invoiceData = {
       vendorId: data.vendorId,
       invoiceDate: data.invoiceDate,
-      item: data.item,
-      weight: parseFloat(data.weight),
-      rate: parseFloat(data.rate),
-      amount: parseFloat(data.amount),
       commission: parseFloat(data.commission),
       labour: parseFloat(data.labour),
       truckFreight: parseFloat(data.truckFreight),
@@ -181,14 +194,30 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       netAmount: parseFloat(data.netAmount),
       balanceAmount: parseFloat(data.netAmount), // Initially balance equals net amount
       status: "Unpaid",
+      items: data.items.map(item => ({
+        item: item.item,
+        weight: parseFloat(item.weight),
+        rate: parseFloat(item.rate),
+        amount: parseFloat(item.amount),
+      })),
     };
 
     createInvoiceMutation.mutate(invoiceData);
   };
 
+  const addItem = () => {
+    append({ item: "", weight: "", rate: "", amount: "0" });
+  };
+
+  const removeItem = (index: number) => {
+    if (fields.length > 1) {
+      remove(index);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Purchase Invoice</DialogTitle>
         </DialogHeader>
@@ -200,7 +229,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               <CardHeader>
                 <CardTitle className="text-lg">Invoice Details</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="vendorId"
@@ -239,87 +268,121 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                     </FormItem>
                   )}
                 />
-
-                <FormField
-                  control={form.control}
-                  name="item"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Item *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter item name" {...field} data-testid="input-item" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </CardContent>
             </Card>
 
-            {/* Quantity & Rate */}
+            {/* Invoice Items */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Quantity & Rate</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Invoice Items</CardTitle>
+                  <Button 
+                    type="button" 
+                    onClick={addItem}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    data-testid="button-add-item"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Item</span>
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <FormField
-                  control={form.control}
-                  name="weight"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Weight *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          {...field} 
-                          data-testid="input-weight" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <CardContent className="space-y-4">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border rounded-lg">
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.item`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Item *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter item name" 
+                              {...field} 
+                              data-testid={`input-item-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="rate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Rate (₹) *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          {...field} 
-                          data-testid="input-rate" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.weight`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Weight *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-weight-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Amount (₹)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          readOnly 
-                          className="bg-muted"
-                          data-testid="input-amount" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.rate`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rate (₹) *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-rate-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.amount`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Amount (₹)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              readOnly 
+                              className="bg-muted"
+                              data-testid={`input-amount-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeItem(index)}
+                        disabled={fields.length === 1}
+                        data-testid={`button-remove-item-${index}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 

@@ -120,8 +120,7 @@ export default function PurchaseInvoices() {
                     <TableHead>Invoice Number</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Weight</TableHead>
+                    <TableHead>Items</TableHead>
                     <TableHead>Net Amount</TableHead>
                     <TableHead>Paid Amount</TableHead>
                     <TableHead>Balance</TableHead>
@@ -132,13 +131,13 @@ export default function PurchaseInvoices() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         Loading invoices...
                       </TableCell>
                     </TableRow>
                   ) : filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         No invoices found
                       </TableCell>
                     </TableRow>
@@ -148,8 +147,7 @@ export default function PurchaseInvoices() {
                         <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
                         <TableCell>{invoice.vendor.name}</TableCell>
                         <TableCell>{format(new Date(invoice.invoiceDate), "MMM dd, yyyy")}</TableCell>
-                        <TableCell>{invoice.item}</TableCell>
-                        <TableCell>{parseFloat(invoice.weight).toFixed(2)}</TableCell>
+                        <TableCell>{invoice.items?.length || 0} items</TableCell>
                         <TableCell>₹{parseFloat(invoice.netAmount).toLocaleString('en-IN')}</TableCell>
                         <TableCell>₹{parseFloat(invoice.paidAmount).toLocaleString('en-IN')}</TableCell>
                         <TableCell>₹{parseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</TableCell>

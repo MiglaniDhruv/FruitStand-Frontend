@@ -70,7 +70,7 @@ export default function InvoiceDetailsModal({ invoice, open, onOpenChange }: Inv
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <FileText className="h-5 w-5" />
@@ -107,79 +107,106 @@ export default function InvoiceDetailsModal({ invoice, open, onOpenChange }: Inv
                   <div>
                     <h4 className="font-medium text-foreground mb-2">Invoice Details</h4>
                     <p className="text-sm text-muted-foreground">Date: {format(new Date(invoice.invoiceDate), "PPP")}</p>
-                    <p className="text-sm text-muted-foreground">Item: {invoice.item}</p>
-                    <p className="text-sm text-muted-foreground">Weight: {parseFloat(invoice.weight).toFixed(2)}</p>
-                    <p className="text-sm text-muted-foreground">Rate: ₹{parseFloat(invoice.rate).toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">Total Items: {invoice.items?.length || 0}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Item & Amount Details */}
+            {/* Invoice Items */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Package className="h-5 w-5" />
-                  <span>Transaction Details</span>
+                  <span>Invoice Items</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-foreground">Item Information</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm"><span className="font-medium">Item:</span> {invoice.item}</p>
-                      <p className="text-sm"><span className="font-medium">Weight:</span> {parseFloat(invoice.weight).toFixed(2)}</p>
-                      <p className="text-sm"><span className="font-medium">Rate:</span> ₹{parseFloat(invoice.rate).toFixed(2)}</p>
-                      <p className="text-sm"><span className="font-medium">Amount:</span> ₹{parseFloat(invoice.amount).toLocaleString('en-IN')}</p>
+                {invoice.items && invoice.items.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead>Weight</TableHead>
+                        <TableHead>Rate (₹)</TableHead>
+                        <TableHead>Amount (₹)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoice.items.map((item: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.item}</TableCell>
+                          <TableCell>{parseFloat(item.weight).toFixed(2)}</TableCell>
+                          <TableCell>₹{parseFloat(item.rate).toFixed(2)}</TableCell>
+                          <TableCell>₹{parseFloat(item.amount).toLocaleString('en-IN')}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="border-t-2">
+                        <TableCell colSpan={3} className="font-semibold">Total Selling:</TableCell>
+                        <TableCell className="font-semibold">₹{parseFloat(invoice.totalSelling).toLocaleString('en-IN')}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">No items found for this invoice</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Expense Breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Expense Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Commission:</span>
+                      <span>₹{parseFloat(invoice.commission).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Labour:</span>
+                      <span>₹{parseFloat(invoice.labour).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Truck Freight:</span>
+                      <span>₹{parseFloat(invoice.truckFreight).toFixed(2)}</span>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-foreground">Expense Breakdown</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Commission:</span>
-                        <span>₹{parseFloat(invoice.commission).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Labour:</span>
-                        <span>₹{parseFloat(invoice.labour).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Truck Freight:</span>
-                        <span>₹{parseFloat(invoice.truckFreight).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Crate Freight:</span>
-                        <span>₹{parseFloat(invoice.crateFreight).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Post Expenses:</span>
-                        <span>₹{parseFloat(invoice.postExpenses).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Draft Expenses:</span>
-                        <span>₹{parseFloat(invoice.draftExpenses).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Vatav:</span>
-                        <span>₹{parseFloat(invoice.vatav).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Other Expenses:</span>
-                        <span>₹{parseFloat(invoice.otherExpenses).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Advance:</span>
-                        <span>₹{parseFloat(invoice.advance).toFixed(2)}</span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-semibold">
-                        <span>Total Expense:</span>
-                        <span>₹{parseFloat(invoice.totalExpense).toFixed(2)}</span>
-                      </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Crate Freight:</span>
+                      <span>₹{parseFloat(invoice.crateFreight).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Post Expenses:</span>
+                      <span>₹{parseFloat(invoice.postExpenses).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Draft Expenses:</span>
+                      <span>₹{parseFloat(invoice.draftExpenses).toFixed(2)}</span>
                     </div>
                   </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Vatav:</span>
+                      <span>₹{parseFloat(invoice.vatav).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Other Expenses:</span>
+                      <span>₹{parseFloat(invoice.otherExpenses).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Advance:</span>
+                      <span>₹{parseFloat(invoice.advance).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+                <Separator className="my-4" />
+                <div className="flex justify-between font-semibold text-lg">
+                  <span>Total Expense:</span>
+                  <span>₹{parseFloat(invoice.totalExpense).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
