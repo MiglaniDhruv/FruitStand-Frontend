@@ -51,10 +51,22 @@ const userSchema = z.object({
   }),
 });
 
+const editUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  name: z.string().min(1, "Name is required"),
+  role: z.enum(["Admin", "Operator", "Accountant"], {
+    required_error: "Role is required",
+  }),
+});
+
 type UserFormData = z.infer<typeof userSchema>;
+type EditUserFormData = z.infer<typeof editUserSchema>;
 
 export default function UserManagement() {
   const [open, setOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -68,13 +80,94 @@ export default function UserManagement() {
     },
   });
 
-  // Note: In a real application, you would have user management APIs
-  // For now, we'll show a demo interface
-  const demoUsers = [
-    { id: "1", username: "admin", name: "System Administrator", role: "Admin" },
-    { id: "2", username: "operator1", name: "John Doe", role: "Operator" },
-    { id: "3", username: "accountant1", name: "Jane Smith", role: "Accountant" },
-  ];
+  const editForm = useForm<EditUserFormData>({
+    resolver: zodResolver(editUserSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+      name: "",
+      role: "Operator",
+    },
+  });
+
+  const { data: users, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: UserFormData) => {
+      const response = await authenticatedApiRequest("POST", "/api/users", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "User created",
+        description: "User has been created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setOpen(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: EditUserFormData }) => {
+      const response = await authenticatedApiRequest("PUT", `/api/users/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "User updated",
+        description: "User has been updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditingUser(null);
+      editForm.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await authenticatedApiRequest("DELETE", `/api/users/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "User deleted",
+        description: "User has been deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredUsers = users?.filter((user: any) => {
+    const searchString = searchTerm.toLowerCase();
+    return (
+      user.username.toLowerCase().includes(searchString) ||
+      user.name.toLowerCase().includes(searchString) ||
+      user.role.toLowerCase().includes(searchString)
+    );
+  }) || [];
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -89,14 +182,35 @@ export default function UserManagement() {
     }
   };
 
-  const onSubmit = (data: UserFormData) => {
-    // In a real app, this would call the API
-    toast({
-      title: "User created",
-      description: `User ${data.name} has been created successfully`,
+  const handleEdit = (user: any) => {
+    setEditingUser(user);
+    editForm.reset({
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      password: "", // Don't prefill password
     });
-    setOpen(false);
-    form.reset();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this user?")) {
+      deleteUserMutation.mutate(id);
+    }
+  };
+
+  const onSubmit = (data: UserFormData) => {
+    createUserMutation.mutate(data);
+  };
+
+  const onEditSubmit = (data: EditUserFormData) => {
+    if (!editingUser) return;
+    
+    // Only include password if it's provided
+    const updateData = data.password 
+      ? data 
+      : { username: data.username, name: data.name, role: data.role };
+    
+    updateUserMutation.mutate({ id: editingUser.id, data: updateData });
   };
 
   return (
@@ -133,7 +247,7 @@ export default function UserManagement() {
                         <FormItem>
                           <FormLabel>Username</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter username" {...field} />
+                            <Input placeholder="Enter username" {...field} data-testid="input-username" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -146,7 +260,7 @@ export default function UserManagement() {
                         <FormItem>
                           <FormLabel>Password</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="Enter password" {...field} />
+                            <Input type="password" placeholder="Enter password" {...field} data-testid="input-password" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -159,7 +273,7 @@ export default function UserManagement() {
                         <FormItem>
                           <FormLabel>Full Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter full name" {...field} />
+                            <Input placeholder="Enter full name" {...field} data-testid="input-name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -173,7 +287,7 @@ export default function UserManagement() {
                           <FormLabel>Role</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger data-testid="select-role">
                                 <SelectValue placeholder="Select role" />
                               </SelectTrigger>
                             </FormControl>
@@ -188,10 +302,12 @@ export default function UserManagement() {
                       )}
                     />
                     <div className="flex justify-end space-x-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
                         Cancel
                       </Button>
-                      <Button type="submit">Create User</Button>
+                      <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-create-user">
+                        {createUserMutation.isPending ? "Creating..." : "Create User"}
+                      </Button>
                     </div>
                   </form>
                 </Form>
@@ -204,35 +320,47 @@ export default function UserManagement() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                System Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  System Users
+                </CardTitle>
+                <div className="relative">
                   <Input
                     placeholder="Search users..."
-                    className="max-w-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-64"
                     data-testid="input-search-users"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    {demoUsers.length} users total
-                  </p>
                 </div>
-
-                <Table>
-                  <TableHeader>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Full Name</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
                     <TableRow>
-                      <TableHead>Username</TableHead>
-                      <TableHead>Full Name</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableCell colSpan={4} className="text-center py-8">
+                        Loading users...
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {demoUsers.map((user) => (
+                  ) : filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                        No users found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user: any) => (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                         <TableCell className="font-medium">{user.username}</TableCell>
                         <TableCell>{user.name}</TableCell>
@@ -246,6 +374,7 @@ export default function UserManagement() {
                             <Button 
                               size="sm" 
                               variant="outline"
+                              onClick={() => handleEdit(user)}
                               data-testid={`button-edit-user-${user.id}`}
                             >
                               <Edit className="h-4 w-4" />
@@ -253,6 +382,7 @@ export default function UserManagement() {
                             <Button 
                               size="sm" 
                               variant="outline"
+                              onClick={() => handleDelete(user.id)}
                               data-testid={`button-delete-user-${user.id}`}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -260,14 +390,96 @@ export default function UserManagement() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </main>
       </div>
+
+      {/* Edit User Modal */}
+      <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter username" {...field} data-testid="input-edit-username" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password (leave empty to keep current)</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Enter new password" {...field} data-testid="input-edit-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter full name" {...field} data-testid="input-edit-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-role">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Admin">Admin</SelectItem>
+                        <SelectItem value="Operator">Operator</SelectItem>
+                        <SelectItem value="Accountant">Accountant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setEditingUser(null)} data-testid="button-cancel-edit">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-update-user">
+                  {updateUserMutation.isPending ? "Updating..." : "Update User"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

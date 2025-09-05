@@ -35,6 +35,11 @@ const navigationItems = [
     icon: Sprout,
   },
   {
+    title: "Stock",
+    href: "/stock",
+    icon: Boxes,
+  },
+  {
     title: "Purchase Invoices",
     href: "/purchase-invoices",
     icon: DollarSign,
@@ -43,11 +48,6 @@ const navigationItems = [
     title: "Payments",
     href: "/payments",
     icon: CreditCard,
-  },
-  {
-    title: "Stock",
-    href: "/stock",
-    icon: Boxes,
   },
   {
     title: "Ledgers",
@@ -97,7 +97,9 @@ export default function Sidebar() {
             <Apple className="text-primary-foreground text-lg" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">APMC System</h1>
+            <h1 className="text-lg font-semibold text-foreground">
+              APMC System
+            </h1>
             <p className="text-sm text-muted-foreground">Commission Merchant</p>
           </div>
         </div>
@@ -128,7 +130,7 @@ export default function Sidebar() {
                     "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
                     isActive
                       ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent",
                   )}
                   data-testid={`link-${item.href.replace("/", "") || "dashboard"}`}
                 >
@@ -152,7 +154,7 @@ export default function Sidebar() {
                         "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
                         isActive
                           ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
                       )}
                       data-testid={`link-${item.href.replace("/", "")}`}
                     >

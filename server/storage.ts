@@ -26,9 +26,12 @@ import bcrypt from "bcrypt";
 
 export interface IStorage {
   // User management
+  getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
   
   // Vendor management
   getVendors(): Promise<Vendor[]>;
@@ -157,6 +160,10 @@ export class MemStorage implements IStorage {
   }
 
   // User methods
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -175,6 +182,24 @@ export class MemStorage implements IStorage {
     };
     this.users.set(user.id, user);
     return user;
+  }
+
+  async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updateDataWithHashedPassword = { ...updateData };
+    if (updateData.password) {
+      updateDataWithHashedPassword.password = await bcrypt.hash(updateData.password, 10);
+    }
+    
+    const updated = { ...user, ...updateDataWithHashedPassword };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return this.users.delete(id);
   }
 
   // Vendor methods
