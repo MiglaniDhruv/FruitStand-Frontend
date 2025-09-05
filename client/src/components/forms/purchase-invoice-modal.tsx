@@ -159,7 +159,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
     const invoiceData = {
       vendorId: data.vendorId,
-      invoiceDate: new Date(data.invoiceDate + "T00:00:00.000Z"),
+      invoiceDate: data.invoiceDate,
       grossAmount: calculatedGrossAmount.toFixed(2),
       commissionRate: data.commissionRate,
       commissionAmount: calculatedCommissionAmount.toFixed(2),
