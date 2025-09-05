@@ -13,6 +13,9 @@ import PurchaseInvoices from "@/pages/purchase-invoices";
 import Payments from "@/pages/payments";
 import Stock from "@/pages/stock";
 import Ledgers from "@/pages/ledgers";
+import Reports from "@/pages/reports";
+import Users from "@/pages/users";
+import Settings from "@/pages/settings";
 import { authService } from "@/lib/auth";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -54,6 +57,9 @@ function Router() {
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
       <Route path="/stock" component={() => <ProtectedRoute component={Stock} />} />
       <Route path="/ledgers" component={() => <ProtectedRoute component={Ledgers} />} />
+      <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
+      <Route path="/users" component={() => <ProtectedRoute component={Users} />} />
+      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
       <Route component={NotFound} />
     </Switch>
   );
