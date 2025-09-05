@@ -12,7 +12,14 @@ import {
   insertPurchaseInvoiceSchema,
   insertInvoiceItemSchema,
   insertPaymentSchema,
-  insertStockSchema
+  insertStockSchema,
+  insertRetailerSchema,
+  insertSalesInvoiceSchema,
+  insertSalesInvoiceItemSchema,
+  insertSalesPaymentSchema,
+  insertCrateTransactionSchema,
+  insertExpenseCategorySchema,
+  insertExpenseSchema
 } from "@shared/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
@@ -445,6 +452,303 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(safeUser);
     } catch (error) {
       res.status(500).json({ message: "Failed to update user permissions" });
+    }
+  });
+
+  // Retailer routes
+  app.get("/api/retailers", authenticateToken, async (req, res) => {
+    try {
+      const retailers = await storage.getRetailers();
+      res.json(retailers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch retailers" });
+    }
+  });
+
+  app.get("/api/retailers/:id", authenticateToken, async (req, res) => {
+    try {
+      const retailer = await storage.getRetailer(req.params.id);
+      if (!retailer) {
+        return res.status(404).json({ message: "Retailer not found" });
+      }
+      res.json(retailer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch retailer" });
+    }
+  });
+
+  app.post("/api/retailers", authenticateToken, async (req, res) => {
+    try {
+      const retailerData = insertRetailerSchema.parse(req.body);
+      const retailer = await storage.createRetailer(retailerData);
+      res.status(201).json(retailer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create retailer" });
+    }
+  });
+
+  app.put("/api/retailers/:id", authenticateToken, async (req, res) => {
+    try {
+      const retailerData = insertRetailerSchema.partial().parse(req.body);
+      const retailer = await storage.updateRetailer(req.params.id, retailerData);
+      if (!retailer) {
+        return res.status(404).json({ message: "Retailer not found" });
+      }
+      res.json(retailer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update retailer" });
+    }
+  });
+
+  app.delete("/api/retailers/:id", authenticateToken, async (req, res) => {
+    try {
+      const success = await storage.deleteRetailer(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Retailer not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete retailer" });
+    }
+  });
+
+  // Sales Invoice routes
+  app.get("/api/sales-invoices", authenticateToken, async (req, res) => {
+    try {
+      const invoices = await storage.getSalesInvoices();
+      res.json(invoices);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch sales invoices" });
+    }
+  });
+
+  app.get("/api/sales-invoices/:id", authenticateToken, async (req, res) => {
+    try {
+      const invoice = await storage.getSalesInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ message: "Sales invoice not found" });
+      }
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch sales invoice" });
+    }
+  });
+
+  app.post("/api/sales-invoices", authenticateToken, async (req, res) => {
+    try {
+      const { invoice, items } = req.body;
+      
+      if (!invoice || !items || !Array.isArray(items)) {
+        return res.status(400).json({ message: "Invoice and items are required" });
+      }
+
+      const invoiceData = insertSalesInvoiceSchema.parse(invoice);
+      const itemsData = items.map((item: any) => insertSalesInvoiceItemSchema.parse(item));
+      
+      const createdInvoice = await storage.createSalesInvoice(invoiceData, itemsData);
+      res.status(201).json(createdInvoice);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create sales invoice" });
+    }
+  });
+
+  // Sales Payment routes
+  app.get("/api/sales-payments", authenticateToken, async (req, res) => {
+    try {
+      const payments = await storage.getSalesPayments();
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch sales payments" });
+    }
+  });
+
+  app.get("/api/sales-payments/invoice/:invoiceId", authenticateToken, async (req, res) => {
+    try {
+      const payments = await storage.getSalesPaymentsByInvoice(req.params.invoiceId);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch payments for invoice" });
+    }
+  });
+
+  app.post("/api/sales-payments", authenticateToken, async (req, res) => {
+    try {
+      const paymentData = insertSalesPaymentSchema.parse(req.body);
+      const payment = await storage.createSalesPayment(paymentData);
+      res.status(201).json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create sales payment" });
+    }
+  });
+
+  // Crate Transaction routes
+  app.get("/api/crate-transactions", authenticateToken, async (req, res) => {
+    try {
+      const transactions = await storage.getCrateTransactions();
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch crate transactions" });
+    }
+  });
+
+  app.get("/api/crate-transactions/retailer/:retailerId", authenticateToken, async (req, res) => {
+    try {
+      const transactions = await storage.getCrateTransactionsByRetailer(req.params.retailerId);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch crate transactions for retailer" });
+    }
+  });
+
+  app.post("/api/crate-transactions", authenticateToken, async (req, res) => {
+    try {
+      const transactionData = insertCrateTransactionSchema.parse(req.body);
+      const transaction = await storage.createCrateTransaction(transactionData);
+      res.status(201).json(transaction);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create crate transaction" });
+    }
+  });
+
+  // Expense Category routes
+  app.get("/api/expense-categories", authenticateToken, async (req, res) => {
+    try {
+      const categories = await storage.getExpenseCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch expense categories" });
+    }
+  });
+
+  app.get("/api/expense-categories/:id", authenticateToken, async (req, res) => {
+    try {
+      const category = await storage.getExpenseCategory(req.params.id);
+      if (!category) {
+        return res.status(404).json({ message: "Expense category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch expense category" });
+    }
+  });
+
+  app.post("/api/expense-categories", authenticateToken, async (req, res) => {
+    try {
+      const categoryData = insertExpenseCategorySchema.parse(req.body);
+      const category = await storage.createExpenseCategory(categoryData);
+      res.status(201).json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create expense category" });
+    }
+  });
+
+  app.put("/api/expense-categories/:id", authenticateToken, async (req, res) => {
+    try {
+      const categoryData = insertExpenseCategorySchema.partial().parse(req.body);
+      const category = await storage.updateExpenseCategory(req.params.id, categoryData);
+      if (!category) {
+        return res.status(404).json({ message: "Expense category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update expense category" });
+    }
+  });
+
+  app.delete("/api/expense-categories/:id", authenticateToken, async (req, res) => {
+    try {
+      const success = await storage.deleteExpenseCategory(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Expense category not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete expense category" });
+    }
+  });
+
+  // Expense routes
+  app.get("/api/expenses", authenticateToken, async (req, res) => {
+    try {
+      const expenses = await storage.getExpenses();
+      res.json(expenses);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch expenses" });
+    }
+  });
+
+  app.get("/api/expenses/:id", authenticateToken, async (req, res) => {
+    try {
+      const expense = await storage.getExpense(req.params.id);
+      if (!expense) {
+        return res.status(404).json({ message: "Expense not found" });
+      }
+      res.json(expense);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch expense" });
+    }
+  });
+
+  app.post("/api/expenses", authenticateToken, async (req, res) => {
+    try {
+      const expenseData = insertExpenseSchema.parse(req.body);
+      const expense = await storage.createExpense(expenseData);
+      res.status(201).json(expense);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create expense" });
+    }
+  });
+
+  // Enhanced Ledger routes
+  app.get("/api/ledgers/retailer/:retailerId", authenticateToken, async (req, res) => {
+    try {
+      const ledger = await storage.getRetailerLedger(req.params.retailerId);
+      res.json(ledger);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch retailer ledger" });
+    }
+  });
+
+  app.get("/api/ledgers/udhaar", authenticateToken, async (req, res) => {
+    try {
+      const udhaaarBook = await storage.getUdhaaarBook();
+      res.json(udhaaarBook);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch udhaar book" });
+    }
+  });
+
+  app.get("/api/ledgers/crates", authenticateToken, async (req, res) => {
+    try {
+      const retailerId = req.query.retailerId as string;
+      const crateLedger = await storage.getCrateLedger(retailerId);
+      res.json(crateLedger);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch crate ledger" });
     }
   });
 

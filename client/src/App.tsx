@@ -8,9 +8,13 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Vendors from "@/pages/vendors";
+import Retailers from "@/pages/retailers";
 import Items from "@/pages/items";
 import PurchaseInvoices from "@/pages/purchase-invoices";
+import SalesInvoices from "@/pages/sales-invoices";
 import Payments from "@/pages/payments";
+import Expenses from "@/pages/expenses";
+import Crates from "@/pages/crates";
 import Stock from "@/pages/stock";
 import Ledgers from "@/pages/ledgers";
 import Reports from "@/pages/reports";
@@ -52,9 +56,13 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/vendors" component={() => <ProtectedRoute component={Vendors} />} />
+      <Route path="/retailers" component={() => <ProtectedRoute component={Retailers} />} />
       <Route path="/items" component={() => <ProtectedRoute component={Items} />} />
       <Route path="/purchase-invoices" component={() => <ProtectedRoute component={PurchaseInvoices} />} />
+      <Route path="/sales-invoices" component={() => <ProtectedRoute component={SalesInvoices} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
+      <Route path="/expenses" component={() => <ProtectedRoute component={Expenses} />} />
+      <Route path="/crates" component={() => <ProtectedRoute component={Crates} />} />
       <Route path="/stock" component={() => <ProtectedRoute component={Stock} />} />
       <Route path="/ledgers" component={() => <ProtectedRoute component={Ledgers} />} />
       <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />

@@ -19,7 +19,24 @@ import {
   type BankbookEntry,
   type InvoiceWithItems,
   type PaymentWithDetails,
-  type StockWithItem
+  type StockWithItem,
+  type Retailer,
+  type InsertRetailer,
+  type SalesInvoice,
+  type InsertSalesInvoice,
+  type SalesInvoiceItem,
+  type InsertSalesInvoiceItem,
+  type SalesPayment,
+  type InsertSalesPayment,
+  type CrateTransaction,
+  type InsertCrateTransaction,
+  type ExpenseCategory,
+  type InsertExpenseCategory,
+  type Expense,
+  type InsertExpense,
+  type SalesInvoiceWithDetails,
+  type ExpenseWithCategory,
+  type CrateTransactionWithRetailer
 } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@shared/permissions";
 import { randomUUID } from "crypto";
@@ -71,10 +88,47 @@ export interface IStorage {
   getStockByItem(itemId: string): Promise<Stock | undefined>;
   updateStock(itemId: string, stock: Partial<InsertStock>): Promise<Stock>;
   
+  // Retailer management
+  getRetailers(): Promise<Retailer[]>;
+  getRetailer(id: string): Promise<Retailer | undefined>;
+  createRetailer(retailer: InsertRetailer): Promise<Retailer>;
+  updateRetailer(id: string, retailer: Partial<InsertRetailer>): Promise<Retailer | undefined>;
+  deleteRetailer(id: string): Promise<boolean>;
+  
+  // Sales invoice management
+  getSalesInvoices(): Promise<SalesInvoiceWithDetails[]>;
+  getSalesInvoice(id: string): Promise<SalesInvoiceWithDetails | undefined>;
+  createSalesInvoice(invoice: InsertSalesInvoice, items: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails>;
+  
+  // Sales payment management
+  getSalesPayments(): Promise<SalesPayment[]>;
+  getSalesPaymentsByInvoice(invoiceId: string): Promise<SalesPayment[]>;
+  createSalesPayment(payment: InsertSalesPayment): Promise<SalesPayment>;
+  
+  // Crate management
+  getCrateTransactions(): Promise<CrateTransactionWithRetailer[]>;
+  getCrateTransactionsByRetailer(retailerId: string): Promise<CrateTransaction[]>;
+  createCrateTransaction(transaction: InsertCrateTransaction): Promise<CrateTransaction>;
+  
+  // Expense category management
+  getExpenseCategories(): Promise<ExpenseCategory[]>;
+  getExpenseCategory(id: string): Promise<ExpenseCategory | undefined>;
+  createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
+  updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined>;
+  deleteExpenseCategory(id: string): Promise<boolean>;
+  
+  // Expense management
+  getExpenses(): Promise<ExpenseWithCategory[]>;
+  getExpense(id: string): Promise<ExpenseWithCategory | undefined>;
+  createExpense(expense: InsertExpense): Promise<ExpenseWithCategory>;
+  
   // Ledger and book management
   getCashbook(): Promise<CashbookEntry[]>;
   getBankbook(bankAccountId?: string): Promise<BankbookEntry[]>;
   getVendorLedger(vendorId: string): Promise<any[]>;
+  getRetailerLedger(retailerId: string): Promise<any[]>;
+  getUdhaaarBook(): Promise<any[]>;
+  getCrateLedger(retailerId?: string): Promise<any[]>;
   
   // Dashboard KPIs
   getDashboardKPIs(): Promise<any>;
@@ -91,8 +145,16 @@ export class MemStorage implements IStorage {
   private stock: Map<string, Stock> = new Map();
   private cashbook: Map<string, CashbookEntry> = new Map();
   private bankbook: Map<string, BankbookEntry> = new Map();
+  private retailers: Map<string, Retailer> = new Map();
+  private salesInvoices: Map<string, SalesInvoice> = new Map();
+  private salesInvoiceItems: Map<string, SalesInvoiceItem> = new Map();
+  private salesPayments: Map<string, SalesPayment> = new Map();
+  private crateTransactions: Map<string, CrateTransaction> = new Map();
+  private expenseCategories: Map<string, ExpenseCategory> = new Map();
+  private expenses: Map<string, Expense> = new Map();
   
   private invoiceCounter = 1;
+  private salesInvoiceCounter = 1;
 
   constructor() {
     this.initializeDefaultData();
@@ -160,6 +222,44 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.bankAccounts.set(bank1.id, bank1);
+
+    // Create sample retailers
+    const retailer1: Retailer = {
+      id: randomUUID(),
+      name: "Raj Retail Store",
+      contactPerson: "Raj Patel",
+      phone: "9876543211",
+      address: "Shop No. 15, Market Complex",
+      gstNumber: "27ABCDE1234G1Z6",
+      panNumber: "ABCDE1234G",
+      balance: "0.00",
+      udhaaarBalance: "0.00",
+      shortfallBalance: "0.00",
+      crateBalance: 0,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.retailers.set(retailer1.id, retailer1);
+
+    // Create sample expense categories
+    const expenseCategories = [
+      { name: "Transport", description: "Transportation and logistics costs" },
+      { name: "Labor", description: "Labor and workforce expenses" },
+      { name: "Market Fee", description: "Market and commission fees" },
+      { name: "Utilities", description: "Electricity, water, and utilities" },
+      { name: "Office Expenses", description: "Stationary, office supplies" },
+    ];
+
+    expenseCategories.forEach(cat => {
+      const category: ExpenseCategory = {
+        id: randomUUID(),
+        name: cat.name,
+        description: cat.description,
+        isActive: true,
+        createdAt: new Date(),
+      };
+      this.expenseCategories.set(category.id, category);
+    });
   }
 
   // User methods
@@ -658,6 +758,474 @@ export class MemStorage implements IStorage {
       stockValue: `₹${stockValue.toLocaleString('en-IN')}`,
       totalStockKgs: `${totalKgs.toFixed(0)} kg`,
     };
+  }
+
+  // Retailer methods
+  async getRetailers(): Promise<Retailer[]> {
+    return Array.from(this.retailers.values()).filter(r => r.isActive);
+  }
+
+  async getRetailer(id: string): Promise<Retailer | undefined> {
+    return this.retailers.get(id);
+  }
+
+  async createRetailer(insertRetailer: InsertRetailer): Promise<Retailer> {
+    const retailer: Retailer = {
+      id: randomUUID(),
+      ...insertRetailer,
+      balance: "0.00",
+      udhaaarBalance: "0.00",
+      shortfallBalance: "0.00",
+      crateBalance: 0,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.retailers.set(retailer.id, retailer);
+    return retailer;
+  }
+
+  async updateRetailer(id: string, updateData: Partial<InsertRetailer>): Promise<Retailer | undefined> {
+    const retailer = this.retailers.get(id);
+    if (!retailer) return undefined;
+
+    const updated = { ...retailer, ...updateData };
+    this.retailers.set(id, updated);
+    return updated;
+  }
+
+  async deleteRetailer(id: string): Promise<boolean> {
+    const retailer = this.retailers.get(id);
+    if (!retailer) return false;
+
+    retailer.isActive = false;
+    this.retailers.set(id, retailer);
+    return true;
+  }
+
+  // Sales invoice methods
+  async getSalesInvoices(): Promise<SalesInvoiceWithDetails[]> {
+    const invoices = Array.from(this.salesInvoices.values());
+    return invoices.map(invoice => {
+      const retailer = this.retailers.get(invoice.retailerId)!;
+      const items = Array.from(this.salesInvoiceItems.values()).filter(item => item.invoiceId === invoice.id);
+      const payments = Array.from(this.salesPayments.values()).filter(payment => payment.invoiceId === invoice.id);
+      return {
+        ...invoice,
+        retailer,
+        items,
+        payments,
+      };
+    }).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getSalesInvoice(id: string): Promise<SalesInvoiceWithDetails | undefined> {
+    const invoice = this.salesInvoices.get(id);
+    if (!invoice) return undefined;
+
+    const retailer = this.retailers.get(invoice.retailerId)!;
+    const items = Array.from(this.salesInvoiceItems.values()).filter(item => item.invoiceId === invoice.id);
+    const payments = Array.from(this.salesPayments.values()).filter(payment => payment.invoiceId === invoice.id);
+    
+    return {
+      ...invoice,
+      retailer,
+      items,
+      payments,
+    };
+  }
+
+  async createSalesInvoice(insertInvoice: InsertSalesInvoice, items: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails> {
+    const invoiceNumber = `SI${this.salesInvoiceCounter.toString().padStart(4, '0')}`;
+    this.salesInvoiceCounter++;
+
+    const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.amount.toString()), 0);
+    
+    const invoice: SalesInvoice = {
+      id: randomUUID(),
+      ...insertInvoice,
+      invoiceNumber,
+      totalAmount: totalAmount.toFixed(2),
+      paidAmount: "0.00",
+      balanceAmount: totalAmount.toFixed(2),
+      udhaaarAmount: "0.00",
+      shortfallAmount: "0.00",
+      status: "Unpaid",
+      createdAt: new Date(),
+    };
+
+    this.salesInvoices.set(invoice.id, invoice);
+
+    // Create invoice items
+    const invoiceItems = items.map(item => {
+      const invoiceItem: SalesInvoiceItem = {
+        id: randomUUID(),
+        ...item,
+        invoiceId: invoice.id,
+        createdAt: new Date(),
+      };
+      this.salesInvoiceItems.set(invoiceItem.id, invoiceItem);
+      return invoiceItem;
+    });
+
+    // Update stock (decrease quantities)
+    for (const item of items) {
+      const stock = await this.getStockByItem(item.itemId);
+      if (stock) {
+        const currentCrates = parseFloat(stock.quantityInCrates);
+        const currentKgs = parseFloat(stock.quantityInKgs);
+        const saleQuantity = parseFloat(item.quantity.toString());
+
+        if (item.unit === "Crates") {
+          await this.updateStock(item.itemId, {
+            quantityInCrates: (currentCrates - saleQuantity).toFixed(2),
+          });
+        } else if (item.unit === "Kgs") {
+          await this.updateStock(item.itemId, {
+            quantityInKgs: (currentKgs - saleQuantity).toFixed(2),
+          });
+        }
+      }
+    }
+
+    const retailer = this.retailers.get(invoice.retailerId)!;
+    return {
+      ...invoice,
+      retailer,
+      items: invoiceItems,
+      payments: [],
+    };
+  }
+
+  // Sales payment methods
+  async getSalesPayments(): Promise<SalesPayment[]> {
+    return Array.from(this.salesPayments.values()).sort((a, b) => 
+      new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+    );
+  }
+
+  async getSalesPaymentsByInvoice(invoiceId: string): Promise<SalesPayment[]> {
+    return Array.from(this.salesPayments.values()).filter(p => p.invoiceId === invoiceId);
+  }
+
+  async createSalesPayment(insertPayment: InsertSalesPayment): Promise<SalesPayment> {
+    const payment: SalesPayment = {
+      id: randomUUID(),
+      ...insertPayment,
+      createdAt: new Date(),
+    };
+
+    this.salesPayments.set(payment.id, payment);
+
+    // Update invoice payment status
+    const invoice = this.salesInvoices.get(payment.invoiceId);
+    if (invoice) {
+      const paidAmount = parseFloat(invoice.paidAmount) + parseFloat(payment.amount.toString());
+      const balanceAmount = parseFloat(invoice.totalAmount) - paidAmount;
+      
+      invoice.paidAmount = paidAmount.toFixed(2);
+      invoice.balanceAmount = balanceAmount.toFixed(2);
+      
+      if (balanceAmount <= 0) {
+        invoice.status = "Paid";
+      } else if (paidAmount > 0) {
+        invoice.status = "Partially Paid";
+      }
+
+      this.salesInvoices.set(invoice.id, invoice);
+    }
+
+    // Update retailer balance
+    const retailer = this.retailers.get(payment.retailerId);
+    if (retailer) {
+      const currentBalance = parseFloat(retailer.balance);
+      retailer.balance = (currentBalance - parseFloat(payment.amount.toString())).toFixed(2);
+      this.retailers.set(retailer.id, retailer);
+    }
+
+    // Update ledgers
+    await this.updateLedgersForSalesPayment(payment);
+
+    return payment;
+  }
+
+  // Crate transaction methods
+  async getCrateTransactions(): Promise<CrateTransactionWithRetailer[]> {
+    const transactions = Array.from(this.crateTransactions.values());
+    return transactions.map(transaction => {
+      const retailer = this.retailers.get(transaction.retailerId)!;
+      return {
+        ...transaction,
+        retailer,
+      };
+    }).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getCrateTransactionsByRetailer(retailerId: string): Promise<CrateTransaction[]> {
+    return Array.from(this.crateTransactions.values()).filter(t => t.retailerId === retailerId);
+  }
+
+  async createCrateTransaction(insertTransaction: InsertCrateTransaction): Promise<CrateTransaction> {
+    const transaction: CrateTransaction = {
+      id: randomUUID(),
+      ...insertTransaction,
+      createdAt: new Date(),
+    };
+
+    this.crateTransactions.set(transaction.id, transaction);
+
+    // Update retailer crate balance
+    const retailer = this.retailers.get(transaction.retailerId);
+    if (retailer) {
+      if (transaction.transactionType === "Issue") {
+        retailer.crateBalance += transaction.quantity;
+      } else if (transaction.transactionType === "Return") {
+        retailer.crateBalance -= transaction.quantity;
+      }
+      this.retailers.set(retailer.id, retailer);
+    }
+
+    return transaction;
+  }
+
+  // Expense category methods
+  async getExpenseCategories(): Promise<ExpenseCategory[]> {
+    return Array.from(this.expenseCategories.values()).filter(c => c.isActive);
+  }
+
+  async getExpenseCategory(id: string): Promise<ExpenseCategory | undefined> {
+    return this.expenseCategories.get(id);
+  }
+
+  async createExpenseCategory(insertCategory: InsertExpenseCategory): Promise<ExpenseCategory> {
+    const category: ExpenseCategory = {
+      id: randomUUID(),
+      ...insertCategory,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.expenseCategories.set(category.id, category);
+    return category;
+  }
+
+  async updateExpenseCategory(id: string, updateData: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined> {
+    const category = this.expenseCategories.get(id);
+    if (!category) return undefined;
+
+    const updated = { ...category, ...updateData };
+    this.expenseCategories.set(id, updated);
+    return updated;
+  }
+
+  async deleteExpenseCategory(id: string): Promise<boolean> {
+    const category = this.expenseCategories.get(id);
+    if (!category) return false;
+
+    category.isActive = false;
+    this.expenseCategories.set(id, category);
+    return true;
+  }
+
+  // Expense methods
+  async getExpenses(): Promise<ExpenseWithCategory[]> {
+    const expenses = Array.from(this.expenses.values());
+    return expenses.map(expense => {
+      const category = this.expenseCategories.get(expense.categoryId)!;
+      const bankAccount = expense.bankAccountId ? this.bankAccounts.get(expense.bankAccountId) : undefined;
+      return {
+        ...expense,
+        category,
+        bankAccount,
+      };
+    }).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getExpense(id: string): Promise<ExpenseWithCategory | undefined> {
+    const expense = this.expenses.get(id);
+    if (!expense) return undefined;
+
+    const category = this.expenseCategories.get(expense.categoryId)!;
+    const bankAccount = expense.bankAccountId ? this.bankAccounts.get(expense.bankAccountId) : undefined;
+    
+    return {
+      ...expense,
+      category,
+      bankAccount,
+    };
+  }
+
+  async createExpense(insertExpense: InsertExpense): Promise<ExpenseWithCategory> {
+    const expense: Expense = {
+      id: randomUUID(),
+      ...insertExpense,
+      createdAt: new Date(),
+    };
+
+    this.expenses.set(expense.id, expense);
+
+    // Update ledgers based on payment mode
+    await this.updateLedgersForExpense(expense);
+
+    const category = this.expenseCategories.get(expense.categoryId)!;
+    const bankAccount = expense.bankAccountId ? this.bankAccounts.get(expense.bankAccountId) : undefined;
+
+    return {
+      ...expense,
+      category,
+      bankAccount,
+    };
+  }
+
+  // Enhanced ledger methods
+  async getRetailerLedger(retailerId: string): Promise<any[]> {
+    const invoices = Array.from(this.salesInvoices.values()).filter(i => i.retailerId === retailerId);
+    const payments = Array.from(this.salesPayments.values()).filter(p => p.retailerId === retailerId);
+
+    const ledgerEntries = [
+      ...invoices.map(invoice => ({
+        date: invoice.invoiceDate,
+        description: `Sales Invoice ${invoice.invoiceNumber}`,
+        debit: "0.00",
+        credit: invoice.totalAmount,
+        type: "sales_invoice",
+        reference: invoice.id,
+      })),
+      ...payments.map(payment => ({
+        date: payment.paymentDate,
+        description: `Payment - ${payment.paymentMode}`,
+        debit: payment.amount,
+        credit: "0.00",
+        type: "sales_payment",
+        reference: payment.id,
+      })),
+    ];
+
+    return ledgerEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
+
+  async getUdhaaarBook(): Promise<any[]> {
+    const retailers = Array.from(this.retailers.values());
+    return retailers
+      .filter(retailer => parseFloat(retailer.udhaaarBalance) > 0)
+      .map(retailer => ({
+        retailer,
+        udhaaarBalance: retailer.udhaaarBalance,
+      }));
+  }
+
+  async getCrateLedger(retailerId?: string): Promise<any[]> {
+    let transactions = Array.from(this.crateTransactions.values());
+    
+    if (retailerId) {
+      transactions = transactions.filter(t => t.retailerId === retailerId);
+    }
+
+    return transactions.map(transaction => {
+      const retailer = this.retailers.get(transaction.retailerId)!;
+      return {
+        ...transaction,
+        retailer,
+      };
+    }).sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
+  }
+
+  // Helper method to update ledgers for sales payments
+  private async updateLedgersForSalesPayment(payment: SalesPayment): Promise<void> {
+    if (payment.paymentMode === "Cash") {
+      const cashEntry: CashbookEntry = {
+        id: randomUUID(),
+        date: payment.paymentDate,
+        description: `Sales Payment from ${payment.retailerId}`,
+        debit: payment.amount,
+        credit: "0.00",
+        balance: "0.00", // Will be calculated based on previous entries
+        referenceType: "SalesPayment",
+        referenceId: payment.id,
+        createdAt: new Date(),
+      };
+
+      // Calculate balance (simplified)
+      const previousEntries = Array.from(this.cashbook.values())
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const lastBalance = previousEntries.length > 0 
+        ? parseFloat(previousEntries[previousEntries.length - 1].balance)
+        : 0;
+      cashEntry.balance = (lastBalance + parseFloat(payment.amount.toString())).toFixed(2);
+
+      this.cashbook.set(cashEntry.id, cashEntry);
+    } else if (payment.bankAccountId) {
+      const bankEntry: BankbookEntry = {
+        id: randomUUID(),
+        bankAccountId: payment.bankAccountId,
+        date: payment.paymentDate,
+        description: `Sales Payment from ${payment.retailerId}`,
+        debit: payment.amount,
+        credit: "0.00",
+        balance: "0.00",
+        referenceType: "SalesPayment",
+        referenceId: payment.id,
+        createdAt: new Date(),
+      };
+
+      // Update bank account balance
+      const bankAccount = this.bankAccounts.get(payment.bankAccountId);
+      if (bankAccount) {
+        bankAccount.balance = (parseFloat(bankAccount.balance) + parseFloat(payment.amount.toString())).toFixed(2);
+        this.bankAccounts.set(bankAccount.id, bankAccount);
+        bankEntry.balance = bankAccount.balance;
+      }
+
+      this.bankbook.set(bankEntry.id, bankEntry);
+    }
+  }
+
+  // Helper method to update ledgers for expenses
+  private async updateLedgersForExpense(expense: Expense): Promise<void> {
+    if (expense.paymentMode === "Cash") {
+      const cashEntry: CashbookEntry = {
+        id: randomUUID(),
+        date: expense.paymentDate,
+        description: expense.description,
+        debit: "0.00",
+        credit: expense.amount,
+        balance: "0.00",
+        referenceType: "Expense",
+        referenceId: expense.id,
+        createdAt: new Date(),
+      };
+
+      // Calculate balance (simplified)
+      const previousEntries = Array.from(this.cashbook.values())
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const lastBalance = previousEntries.length > 0 
+        ? parseFloat(previousEntries[previousEntries.length - 1].balance)
+        : 0;
+      cashEntry.balance = (lastBalance - parseFloat(expense.amount.toString())).toFixed(2);
+
+      this.cashbook.set(cashEntry.id, cashEntry);
+    } else if (expense.bankAccountId) {
+      const bankEntry: BankbookEntry = {
+        id: randomUUID(),
+        bankAccountId: expense.bankAccountId,
+        date: expense.paymentDate,
+        description: expense.description,
+        debit: "0.00",
+        credit: expense.amount,
+        balance: "0.00",
+        referenceType: "Expense",
+        referenceId: expense.id,
+        createdAt: new Date(),
+      };
+
+      // Update bank account balance
+      const bankAccount = this.bankAccounts.get(expense.bankAccountId);
+      if (bankAccount) {
+        bankAccount.balance = (parseFloat(bankAccount.balance) - parseFloat(expense.amount.toString())).toFixed(2);
+        this.bankAccounts.set(bankAccount.id, bankAccount);
+        bankEntry.balance = bankAccount.balance;
+      }
+
+      this.bankbook.set(bankEntry.id, bankEntry);
+    }
   }
 }
 

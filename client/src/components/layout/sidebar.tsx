@@ -12,8 +12,12 @@ import {
   CreditCard,
   DollarSign,
   LogOut,
+  Package,
+  Receipt,
   Sprout,
   Settings,
+  Store,
+  TrendingDown,
   Truck,
   User,
   Users,
@@ -34,6 +38,12 @@ const navigationItems = [
     permission: PERMISSIONS.VIEW_VENDORS,
   },
   {
+    title: "Retailers",
+    href: "/retailers",
+    icon: Store,
+    permission: PERMISSIONS.VIEW_VENDORS, // Using VIEW_VENDORS for now, will add specific permission later
+  },
+  {
     title: "Items",
     href: "/items",
     icon: Sprout,
@@ -52,10 +62,28 @@ const navigationItems = [
     permission: PERMISSIONS.VIEW_PURCHASE_INVOICES,
   },
   {
+    title: "Sales Invoices",
+    href: "/sales-invoices",
+    icon: Receipt,
+    permission: PERMISSIONS.VIEW_PURCHASE_INVOICES, // Using existing permission for now
+  },
+  {
     title: "Payments",
     href: "/payments",
     icon: CreditCard,
     permission: PERMISSIONS.VIEW_PAYMENTS,
+  },
+  {
+    title: "Expenses",
+    href: "/expenses",
+    icon: TrendingDown,
+    permission: PERMISSIONS.VIEW_PAYMENTS, // Using existing permission for now
+  },
+  {
+    title: "Crates",
+    href: "/crates",
+    icon: Package,
+    permission: PERMISSIONS.VIEW_STOCK, // Using existing permission for now
   },
   {
     title: "Ledgers",

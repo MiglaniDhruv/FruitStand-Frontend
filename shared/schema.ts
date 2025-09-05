@@ -127,6 +127,96 @@ export const bankbook = pgTable("bankbook", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const retailers = pgTable("retailers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  contactPerson: text("contact_person"),
+  phone: text("phone"),
+  address: text("address"),
+  gstNumber: text("gst_number"),
+  panNumber: text("pan_number"),
+  balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
+  udhaaarBalance: decimal("udhaar_balance", { precision: 10, scale: 2 }).default("0.00"), // Credit balance
+  shortfallBalance: decimal("shortfall_balance", { precision: 10, scale: 2 }).default("0.00"), // Deficit balance
+  crateBalance: integer("crate_balance").default(0), // Number of crates with retailer
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const salesInvoices = pgTable("sales_invoices", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceNumber: text("invoice_number").notNull().unique(),
+  retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
+  invoiceDate: timestamp("invoice_date").notNull(),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0.00"),
+  balanceAmount: decimal("balance_amount", { precision: 10, scale: 2 }).notNull(),
+  udhaaarAmount: decimal("udhaar_amount", { precision: 10, scale: 2 }).default("0.00"), // Credit amount
+  shortfallAmount: decimal("shortfall_amount", { precision: 10, scale: 2 }).default("0.00"), // Deficit amount
+  status: text("status").notNull(), // Paid, Partially Paid, Unpaid
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const salesInvoiceItems = pgTable("sales_invoice_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: uuid("invoice_id").references(() => salesInvoices.id).notNull(),
+  itemId: uuid("item_id").references(() => items.id).notNull(),
+  quantity: decimal("quantity", { precision: 8, scale: 2 }).notNull(),
+  unit: text("unit").notNull(), // Crates, Kgs
+  rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const salesPayments = pgTable("sales_payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: uuid("invoice_id").references(() => salesInvoices.id).notNull(),
+  retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentMode: text("payment_mode").notNull(), // Cash, Bank, UPI, Cheque, PaymentLink
+  paymentDate: timestamp("payment_date").notNull(),
+  bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  chequeNumber: text("cheque_number"),
+  upiReference: text("upi_reference"),
+  paymentLinkId: text("payment_link_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const crateTransactions = pgTable("crate_transactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
+  transactionType: text("transaction_type").notNull(), // Issue, Return
+  quantity: integer("quantity").notNull(), // Number of crates
+  depositAmount: decimal("deposit_amount", { precision: 8, scale: 2 }).default("0.00"),
+  transactionDate: timestamp("transaction_date").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const expenseCategories = pgTable("expense_categories", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const expenses = pgTable("expenses", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  categoryId: uuid("category_id").references(() => expenseCategories.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentMode: text("payment_mode").notNull(), // Cash, Bank, UPI, Cheque
+  paymentDate: timestamp("payment_date").notNull(),
+  bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  chequeNumber: text("cheque_number"),
+  upiReference: text("upi_reference"),
+  description: text("description").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -182,6 +272,67 @@ export const insertStockSchema = createInsertSchema(stock).omit({
   lastUpdated: true,
 });
 
+export const insertRetailerSchema = createInsertSchema(retailers).omit({
+  id: true,
+  balance: true,
+  udhaaarBalance: true,
+  shortfallBalance: true,
+  crateBalance: true,
+  createdAt: true,
+});
+
+export const insertSalesInvoiceSchema = createInsertSchema(salesInvoices, {
+  invoiceDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  invoiceNumber: true,
+  paidAmount: true,
+  balanceAmount: true,
+  udhaaarAmount: true,
+  shortfallAmount: true,
+  status: true,
+  createdAt: true,
+});
+
+export const insertSalesInvoiceItemSchema = createInsertSchema(salesInvoiceItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSalesPaymentSchema = createInsertSchema(salesPayments, {
+  paymentDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCrateTransactionSchema = createInsertSchema(crateTransactions, {
+  transactionDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses, {
+  paymentDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -207,6 +358,27 @@ export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Stock = typeof stock.$inferSelect;
 export type InsertStock = z.infer<typeof insertStockSchema>;
 
+export type Retailer = typeof retailers.$inferSelect;
+export type InsertRetailer = z.infer<typeof insertRetailerSchema>;
+
+export type SalesInvoice = typeof salesInvoices.$inferSelect;
+export type InsertSalesInvoice = z.infer<typeof insertSalesInvoiceSchema>;
+
+export type SalesInvoiceItem = typeof salesInvoiceItems.$inferSelect;
+export type InsertSalesInvoiceItem = z.infer<typeof insertSalesInvoiceItemSchema>;
+
+export type SalesPayment = typeof salesPayments.$inferSelect;
+export type InsertSalesPayment = z.infer<typeof insertSalesPaymentSchema>;
+
+export type CrateTransaction = typeof crateTransactions.$inferSelect;
+export type InsertCrateTransaction = z.infer<typeof insertCrateTransactionSchema>;
+
+export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
+
+export type Expense = typeof expenses.$inferSelect;
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+
 export type CashbookEntry = typeof cashbook.$inferSelect;
 export type BankbookEntry = typeof bankbook.$inferSelect;
 
@@ -226,4 +398,25 @@ export type StockWithItem = Stock & {
   item: Item & {
     vendor: Vendor;
   };
+};
+
+export type SalesInvoiceWithDetails = SalesInvoice & {
+  retailer: Retailer;
+  items: SalesInvoiceItem[];
+  payments: SalesPayment[];
+};
+
+export type SalesPaymentWithDetails = SalesPayment & {
+  invoice: SalesInvoice;
+  retailer: Retailer;
+  bankAccount?: BankAccount;
+};
+
+export type ExpenseWithCategory = Expense & {
+  category: ExpenseCategory;
+  bankAccount?: BankAccount;
+};
+
+export type CrateTransactionWithRetailer = CrateTransaction & {
+  retailer: Retailer;
 };
