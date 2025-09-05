@@ -127,27 +127,45 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   // Update item amounts when quantity or rate changes
   useEffect(() => {
-    watchedItems.forEach((item, index) => {
-      const quantity = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const amount = (quantity * rate).toFixed(2);
-      
-      if (item.amount !== amount) {
-        form.setValue(`items.${index}.amount`, amount, { shouldValidate: true });
+    const subscription = form.watch((value, { name }) => {
+      if (name?.includes('quantity') || name?.includes('rate')) {
+        const items = value.items || [];
+        items.forEach((item: any, index: number) => {
+          const quantity = parseFloat(item?.quantity) || 0;
+          const rate = parseFloat(item?.rate) || 0;
+          const amount = (quantity * rate).toFixed(2);
+          
+          if (item?.amount !== amount) {
+            form.setValue(`items.${index}.amount`, amount);
+          }
+        });
       }
     });
-  }, [watchedItems, form]);
+    
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const onSubmit = (data: InvoiceFormData) => {
+    // Ensure all amounts are properly calculated before submission
+    const calculatedGrossAmount = watchedItems.reduce((sum, item) => {
+      const amount = parseFloat(item.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+    const calculatedCommissionAmount = (calculatedGrossAmount * (parseFloat(watchedCommissionRate) || 0)) / 100;
+    const calculatedFreightCharges = parseFloat(watchedFreightCharges) || 0;
+    const calculatedLaborCharges = parseFloat(watchedLaborCharges) || 0;
+    const calculatedNetPayable = calculatedGrossAmount - calculatedCommissionAmount + calculatedFreightCharges + calculatedLaborCharges;
+
     const invoiceData = {
       vendorId: data.vendorId,
-      invoiceDate: new Date(data.invoiceDate),
-      grossAmount: grossAmount.toFixed(2),
+      invoiceDate: new Date(data.invoiceDate + "T00:00:00.000Z"),
+      grossAmount: calculatedGrossAmount.toFixed(2),
       commissionRate: data.commissionRate,
-      commissionAmount: commissionAmount.toFixed(2),
+      commissionAmount: calculatedCommissionAmount.toFixed(2),
       freightCharges: data.freightCharges,
       laborCharges: data.laborCharges,
-      netPayable: netPayable.toFixed(2),
+      netPayable: calculatedNetPayable.toFixed(2),
     };
 
     const itemsData = data.items.map(item => ({

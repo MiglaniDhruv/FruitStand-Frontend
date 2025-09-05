@@ -151,10 +151,6 @@ export const insertPurchaseInvoiceSchema = createInsertSchema(purchaseInvoices).
   balanceAmount: true,
   status: true,
   createdAt: true,
-}).extend({
-  invoiceDate: z.union([z.string(), z.date()]).transform((val) => {
-    return typeof val === 'string' ? new Date(val) : val;
-  }),
 });
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).omit({
