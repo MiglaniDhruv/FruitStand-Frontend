@@ -162,7 +162,11 @@ export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).omit({
   createdAt: true,
 });
 
-export const insertPaymentSchema = createInsertSchema(payments).omit({
+export const insertPaymentSchema = createInsertSchema(payments, {
+  paymentDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
   id: true,
   createdAt: true,
 });

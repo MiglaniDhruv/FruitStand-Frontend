@@ -38,7 +38,7 @@ const paymentSchema = z.object({
     required_error: "Payment mode is required",
   }),
   paymentDate: z.string().min(1, "Payment date is required"),
-  bankAccountId: z.string().optional(),
+  bankAccountId: z.string().nullable().optional(),
   chequeNumber: z.string().optional(),
   upiReference: z.string().optional(),
   notes: z.string().optional(),
@@ -66,7 +66,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
       amount: "",
       paymentMode: "Cash",
       paymentDate: new Date().toISOString().split('T')[0],
-      bankAccountId: "",
+      bankAccountId: undefined,
       chequeNumber: "",
       upiReference: "",
       notes: "",
@@ -89,10 +89,12 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
-      const response = await authenticatedApiRequest("POST", "/api/payments", {
+      const paymentData = {
         ...data,
-        paymentDate: new Date(data.paymentDate).toISOString(),
-      });
+        paymentDate: data.paymentDate,
+        bankAccountId: data.bankAccountId || null,
+      };
+      const response = await authenticatedApiRequest("POST", "/api/payments", paymentData);
       return response.json();
     },
     onSuccess: () => {
