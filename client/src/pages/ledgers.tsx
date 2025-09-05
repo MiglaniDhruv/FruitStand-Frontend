@@ -30,7 +30,7 @@ import { format } from "date-fns";
 
 export default function Ledgers() {
   const [selectedVendor, setSelectedVendor] = useState("");
-  const [selectedBankAccount, setSelectedBankAccount] = useState("");
+  const [selectedBankAccount, setSelectedBankAccount] = useState("all");
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
@@ -229,7 +229,7 @@ export default function Ledgers() {
                         <SelectValue placeholder="All bank accounts" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Accounts</SelectItem>
+                        <SelectItem value="all">All Accounts</SelectItem>
                         {bankAccounts?.map((account: any) => (
                           <SelectItem key={account.id} value={account.id}>
                             {account.name} - {account.accountNumber}
@@ -254,7 +254,7 @@ export default function Ledgers() {
                     <TableBody>
                       {bankbook && bankbook.length > 0 ? (
                         bankbook
-                          .filter((entry: any) => !selectedBankAccount || entry.bankAccountId === selectedBankAccount)
+                          .filter((entry: any) => selectedBankAccount === "all" || entry.bankAccountId === selectedBankAccount)
                           .map((entry: any) => {
                             const account = bankAccounts?.find((acc: any) => acc.id === entry.bankAccountId);
                             return (
