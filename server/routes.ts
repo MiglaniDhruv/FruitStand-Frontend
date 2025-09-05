@@ -7,7 +7,7 @@ import { z } from "zod";
 import { 
   insertUserSchema,
   insertVendorSchema,
-  insertCommoditySchema,
+  insertItemSchema,
   insertBankAccountSchema,
   insertPurchaseInvoiceSchema,
   insertInvoiceItemSchema,
@@ -329,10 +329,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/stock/:commodityId", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.put("/api/stock/:itemId", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
     try {
       const stockData = insertStockSchema.partial().parse(req.body);
-      const stock = await storage.updateStock(req.params.commodityId, stockData);
+      const stock = await storage.updateStock(req.params.itemId, stockData);
       res.json(stock);
     } catch (error) {
       if (error instanceof z.ZodError) {

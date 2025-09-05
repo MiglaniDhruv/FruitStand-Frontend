@@ -8,7 +8,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Vendors from "@/pages/vendors";
-import Commodities from "@/pages/commodities";
+import Items from "@/pages/items";
 import PurchaseInvoices from "@/pages/purchase-invoices";
 import Payments from "@/pages/payments";
 import Stock from "@/pages/stock";
@@ -52,7 +52,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/vendors" component={() => <ProtectedRoute component={Vendors} />} />
-      <Route path="/commodities" component={() => <ProtectedRoute component={Commodities} />} />
+      <Route path="/items" component={() => <ProtectedRoute component={Items} />} />
       <Route path="/purchase-invoices" component={() => <ProtectedRoute component={PurchaseInvoices} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
       <Route path="/stock" component={() => <ProtectedRoute component={Stock} />} />

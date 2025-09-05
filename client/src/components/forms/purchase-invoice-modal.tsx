@@ -32,7 +32,7 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { Plus, Trash2 } from "lucide-react";
 
 const invoiceItemSchema = z.object({
-  item: z.string().min(1, "Item is required"),
+  itemId: z.string().min(1, "Item is required"),
   weight: z.string().min(1, "Weight is required"),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
@@ -73,7 +73,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      items: [{ item: "", weight: "", rate: "", amount: "0" }],
+      items: [{ itemId: "", weight: "", rate: "", amount: "0" }],
       commission: "0",
       labour: "0",
       truckFreight: "0",
@@ -97,6 +97,10 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
+  });
+
+  const { data: items } = useQuery<any[]>({
+    queryKey: ["/api/items"],
   });
 
   const createInvoiceMutation = useMutation({
@@ -195,7 +199,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       balanceAmount: parseFloat(data.netAmount), // Initially balance equals net amount
       status: "Unpaid",
       items: data.items.map(item => ({
-        item: item.item,
+        itemId: item.itemId,
         weight: parseFloat(item.weight),
         rate: parseFloat(item.rate),
         amount: parseFloat(item.amount),
@@ -206,7 +210,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   };
 
   const addItem = () => {
-    append({ item: "", weight: "", rate: "", amount: "0" });
+    append({ itemId: "", weight: "", rate: "", amount: "0" });
   };
 
   const removeItem = (index: number) => {
@@ -294,17 +298,24 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border rounded-lg">
                     <FormField
                       control={form.control}
-                      name={`items.${index}.item`}
+                      name={`items.${index}.itemId`}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Item *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="Enter item name" 
-                              {...field} 
-                              data-testid={`input-item-${index}`}
-                            />
-                          </FormControl>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid={`select-item-${index}`}>
+                                <SelectValue placeholder="Select item" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {items?.map((item: any) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name} - {item.quality}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

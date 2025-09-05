@@ -21,67 +21,67 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, Edit, Trash2 } from "lucide-react";
-import CommodityForm from "@/components/forms/commodity-form";
+import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 
-export default function Commodities() {
+export default function Items() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [showForm, setShowForm] = useState(false);
-  const [editingCommodity, setEditingCommodity] = useState<any>(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: commodities, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/commodities"],
+  const { data: items, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/items"],
   });
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
   });
 
-  const deleteCommodityMutation = useMutation({
+  const deleteItemMutation = useMutation({
     mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/commodities/${id}`);
+      await authenticatedApiRequest("DELETE", `/api/items/${id}`);
     },
     onSuccess: () => {
       toast({
-        title: "Commodity deleted",
-        description: "Commodity has been deleted successfully",
+        title: "Item deleted",
+        description: "Item has been deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/commodities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/items"] });
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete commodity",
+        description: error instanceof Error ? error.message : "Failed to delete item",
         variant: "destructive",
       });
     },
   });
 
-  const filteredCommodities = commodities?.filter((commodity: any) => {
-    const matchesSearch = commodity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      commodity.quality.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesVendor = selectedVendor === "all" || commodity.vendorId === selectedVendor;
+  const filteredItems = items?.filter((item: any) => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.quality.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesVendor = selectedVendor === "all" || item.vendorId === selectedVendor;
     return matchesSearch && matchesVendor;
   }) || [];
 
-  const handleEdit = (commodity: any) => {
-    setEditingCommodity(commodity);
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
     setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this commodity?")) {
-      deleteCommodityMutation.mutate(id);
+    if (confirm("Are you sure you want to delete this item?")) {
+      deleteItemMutation.mutate(id);
     }
   };
 
   const handleCloseForm = () => {
     setShowForm(false);
-    setEditingCommodity(null);
+    setEditingItem(null);
   };
 
   const getVendorName = (vendorId: string) => {
@@ -98,14 +98,14 @@ export default function Commodities() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Commodities</h2>
+              <h2 className="text-2xl font-semibold text-foreground">Items</h2>
               <p className="text-sm text-muted-foreground">
-                Manage commodity types, qualities, and pricing
+                Manage item types, qualities, and details
               </p>
             </div>
-            <Button onClick={() => setShowForm(true)} data-testid="button-add-commodity">
+            <Button onClick={() => setShowForm(true)} data-testid="button-add-item">
               <Plus className="mr-2 h-4 w-4" />
-              Add Commodity
+              Add Item
             </Button>
           </div>
         </header>
@@ -115,7 +115,7 @@ export default function Commodities() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>All Commodities</CardTitle>
+                <CardTitle>All Items</CardTitle>
                 <div className="flex items-center space-x-4">
                   <Select value={selectedVendor} onValueChange={setSelectedVendor}>
                     <SelectTrigger className="w-48" data-testid="select-vendor-filter">
@@ -133,11 +133,11 @@ export default function Commodities() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                     <Input
-                      placeholder="Search commodities..."
+                      placeholder="Search items..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10 w-64"
-                      data-testid="input-search-commodities"
+                      data-testid="input-search-items"
                     />
                   </div>
                 </div>
@@ -157,25 +157,25 @@ export default function Commodities() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        Loading commodities...
+                      <TableCell colSpan={5} className="text-center py-8">
+                        Loading items...
                       </TableCell>
                     </TableRow>
-                  ) : filteredCommodities.length === 0 ? (
+                  ) : filteredItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        No commodities found
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No items found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredCommodities.map((commodity: any) => (
-                      <TableRow key={commodity.id} data-testid={`commodity-row-${commodity.id}`}>
-                        <TableCell className="font-medium">{commodity.name}</TableCell>
-                        <TableCell>{commodity.quality}</TableCell>
-                        <TableCell>{getVendorName(commodity.vendorId)}</TableCell>
+                    filteredItems.map((item: any) => (
+                      <TableRow key={item.id} data-testid={`item-row-${item.id}`}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{item.quality}</TableCell>
+                        <TableCell>{getVendorName(item.vendorId)}</TableCell>
                         <TableCell>
-                          <Badge variant={commodity.isActive ? "default" : "secondary"}>
-                            {commodity.isActive ? "Active" : "Inactive"}
+                          <Badge variant={item.isActive ? "default" : "secondary"}>
+                            {item.isActive ? "Active" : "Inactive"}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -183,16 +183,16 @@ export default function Commodities() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleEdit(commodity)}
-                              data-testid={`button-edit-commodity-${commodity.id}`}
+                              onClick={() => handleEdit(item)}
+                              data-testid={`button-edit-item-${item.id}`}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDelete(commodity.id)}
-                              data-testid={`button-delete-commodity-${commodity.id}`}
+                              onClick={() => handleDelete(item.id)}
+                              data-testid={`button-delete-item-${item.id}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -208,10 +208,10 @@ export default function Commodities() {
         </main>
       </div>
 
-      <CommodityForm
+      <ItemForm
         open={showForm}
         onOpenChange={handleCloseForm}
-        commodity={editingCommodity}
+        item={editingItem}
       />
     </div>
   );

@@ -25,7 +25,7 @@ export const vendors = pgTable("vendors", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const commodities = pgTable("commodities", {
+export const items = pgTable("items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   quality: text("quality").notNull(),
@@ -72,7 +72,7 @@ export const purchaseInvoices = pgTable("purchase_invoices", {
 export const invoiceItems = pgTable("invoice_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceId: uuid("invoice_id").references(() => purchaseInvoices.id).notNull(),
-  item: text("item").notNull(),
+  itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -95,7 +95,7 @@ export const payments = pgTable("payments", {
 
 export const stock = pgTable("stock", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  commodityId: uuid("commodity_id").references(() => commodities.id).notNull(),
+  itemId: uuid("item_id").references(() => items.id).notNull(),
   quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).default("0.00"),
   quantityInKgs: decimal("quantity_in_kgs", { precision: 8, scale: 2 }).default("0.00"),
   lastUpdated: timestamp("last_updated").defaultNow(),
@@ -138,7 +138,7 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   createdAt: true,
 });
 
-export const insertCommoditySchema = createInsertSchema(commodities).omit({
+export const insertItemSchema = createInsertSchema(items).omit({
   id: true,
   createdAt: true,
 });
@@ -188,8 +188,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
-export type Commodity = typeof commodities.$inferSelect;
-export type InsertCommodity = z.infer<typeof insertCommoditySchema>;
+export type Item = typeof items.$inferSelect;
+export type InsertItem = z.infer<typeof insertItemSchema>;
 
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
@@ -221,8 +221,8 @@ export type PaymentWithDetails = Payment & {
   bankAccount?: BankAccount;
 };
 
-export type StockWithCommodity = Stock & {
-  commodity: Commodity & {
+export type StockWithItem = Stock & {
+  item: Item & {
     vendor: Vendor;
   };
 };

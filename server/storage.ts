@@ -3,8 +3,8 @@ import {
   type InsertUser,
   type Vendor,
   type InsertVendor,
-  type Commodity,
-  type InsertCommodity,
+  type Item,
+  type InsertItem,
   type BankAccount,
   type InsertBankAccount,
   type PurchaseInvoice,
@@ -19,7 +19,7 @@ import {
   type BankbookEntry,
   type InvoiceWithItems,
   type PaymentWithDetails,
-  type StockWithCommodity
+  type StockWithItem
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -37,13 +37,13 @@ export interface IStorage {
   updateVendor(id: string, vendor: Partial<InsertVendor>): Promise<Vendor | undefined>;
   deleteVendor(id: string): Promise<boolean>;
   
-  // Commodity management
-  getCommodities(): Promise<Commodity[]>;
-  getCommoditiesByVendor(vendorId: string): Promise<Commodity[]>;
-  getCommodity(id: string): Promise<Commodity | undefined>;
-  createCommodity(commodity: InsertCommodity): Promise<Commodity>;
-  updateCommodity(id: string, commodity: Partial<InsertCommodity>): Promise<Commodity | undefined>;
-  deleteCommodity(id: string): Promise<boolean>;
+  // Item management
+  getItems(): Promise<Item[]>;
+  getItemsByVendor(vendorId: string): Promise<Item[]>;
+  getItem(id: string): Promise<Item | undefined>;
+  createItem(item: InsertItem): Promise<Item>;
+  updateItem(id: string, item: Partial<InsertItem>): Promise<Item | undefined>;
+  deleteItem(id: string): Promise<boolean>;
   
   // Bank account management
   getBankAccounts(): Promise<BankAccount[]>;
@@ -62,9 +62,9 @@ export interface IStorage {
   createPayment(payment: InsertPayment): Promise<PaymentWithDetails>;
   
   // Stock management
-  getStock(): Promise<StockWithCommodity[]>;
-  getStockByCommodity(commodityId: string): Promise<Stock | undefined>;
-  updateStock(commodityId: string, stock: Partial<InsertStock>): Promise<Stock>;
+  getStock(): Promise<StockWithItem[]>;
+  getStockByItem(itemId: string): Promise<Stock | undefined>;
+  updateStock(itemId: string, stock: Partial<InsertStock>): Promise<Stock>;
   
   // Ledger and book management
   getCashbook(): Promise<CashbookEntry[]>;
@@ -78,7 +78,7 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private users: Map<string, User> = new Map();
   private vendors: Map<string, Vendor> = new Map();
-  private commodities: Map<string, Commodity> = new Map();
+  private items: Map<string, Item> = new Map();
   private bankAccounts: Map<string, BankAccount> = new Map();
   private purchaseInvoices: Map<string, PurchaseInvoice> = new Map();
   private invoiceItems: Map<string, InvoiceItem> = new Map();
@@ -121,23 +121,21 @@ export class MemStorage implements IStorage {
     };
     this.vendors.set(vendor1.id, vendor1);
 
-    // Create sample commodities
-    const commodity1: Commodity = {
+    // Create sample items
+    const item1: Item = {
       id: randomUUID(),
       name: "Mangoes",
       quality: "A-Grade",
-      unit: "Kgs",
       vendorId: vendor1.id,
-      baseRate: "80.00",
       isActive: true,
       createdAt: new Date(),
     };
-    this.commodities.set(commodity1.id, commodity1);
+    this.items.set(item1.id, item1);
 
-    // Initialize stock for the commodity
+    // Initialize stock for the item
     const stock1: Stock = {
       id: randomUUID(),
-      commodityId: commodity1.id,
+      itemId: item1.id,
       quantityInCrates: "0.00",
       quantityInKgs: "0.00",
       lastUpdated: new Date(),
@@ -217,56 +215,56 @@ export class MemStorage implements IStorage {
     return true;
   }
 
-  // Commodity methods
-  async getCommodities(): Promise<Commodity[]> {
-    return Array.from(this.commodities.values()).filter(c => c.isActive);
+  // Item methods
+  async getItems(): Promise<Item[]> {
+    return Array.from(this.items.values()).filter(c => c.isActive);
   }
 
-  async getCommoditiesByVendor(vendorId: string): Promise<Commodity[]> {
-    return Array.from(this.commodities.values())
+  async getItemsByVendor(vendorId: string): Promise<Item[]> {
+    return Array.from(this.items.values())
       .filter(c => c.vendorId === vendorId && c.isActive);
   }
 
-  async getCommodity(id: string): Promise<Commodity | undefined> {
-    return this.commodities.get(id);
+  async getItem(id: string): Promise<Item | undefined> {
+    return this.items.get(id);
   }
 
-  async createCommodity(insertCommodity: InsertCommodity): Promise<Commodity> {
-    const commodity: Commodity = {
-      ...insertCommodity,
+  async createItem(insertItem: InsertItem): Promise<Item> {
+    const item: Item = {
+      ...insertItem,
       id: randomUUID(),
       createdAt: new Date(),
     };
-    this.commodities.set(commodity.id, commodity);
+    this.items.set(item.id, item);
 
-    // Initialize stock for new commodity
+    // Initialize stock for new item
     const stock: Stock = {
       id: randomUUID(),
-      commodityId: commodity.id,
+      itemId: item.id,
       quantityInCrates: "0.00",
       quantityInKgs: "0.00",
       lastUpdated: new Date(),
     };
     this.stock.set(stock.id, stock);
 
-    return commodity;
+    return item;
   }
 
-  async updateCommodity(id: string, updateData: Partial<InsertCommodity>): Promise<Commodity | undefined> {
-    const commodity = this.commodities.get(id);
-    if (!commodity) return undefined;
+  async updateItem(id: string, updateData: Partial<InsertItem>): Promise<Item | undefined> {
+    const item = this.items.get(id);
+    if (!item) return undefined;
     
-    const updated = { ...commodity, ...updateData };
-    this.commodities.set(id, updated);
+    const updated = { ...item, ...updateData };
+    this.items.set(id, updated);
     return updated;
   }
 
-  async deleteCommodity(id: string): Promise<boolean> {
-    const commodity = this.commodities.get(id);
-    if (!commodity) return false;
+  async deleteItem(id: string): Promise<boolean> {
+    const item = this.items.get(id);
+    if (!item) return false;
     
-    commodity.isActive = false;
-    this.commodities.set(id, commodity);
+    item.isActive = false;
+    this.items.set(id, item);
     return true;
   }
 
@@ -324,7 +322,7 @@ export class MemStorage implements IStorage {
     const invoiceNumber = `INV-${new Date().getFullYear()}-${this.invoiceCounter.toString().padStart(3, '0')}`;
     this.invoiceCounter++;
 
-    const balanceAmount = (parseFloat(insertInvoice.netPayable) - 0).toFixed(2);
+    const balanceAmount = (parseFloat(insertInvoice.netAmount) - 0).toFixed(2);
     const status = parseFloat(balanceAmount) === 0 ? "Paid" : "Unpaid";
 
     const invoice: PurchaseInvoice = {
@@ -357,7 +355,7 @@ export class MemStorage implements IStorage {
     // Update vendor balance
     const vendor = this.vendors.get(invoice.vendorId);
     if (vendor) {
-      vendor.balance = (parseFloat(vendor.balance) + parseFloat(invoice.netPayable)).toFixed(2);
+      vendor.balance = (parseFloat(vendor.balance!) + parseFloat(invoice.netAmount)).toFixed(2);
       this.vendors.set(vendor.id, vendor);
     }
 
@@ -368,18 +366,12 @@ export class MemStorage implements IStorage {
     };
   }
 
-  private async updateStockFromInvoiceItem(item: InvoiceItem): Promise<void> {
-    const stockEntry = Array.from(this.stock.values()).find(s => s.commodityId === item.commodityId);
+  private async updateStockFromInvoiceItem(invoiceItem: InvoiceItem): Promise<void> {
+    const stockEntry = Array.from(this.stock.values()).find(s => s.itemId === invoiceItem.itemId);
     if (!stockEntry) return;
 
-    const commodity = this.commodities.get(item.commodityId);
-    if (!commodity) return;
-
-    if (commodity.unit === "Kgs") {
-      stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs) + parseFloat(item.quantity)).toFixed(2);
-    } else if (commodity.unit === "Crates") {
-      stockEntry.quantityInCrates = (parseFloat(stockEntry.quantityInCrates) + parseFloat(item.quantity)).toFixed(2);
-    }
+    // For invoice items, we use weight directly instead of checking unit
+    stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs!) + parseFloat(invoiceItem.weight)).toFixed(2);
 
     stockEntry.lastUpdated = new Date();
     this.stock.set(stockEntry.id, stockEntry);
@@ -506,32 +498,32 @@ export class MemStorage implements IStorage {
   }
 
   // Stock methods
-  async getStock(): Promise<StockWithCommodity[]> {
+  async getStock(): Promise<StockWithItem[]> {
     const stocks = Array.from(this.stock.values());
     return stocks.map(stock => {
-      const commodity = this.commodities.get(stock.commodityId)!;
-      const vendor = this.vendors.get(commodity.vendorId!)!;
+      const item = this.items.get(stock.itemId!)!;
+      const vendor = this.vendors.get(item.vendorId!)!;
       return {
         ...stock,
-        commodity: {
-          ...commodity,
+        item: {
+          ...item,
           vendor,
         },
       };
     });
   }
 
-  async getStockByCommodity(commodityId: string): Promise<Stock | undefined> {
-    return Array.from(this.stock.values()).find(s => s.commodityId === commodityId);
+  async getStockByItem(itemId: string): Promise<Stock | undefined> {
+    return Array.from(this.stock.values()).find(s => s.itemId === itemId);
   }
 
-  async updateStock(commodityId: string, updateData: Partial<InsertStock>): Promise<Stock> {
-    const stockEntry = Array.from(this.stock.values()).find(s => s.commodityId === commodityId);
+  async updateStock(itemId: string, updateData: Partial<InsertStock>): Promise<Stock> {
+    const stockEntry = Array.from(this.stock.values()).find(s => s.itemId === itemId);
     if (!stockEntry) {
       // Create new stock entry
       const newStock: Stock = {
         id: randomUUID(),
-        commodityId,
+        itemId,
         quantityInCrates: updateData.quantityInCrates || "0.00",
         quantityInKgs: updateData.quantityInKgs || "0.00",
         lastUpdated: new Date(),
@@ -608,8 +600,8 @@ export class MemStorage implements IStorage {
     let stockValue = 0;
     let totalKgs = 0;
     for (const stock of stocks) {
-      const commodity = this.commodities.get(stock.commodityId);
-      if (commodity) {
+      const item = this.items.get(stock.itemId!);
+      if (item) {
         const kgs = parseFloat(stock.quantityInKgs);
         const rate = parseFloat(commodity.baseRate);
         stockValue += kgs * rate;

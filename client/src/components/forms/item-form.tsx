@@ -30,76 +30,76 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 
-const commoditySchema = z.object({
+const itemSchema = z.object({
   name: z.string().min(1, "Name is required"),
   quality: z.string().min(1, "Quality is required"),
   vendorId: z.string().min(1, "Vendor is required"),
   isActive: z.boolean().default(true),
 });
 
-type CommodityFormData = z.infer<typeof commoditySchema>;
+type ItemFormData = z.infer<typeof itemSchema>;
 
-interface CommodityFormProps {
+interface ItemFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  commodity?: any;
+  item?: any;
 }
 
-export default function CommodityForm({ open, onOpenChange, commodity }: CommodityFormProps) {
+export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEditing = !!commodity;
+  const isEditing = !!item;
 
-  const form = useForm<CommodityFormData>({
-    resolver: zodResolver(commoditySchema),
+  const form = useForm<ItemFormData>({
+    resolver: zodResolver(itemSchema),
     defaultValues: {
-      name: commodity?.name || "",
-      quality: commodity?.quality || "",
-      vendorId: commodity?.vendorId || "",
-      isActive: commodity?.isActive ?? true,
+      name: item?.name || "",
+      quality: item?.quality || "",
+      vendorId: item?.vendorId || "",
+      isActive: item?.isActive ?? true,
     },
   });
 
-  // Reset form when commodity changes (for switching between create/edit modes)
+  // Reset form when item changes (for switching between create/edit modes)
   React.useEffect(() => {
     form.reset({
-      name: commodity?.name || "",
-      quality: commodity?.quality || "",
-      vendorId: commodity?.vendorId || "",
-      isActive: commodity?.isActive ?? true,
+      name: item?.name || "",
+      quality: item?.quality || "",
+      vendorId: item?.vendorId || "",
+      isActive: item?.isActive ?? true,
     });
-  }, [commodity, form]);
+  }, [item, form]);
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
   });
 
   const mutation = useMutation({
-    mutationFn: async (data: CommodityFormData) => {
-      const url = isEditing ? `/api/commodities/${commodity.id}` : "/api/commodities";
+    mutationFn: async (data: ItemFormData) => {
+      const url = isEditing ? `/api/items/${item.id}` : "/api/items";
       const method = isEditing ? "PUT" : "POST";
       const response = await authenticatedApiRequest(method, url, data);
       return response.json();
     },
     onSuccess: () => {
       toast({
-        title: isEditing ? "Commodity updated" : "Commodity created",
-        description: `Commodity has been ${isEditing ? "updated" : "created"} successfully`,
+        title: isEditing ? "Item updated" : "Item created",
+        description: `Item has been ${isEditing ? "updated" : "created"} successfully`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/commodities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/items"] });
       onOpenChange(false);
       form.reset();
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : `Failed to ${isEditing ? "update" : "create"} commodity`,
+        description: error instanceof Error ? error.message : `Failed to ${isEditing ? "update" : "create"} item`,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: CommodityFormData) => {
+  const onSubmit = (data: ItemFormData) => {
     mutation.mutate(data);
   };
 
@@ -107,7 +107,7 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Commodity" : "Add New Commodity"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Item" : "Add New Item"}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -118,9 +118,9 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Commodity Name *</FormLabel>
+                    <FormLabel>Item Name *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter commodity name" {...field} data-testid="input-commodity-name" />
+                      <Input placeholder="Enter item name" {...field} data-testid="input-item-name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -149,7 +149,7 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
                     <FormLabel>Vendor *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger data-testid="select-commodity-vendor">
+                        <SelectTrigger data-testid="select-item-vendor">
                           <SelectValue placeholder="Select vendor" />
                         </SelectTrigger>
                       </FormControl>
@@ -174,14 +174,14 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
                       <div className="text-sm text-muted-foreground">
-                        Enable or disable this commodity
+                        Enable or disable this item
                       </div>
                     </div>
                     <FormControl>
                       <Switch
                         checked={field.value}
                         onCheckedChange={field.onChange}
-                        data-testid="switch-commodity-active"
+                        data-testid="switch-item-active"
                       />
                     </FormControl>
                   </FormItem>
@@ -194,16 +194,16 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
                 type="button" 
                 variant="outline" 
                 onClick={() => onOpenChange(false)}
-                data-testid="button-cancel-commodity"
+                data-testid="button-cancel-item"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 disabled={mutation.isPending}
-                data-testid="button-save-commodity"
+                data-testid="button-save-item"
               >
-                {mutation.isPending ? "Saving..." : isEditing ? "Update Commodity" : "Create Commodity"}
+                {mutation.isPending ? "Saving..." : isEditing ? "Update Item" : "Create Item"}
               </Button>
             </div>
           </form>

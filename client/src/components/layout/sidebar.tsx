@@ -30,8 +30,8 @@ const navigationItems = [
     icon: Truck,
   },
   {
-    title: "Commodities",
-    href: "/commodities",
+    title: "Items",
+    href: "/items",
     icon: Sprout,
   },
   {
