@@ -1,3 +1,4 @@
+import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -58,6 +59,19 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
       isActive: vendor?.isActive ?? true,
     },
   });
+
+  // Reset form when vendor changes (for switching between create/edit modes)
+  React.useEffect(() => {
+    form.reset({
+      name: vendor?.name || "",
+      contactPerson: vendor?.contactPerson || "",
+      phone: vendor?.phone || "",
+      address: vendor?.address || "",
+      gstNumber: vendor?.gstNumber || "",
+      panNumber: vendor?.panNumber || "",
+      isActive: vendor?.isActive ?? true,
+    });
+  }, [vendor, form]);
 
   const mutation = useMutation({
     mutationFn: async (data: VendorFormData) => {

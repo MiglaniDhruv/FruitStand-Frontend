@@ -1,3 +1,4 @@
+import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
@@ -64,6 +65,18 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
       isActive: commodity?.isActive ?? true,
     },
   });
+
+  // Reset form when commodity changes (for switching between create/edit modes)
+  React.useEffect(() => {
+    form.reset({
+      name: commodity?.name || "",
+      quality: commodity?.quality || "",
+      unit: commodity?.unit || "Kgs",
+      vendorId: commodity?.vendorId || "",
+      baseRate: commodity?.baseRate || "",
+      isActive: commodity?.isActive ?? true,
+    });
+  }, [commodity, form]);
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
