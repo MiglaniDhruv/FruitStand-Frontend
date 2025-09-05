@@ -274,13 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { invoice, items } = req.body;
       
-      // Convert string date to Date object if needed
-      const processedInvoice = {
-        ...invoice,
-        invoiceDate: typeof invoice.invoiceDate === 'string' ? new Date(invoice.invoiceDate) : invoice.invoiceDate
-      };
-      
-      const invoiceData = insertPurchaseInvoiceSchema.parse(processedInvoice);
+      const invoiceData = insertPurchaseInvoiceSchema.parse(invoice);
       const itemsData = z.array(insertInvoiceItemSchema.omit({ invoiceId: true })).parse(items);
       
       const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData);

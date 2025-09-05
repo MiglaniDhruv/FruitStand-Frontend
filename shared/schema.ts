@@ -144,7 +144,11 @@ export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({
   createdAt: true,
 });
 
-export const insertPurchaseInvoiceSchema = createInsertSchema(purchaseInvoices).omit({
+export const insertPurchaseInvoiceSchema = createInsertSchema(purchaseInvoices, {
+  invoiceDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
   id: true,
   invoiceNumber: true,
   paidAmount: true,
