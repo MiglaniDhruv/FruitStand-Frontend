@@ -133,7 +133,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       const amount = (quantity * rate).toFixed(2);
       
       if (item.amount !== amount) {
-        form.setValue(`items.${index}.amount`, amount);
+        form.setValue(`items.${index}.amount`, amount, { shouldValidate: true });
       }
     });
   }, [watchedItems, form]);
@@ -141,7 +141,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const onSubmit = (data: InvoiceFormData) => {
     const invoiceData = {
       vendorId: data.vendorId,
-      invoiceDate: new Date(data.invoiceDate).toISOString(),
+      invoiceDate: new Date(data.invoiceDate),
       grossAmount: grossAmount.toFixed(2),
       commissionRate: data.commissionRate,
       commissionAmount: commissionAmount.toFixed(2),
