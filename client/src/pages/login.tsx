@@ -27,7 +27,8 @@ export default function Login() {
         title: "Login successful",
         description: "Welcome to APMC System",
       });
-      setLocation("/");
+      // Force a page reload to ensure the authentication state is properly updated
+      window.location.href = "/";
     } catch (error) {
       toast({
         title: "Login failed",

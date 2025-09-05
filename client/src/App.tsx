@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -15,7 +16,25 @@ import Ledgers from "@/pages/ledgers";
 import { authService } from "@/lib/auth";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const isAuthenticated = authService.isAuthenticated();
+  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
+  
+  useEffect(() => {
+    // Check authentication status on mount and when localStorage changes
+    const checkAuth = () => {
+      setIsAuthenticated(authService.isAuthenticated());
+    };
+    
+    // Listen for storage changes (e.g., when login/logout happens)
+    window.addEventListener('storage', checkAuth);
+    
+    // Also check periodically to catch any auth changes
+    const interval = setInterval(checkAuth, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', checkAuth);
+      clearInterval(interval);
+    };
+  }, []);
   
   if (!isAuthenticated) {
     return <Login />;
