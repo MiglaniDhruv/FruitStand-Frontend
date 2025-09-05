@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -26,25 +26,30 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { Plus, Trash2 } from "lucide-react";
-
-const invoiceItemSchema = z.object({
-  commodityId: z.string().min(1, "Commodity is required"),
-  quantity: z.string().min(1, "Quantity is required"),
-  rate: z.string().min(1, "Rate is required"),
-  amount: z.string(),
-});
 
 const invoiceSchema = z.object({
   vendorId: z.string().min(1, "Vendor is required"),
   invoiceDate: z.string().min(1, "Invoice date is required"),
-  commissionRate: z.string().min(1, "Commission rate is required"),
-  freightCharges: z.string().default("0"),
-  laborCharges: z.string().default("0"),
-  items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
+  item: z.string().min(1, "Item is required"),
+  weight: z.string().min(1, "Weight is required"),
+  rate: z.string().min(1, "Rate is required"),
+  amount: z.string(),
+  commission: z.string().default("0"),
+  labour: z.string().default("0"),
+  truckFreight: z.string().default("0"),
+  crateFreight: z.string().default("0"),
+  postExpenses: z.string().default("0"),
+  draftExpenses: z.string().default("0"),
+  vatav: z.string().default("0"),
+  otherExpenses: z.string().default("0"),
+  advance: z.string().default("0"),
+  totalExpense: z.string(),
+  totalSelling: z.string(),
+  totalLessExpenses: z.string(),
+  netAmount: z.string(),
 });
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
@@ -55,7 +60,6 @@ interface PurchaseInvoiceModalProps {
 }
 
 export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInvoiceModalProps) {
-  const [selectedVendorId, setSelectedVendorId] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -64,25 +68,28 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      commissionRate: "5",
-      freightCharges: "0",
-      laborCharges: "0",
-      items: [{ commodityId: "", quantity: "", rate: "", amount: "0" }],
+      item: "",
+      weight: "",
+      rate: "",
+      amount: "0",
+      commission: "0",
+      labour: "0",
+      truckFreight: "0",
+      crateFreight: "0",
+      postExpenses: "0",
+      draftExpenses: "0",
+      vatav: "0",
+      otherExpenses: "0",
+      advance: "0",
+      totalExpense: "0",
+      totalSelling: "0",
+      totalLessExpenses: "0",
+      netAmount: "0",
     },
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "items",
   });
 
   const { data: vendors } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
-  });
-
-  const { data: commodities } = useQuery<any[]>({
-    queryKey: ["/api/commodities", "vendor", selectedVendorId],
-    enabled: !!selectedVendorId,
   });
 
   const createInvoiceMutation = useMutation({
@@ -109,86 +116,74 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     },
   });
 
-  const watchedItems = form.watch("items");
-  const watchedCommissionRate = form.watch("commissionRate");
-  const watchedFreightCharges = form.watch("freightCharges");
-  const watchedLaborCharges = form.watch("laborCharges");
+  // Watch form fields for calculations
+  const watchedWeight = form.watch("weight");
+  const watchedRate = form.watch("rate");
+  const watchedCommission = form.watch("commission");
+  const watchedLabour = form.watch("labour");
+  const watchedTruckFreight = form.watch("truckFreight");
+  const watchedCrateFreight = form.watch("crateFreight");
+  const watchedPostExpenses = form.watch("postExpenses");
+  const watchedDraftExpenses = form.watch("draftExpenses");
+  const watchedVatav = form.watch("vatav");
+  const watchedOtherExpenses = form.watch("otherExpenses");
+  const watchedAdvance = form.watch("advance");
 
-  // Calculate totals
-  const grossAmount = watchedItems.reduce((sum, item) => {
-    const amount = parseFloat(item.amount) || 0;
-    return sum + amount;
-  }, 0);
+  // Calculate derived values
+  const weight = parseFloat(watchedWeight) || 0;
+  const rate = parseFloat(watchedRate) || 0;
+  const amount = weight * rate;
+  
+  const commission = parseFloat(watchedCommission) || 0;
+  const labour = parseFloat(watchedLabour) || 0;
+  const truckFreight = parseFloat(watchedTruckFreight) || 0;
+  const crateFreight = parseFloat(watchedCrateFreight) || 0;
+  const postExpenses = parseFloat(watchedPostExpenses) || 0;
+  const draftExpenses = parseFloat(watchedDraftExpenses) || 0;
+  const vatav = parseFloat(watchedVatav) || 0;
+  const otherExpenses = parseFloat(watchedOtherExpenses) || 0;
+  const advance = parseFloat(watchedAdvance) || 0;
+  
+  const totalExpense = commission + labour + truckFreight + crateFreight + postExpenses + draftExpenses + vatav + otherExpenses + advance;
+  const totalSelling = amount;
+  const totalLessExpenses = totalSelling - totalExpense;
+  const netAmount = totalLessExpenses;
 
-  const commissionAmount = (grossAmount * (parseFloat(watchedCommissionRate) || 0)) / 100;
-  const freightCharges = parseFloat(watchedFreightCharges) || 0;
-  const laborCharges = parseFloat(watchedLaborCharges) || 0;
-  const netPayable = grossAmount - commissionAmount + freightCharges + laborCharges;
-
-  // Update item amounts when quantity or rate changes
+  // Update calculated fields when dependent values change
   useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name?.includes('quantity') || name?.includes('rate')) {
-        const items = value.items || [];
-        items.forEach((item: any, index: number) => {
-          const quantity = parseFloat(item?.quantity) || 0;
-          const rate = parseFloat(item?.rate) || 0;
-          const amount = (quantity * rate).toFixed(2);
-          
-          if (item?.amount !== amount) {
-            form.setValue(`items.${index}.amount`, amount);
-          }
-        });
-      }
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [form]);
+    form.setValue("amount", amount.toFixed(2));
+    form.setValue("totalExpense", totalExpense.toFixed(2));
+    form.setValue("totalSelling", totalSelling.toFixed(2));
+    form.setValue("totalLessExpenses", totalLessExpenses.toFixed(2));
+    form.setValue("netAmount", netAmount.toFixed(2));
+  }, [form, amount, totalExpense, totalSelling, totalLessExpenses, netAmount]);
 
   const onSubmit = (data: InvoiceFormData) => {
-    // Ensure all amounts are properly calculated before submission
-    const calculatedGrossAmount = watchedItems.reduce((sum, item) => {
-      const amount = parseFloat(item.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-    const calculatedCommissionAmount = (calculatedGrossAmount * (parseFloat(watchedCommissionRate) || 0)) / 100;
-    const calculatedFreightCharges = parseFloat(watchedFreightCharges) || 0;
-    const calculatedLaborCharges = parseFloat(watchedLaborCharges) || 0;
-    const calculatedNetPayable = calculatedGrossAmount - calculatedCommissionAmount + calculatedFreightCharges + calculatedLaborCharges;
-
     const invoiceData = {
       vendorId: data.vendorId,
       invoiceDate: data.invoiceDate,
-      grossAmount: calculatedGrossAmount.toFixed(2),
-      commissionRate: data.commissionRate,
-      commissionAmount: calculatedCommissionAmount.toFixed(2),
-      freightCharges: data.freightCharges,
-      laborCharges: data.laborCharges,
-      netPayable: calculatedNetPayable.toFixed(2),
+      item: data.item,
+      weight: parseFloat(data.weight),
+      rate: parseFloat(data.rate),
+      amount: parseFloat(data.amount),
+      commission: parseFloat(data.commission),
+      labour: parseFloat(data.labour),
+      truckFreight: parseFloat(data.truckFreight),
+      crateFreight: parseFloat(data.crateFreight),
+      postExpenses: parseFloat(data.postExpenses),
+      draftExpenses: parseFloat(data.draftExpenses),
+      vatav: parseFloat(data.vatav),
+      otherExpenses: parseFloat(data.otherExpenses),
+      advance: parseFloat(data.advance),
+      totalExpense: parseFloat(data.totalExpense),
+      totalSelling: parseFloat(data.totalSelling),
+      totalLessExpenses: parseFloat(data.totalLessExpenses),
+      netAmount: parseFloat(data.netAmount),
+      balanceAmount: parseFloat(data.netAmount), // Initially balance equals net amount
+      status: "Unpaid",
     };
 
-    const itemsData = data.items.map(item => ({
-      commodityId: item.commodityId,
-      quantity: item.quantity,
-      rate: item.rate,
-      amount: item.amount,
-    }));
-
-    createInvoiceMutation.mutate({
-      invoice: invoiceData,
-      items: itemsData,
-    });
-  };
-
-  const addItem = () => {
-    append({ commodityId: "", quantity: "", rate: "", amount: "0" });
-  };
-
-  const removeItem = (index: number) => {
-    if (fields.length > 1) {
-      remove(index);
-    }
+    createInvoiceMutation.mutate(invoiceData);
   };
 
   return (
@@ -200,165 +195,45 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="vendorId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vendor</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        setSelectedVendorId(value);
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-vendor">
-                          <SelectValue placeholder="Select vendor" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {vendors?.map((vendor: any) => (
-                          <SelectItem key={vendor.id} value={vendor.id}>
-                            {vendor.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="invoiceDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} data-testid="input-invoice-date" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Invoice Items */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-md font-medium text-foreground">Invoice Items</h4>
-                <Button type="button" variant="outline" onClick={addItem} data-testid="button-add-item">
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add Item
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {fields.map((field, index) => (
-                  <Card key={field.id}>
-                    <CardContent className="p-4">
-                      <div className="grid grid-cols-5 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.commodityId`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Commodity</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {commodities?.map((commodity: any) => (
-                                    <SelectItem key={commodity.id} value={commodity.id}>
-                                      {commodity.name} - {commodity.quality}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.quantity`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Quantity</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" placeholder="0" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.rate`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Rate</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.amount`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Amount</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" readOnly {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="flex items-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeItem(index)}
-                            disabled={fields.length === 1}
-                            data-testid={`button-remove-item-${index}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            {/* Calculation Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
+            {/* Basic Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Invoice Details</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
-                  name="commissionRate"
+                  name="vendorId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Commission %</FormLabel>
+                      <FormLabel>Vendor *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-vendor">
+                            <SelectValue placeholder="Select vendor" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {vendors?.map((vendor: any) => (
+                            <SelectItem key={vendor.id} value={vendor.id}>
+                              {vendor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="invoiceDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Invoice Date *</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="5.00" {...field} />
+                        <Input type="date" {...field} data-testid="input-invoice-date" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -367,12 +242,40 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
                 <FormField
                   control={form.control}
-                  name="freightCharges"
+                  name="item"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Freight Charges</FormLabel>
+                      <FormLabel>Item *</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        <Input placeholder="Enter item name" {...field} data-testid="input-item" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Quantity & Rate */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Quantity & Rate</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <FormField
+                  control={form.control}
+                  name="weight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Weight *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-weight" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -381,55 +284,320 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
                 <FormField
                   control={form.control}
-                  name="laborCharges"
+                  name="rate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Labor Charges</FormLabel>
+                      <FormLabel>Rate (₹) *</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-rate" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <Card>
-                <CardContent className="p-4">
-                  <h5 className="font-medium text-foreground mb-3">Invoice Summary</h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Gross Amount:</span>
-                      <span className="text-foreground">₹{grossAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Commission ({watchedCommissionRate}%):</span>
-                      <span className="text-foreground">₹{commissionAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Freight:</span>
-                      <span className="text-foreground">₹{freightCharges.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Labor:</span>
-                      <span className="text-foreground">₹{laborCharges.toFixed(2)}</span>
-                    </div>
-                    <hr className="border-border" />
-                    <div className="flex justify-between font-medium text-base">
-                      <span className="text-foreground">Net Payable:</span>
-                      <span className="text-foreground">₹{netPayable.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                <FormField
+                  control={form.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          readOnly 
+                          className="bg-muted"
+                          data-testid="input-amount" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
 
+            {/* Expenses */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Expenses</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <FormField
+                  control={form.control}
+                  name="commission"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Commission (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-commission" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="labour"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Labour (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-labour" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="truckFreight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Truck Freight (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-truck-freight" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="crateFreight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Crate Freight (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-crate-freight" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="postExpenses"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Post Expenses (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-post-expenses" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="draftExpenses"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Draft Expenses (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-draft-expenses" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="vatav"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vatav (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-vatav" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="otherExpenses"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Other Expenses (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-other-expenses" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="advance"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Advance (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          {...field} 
+                          data-testid="input-advance" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Totals */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Calculated Totals</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <FormField
+                  control={form.control}
+                  name="totalExpense"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total Expense (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          readOnly 
+                          className="bg-muted font-semibold"
+                          data-testid="input-total-expense" 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="totalSelling"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total Selling (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          readOnly 
+                          className="bg-muted font-semibold"
+                          data-testid="input-total-selling" 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="totalLessExpenses"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total Less Expenses (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          readOnly 
+                          className="bg-muted font-semibold"
+                          data-testid="input-total-less-expenses" 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="netAmount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Net Amount (₹)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          readOnly 
+                          className="bg-primary/10 font-bold text-primary border-primary"
+                          data-testid="input-net-amount" 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Form Actions */}
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => onOpenChange(false)}
-                data-testid="button-cancel-invoice"
+                data-testid="button-cancel"
               >
                 Cancel
               </Button>
