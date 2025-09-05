@@ -29,9 +29,7 @@ export const commodities = pgTable("commodities", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   quality: text("quality").notNull(),
-  unit: text("unit").notNull(), // Crates, Kgs
   vendorId: uuid("vendor_id").references(() => vendors.id),
-  baseRate: decimal("base_rate", { precision: 8, scale: 2 }).notNull(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

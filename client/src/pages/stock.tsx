@@ -135,7 +135,6 @@ export default function Stock() {
                     <TableHead>Commodity</TableHead>
                     <TableHead>Quality</TableHead>
                     <TableHead>Vendor</TableHead>
-                    <TableHead>Unit</TableHead>
                     <TableHead>Quantity (Crates)</TableHead>
                     <TableHead>Quantity (Kgs)</TableHead>
                     <TableHead>Last Updated</TableHead>
@@ -146,13 +145,13 @@ export default function Stock() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         Loading stock...
                       </TableCell>
                     </TableRow>
                   ) : filteredStock.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No stock items found
                       </TableCell>
                     </TableRow>
@@ -162,7 +161,6 @@ export default function Stock() {
                         <TableCell className="font-medium">{item.commodity.name}</TableCell>
                         <TableCell>{item.commodity.quality}</TableCell>
                         <TableCell>{item.commodity.vendor.name}</TableCell>
-                        <TableCell>{item.commodity.unit}</TableCell>
                         <TableCell>{parseFloat(item.quantityInCrates).toFixed(2)}</TableCell>
                         <TableCell>{parseFloat(item.quantityInKgs).toFixed(2)}</TableCell>
                         <TableCell>{format(new Date(item.lastUpdated), "MMM dd, yyyy")}</TableCell>

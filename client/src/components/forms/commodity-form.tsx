@@ -33,11 +33,7 @@ import { authenticatedApiRequest } from "@/lib/auth";
 const commoditySchema = z.object({
   name: z.string().min(1, "Name is required"),
   quality: z.string().min(1, "Quality is required"),
-  unit: z.enum(["Kgs", "Crates"], {
-    required_error: "Unit is required",
-  }),
   vendorId: z.string().min(1, "Vendor is required"),
-  baseRate: z.string().min(1, "Base rate is required"),
   isActive: z.boolean().default(true),
 });
 
@@ -59,9 +55,7 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
     defaultValues: {
       name: commodity?.name || "",
       quality: commodity?.quality || "",
-      unit: commodity?.unit || "Kgs",
       vendorId: commodity?.vendorId || "",
-      baseRate: commodity?.baseRate || "",
       isActive: commodity?.isActive ?? true,
     },
   });
@@ -71,9 +65,7 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
     form.reset({
       name: commodity?.name || "",
       quality: commodity?.quality || "",
-      unit: commodity?.unit || "Kgs",
       vendorId: commodity?.vendorId || "",
-      baseRate: commodity?.baseRate || "",
       isActive: commodity?.isActive ?? true,
     });
   }, [commodity, form]);
@@ -151,28 +143,6 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
 
               <FormField
                 control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Unit *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-unit">
-                          <SelectValue placeholder="Select unit" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Kgs">Kilograms (Kgs)</SelectItem>
-                        <SelectItem value="Crates">Crates</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="vendorId"
                 render={({ field }) => (
                   <FormItem>
@@ -191,26 +161,6 @@ export default function CommodityForm({ open, onOpenChange, commodity }: Commodi
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="baseRate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Base Rate (₹) *</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        {...field} 
-                        data-testid="input-base-rate" 
-                      />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

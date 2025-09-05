@@ -149,8 +149,6 @@ export default function Commodities() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Quality</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Base Rate</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
@@ -174,8 +172,6 @@ export default function Commodities() {
                       <TableRow key={commodity.id} data-testid={`commodity-row-${commodity.id}`}>
                         <TableCell className="font-medium">{commodity.name}</TableCell>
                         <TableCell>{commodity.quality}</TableCell>
-                        <TableCell>{commodity.unit}</TableCell>
-                        <TableCell>₹{parseFloat(commodity.baseRate).toFixed(2)}</TableCell>
                         <TableCell>{getVendorName(commodity.vendorId)}</TableCell>
                         <TableCell>
                           <Badge variant={commodity.isActive ? "default" : "secondary"}>
