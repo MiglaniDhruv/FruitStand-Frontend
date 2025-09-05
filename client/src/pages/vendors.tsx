@@ -17,6 +17,8 @@ import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { PERMISSIONS } from "@/lib/permissions";
+import { PermissionGuard } from "@/components/ui/permission-guard";
 
 export default function Vendors() {
   const [searchTerm, setSearchTerm] = useState("");
