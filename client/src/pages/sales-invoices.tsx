@@ -34,12 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { z } from "zod";
-import { Plus, Edit, Trash2, FileText, IndianRupee, Users, TrendingUp, Minus } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, IndianRupee, Users, TrendingUp, Minus, DollarSign, Eye, History } from "lucide-react";
 import { format } from "date-fns";
 
 const salesInvoiceSchema = z.object({
@@ -68,9 +69,24 @@ const invoiceFormSchema = z.object({
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
+const paymentSchema = z.object({
+  salesInvoiceId: z.string().min(1, "Sales invoice is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  paymentDate: z.string().min(1, "Payment date is required"),
+  paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"]),
+  bankAccountId: z.string().optional(),
+  transactionReference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+type PaymentFormData = z.infer<typeof paymentSchema>;
+
 export default function SalesInvoiceManagement() {
   const [open, setOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentHistoryDialogOpen, setPaymentHistoryDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -105,6 +121,19 @@ export default function SalesInvoiceManagement() {
     name: "items",
   });
 
+  const paymentForm = useForm<PaymentFormData>({
+    resolver: zodResolver(paymentSchema),
+    defaultValues: {
+      salesInvoiceId: "",
+      amount: 0,
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
+      paymentMode: "Cash",
+      bankAccountId: "",
+      transactionReference: "",
+      notes: "",
+    },
+  });
+
   // Fetch data
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["/api/sales-invoices"],
@@ -122,6 +151,22 @@ export default function SalesInvoiceManagement() {
     },
   });
 
+  const { data: salesPayments = [] } = useQuery({
+    queryKey: ["/api/sales-payments"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/sales-payments");
+      return response.json();
+    },
+  });
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["/api/bank-accounts"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
+      return response.json();
+    },
+  });
+
   const { data: items = [] } = useQuery({
     queryKey: ["/api/items"],
     queryFn: async () => {
@@ -135,6 +180,30 @@ export default function SalesInvoiceManagement() {
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/stock");
       return response.json();
+    },
+  });
+
+  const createPaymentMutation = useMutation({
+    mutationFn: async (data: PaymentFormData) => {
+      const response = await authenticatedApiRequest("POST", "/api/sales-payments", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Payment recorded",
+        description: "Sales payment has been recorded successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
+      setPaymentDialogOpen(false);
+      paymentForm.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to record payment",
+        variant: "destructive",
+      });
     },
   });
 
@@ -232,6 +301,33 @@ export default function SalesInvoiceManagement() {
 
   const onSubmit = (data: InvoiceFormData) => {
     createInvoiceMutation.mutate(data);
+  };
+
+  const handleRecordPayment = (invoice: any) => {
+    setSelectedInvoice(invoice);
+    paymentForm.reset({
+      salesInvoiceId: invoice.id,
+      amount: 0,
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
+      paymentMode: "Cash",
+      bankAccountId: "",
+      transactionReference: "",
+      notes: "",
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  const handleViewPaymentHistory = (invoice: any) => {
+    setSelectedInvoice(invoice);
+    setPaymentHistoryDialogOpen(true);
+  };
+
+  const onSubmitPayment = (data: PaymentFormData) => {
+    createPaymentMutation.mutate(data);
+  };
+
+  const getInvoicePayments = (invoiceId: string) => {
+    return salesPayments.filter((payment: any) => payment.salesInvoiceId === invoiceId);
   };
 
   const filteredInvoices = invoices.filter((invoice: any) =>
@@ -403,10 +499,18 @@ export default function SalesInvoiceManagement() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {}}
-                            data-testid={`button-view-${invoice.id}`}
+                            onClick={() => handleRecordPayment(invoice)}
+                            data-testid={`button-record-payment-${invoice.id}`}
                           >
-                            <Edit className="h-4 w-4" />
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewPaymentHistory(invoice)}
+                            data-testid={`button-payment-history-${invoice.id}`}
+                          >
+                            <History className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -756,6 +860,218 @@ export default function SalesInvoiceManagement() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Dialog */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...paymentForm}>
+            <form onSubmit={paymentForm.handleSubmit(onSubmitPayment)} className="space-y-4">
+              {selectedInvoice && (
+                <div className="bg-muted p-4 rounded-lg">
+                  <div className="text-sm space-y-1">
+                    <div><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</div>
+                    <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
+                    <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
+                    <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.dueAmount).toLocaleString("en-IN")}</div>
+                  </div>
+                </div>
+              )}
+
+              <FormField
+                control={paymentForm.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment Amount *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="₹ 0.00"
+                        {...field}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        data-testid="input-payment-amount"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="paymentDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Date *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-payment-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="paymentMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Mode *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-mode">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="Bank">Bank Transfer</SelectItem>
+                          <SelectItem value="UPI">UPI</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {paymentForm.watch("paymentMode") !== "Cash" && (
+                <FormField
+                  control={paymentForm.control}
+                  name="bankAccountId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bank Account</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bank-account">
+                            <SelectValue placeholder="Select bank account" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {bankAccounts.map((account: any) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.bankName} - {account.accountNumber?.slice(-4)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={paymentForm.control}
+                name="transactionReference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Transaction Reference</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Reference number..." {...field} data-testid="input-transaction-ref" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={paymentForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Additional notes..." {...field} data-testid="input-payment-notes" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} data-testid="button-payment-cancel">
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createPaymentMutation.isPending}
+                  data-testid="button-payment-submit"
+                >
+                  {createPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={paymentHistoryDialogOpen} onOpenChange={setPaymentHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Payment History</DialogTitle>
+          </DialogHeader>
+          
+          {selectedInvoice && (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="text-sm space-y-1">
+                  <div><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</div>
+                  <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
+                  <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Paid Amount:</strong> ₹{parseFloat(selectedInvoice.paidAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.dueAmount).toLocaleString("en-IN")}</div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium mb-3">Payment Records</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Reference</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getInvoicePayments(selectedInvoice.id).map((payment: any) => (
+                      <TableRow key={payment.id}>
+                        <TableCell>{format(new Date(payment.paymentDate), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="font-medium">₹{parseFloat(payment.amount).toLocaleString("en-IN")}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{payment.paymentMode}</Badge>
+                        </TableCell>
+                        <TableCell>{payment.transactionReference || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                    {getInvoicePayments(selectedInvoice.id).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                          No payments recorded for this invoice
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <Button variant="outline" onClick={() => setPaymentHistoryDialogOpen(false)} data-testid="button-history-close">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
