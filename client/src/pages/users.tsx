@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +69,7 @@ export default function UserManagement() {
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [managingPermissions, setManagingPermissions] = useState<any>(null);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -200,8 +202,50 @@ export default function UserManagement() {
     }
   };
 
+  const updatePermissionsMutation = useMutation({
+    mutationFn: async ({ id, permissions }: { id: string; permissions: string[] }) => {
+      const response = await authenticatedApiRequest("PUT", `/api/users/${id}/permissions`, { permissions });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Permissions updated",
+        description: "User permissions have been updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update permissions",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleManagePermissions = (user: any) => {
     setManagingPermissions(user);
+    setUserPermissions(user.permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || []);
+  };
+
+  const togglePermission = (permission: string) => {
+    setUserPermissions(prev => {
+      if (prev.includes(permission)) {
+        return prev.filter(p => p !== permission);
+      } else {
+        return [...prev, permission];
+      }
+    });
+  };
+
+  const savePermissions = () => {
+    if (managingPermissions) {
+      updatePermissionsMutation.mutate({
+        id: managingPermissions.id,
+        permissions: userPermissions
+      });
+      setManagingPermissions(null);
+    }
   };
 
   const onSubmit = (data: UserFormData) => {
@@ -378,7 +422,7 @@ export default function UserManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-muted-foreground">
-                            {ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS]?.length || 0} permissions
+                            {user.permissions?.length || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS]?.length || 0} permissions
                           </div>
                         </TableCell>
                         <TableCell>
@@ -518,7 +562,7 @@ export default function UserManagement() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-4">
-                  <h4 className="text-lg font-medium">Current Permissions</h4>
+                  <h4 className="text-lg font-medium">Default Role Permissions</h4>
                   <div className="grid grid-cols-2 gap-2">
                     {ROLE_PERMISSIONS[managingPermissions.role as keyof typeof ROLE_PERMISSIONS]?.map((permission: string) => (
                       <div key={permission} className="flex items-center space-x-2 p-2 bg-secondary rounded-md">
@@ -530,7 +574,10 @@ export default function UserManagement() {
                 </div>
 
                 <div className="space-y-4 border-t pt-4">
-                  <h4 className="text-lg font-medium">All Available Permissions</h4>
+                  <h4 className="text-lg font-medium">Customize User Permissions</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Toggle individual permissions on or off. Changes override the default role permissions.
+                  </p>
                   <div className="grid grid-cols-1 gap-3">
                     {Object.entries({
                       "User Management": [PERMISSIONS.MANAGE_USERS, PERMISSIONS.VIEW_USERS],
@@ -544,14 +591,22 @@ export default function UserManagement() {
                       "System": [PERMISSIONS.MANAGE_SETTINGS, PERMISSIONS.VIEW_SETTINGS, PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_ANALYTICS],
                     }).map(([category, permissions]) => (
                       <div key={category} className="border rounded-lg p-3">
-                        <h5 className="font-medium mb-2">{category}</h5>
-                        <div className="grid grid-cols-2 gap-1">
+                        <h5 className="font-medium mb-3">{category}</h5>
+                        <div className="space-y-3">
                           {permissions.map((permission: string) => {
-                            const hasPermission = ROLE_PERMISSIONS[managingPermissions.role as keyof typeof ROLE_PERMISSIONS]?.includes(permission);
+                            const hasPermission = userPermissions.includes(permission);
                             return (
-                              <div key={permission} className={`flex items-center space-x-2 p-1 rounded text-xs ${hasPermission ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                                <div className={`w-2 h-2 rounded-full ${hasPermission ? 'bg-green-600' : 'bg-gray-400'}`} />
-                                <span>{permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                              <div key={permission} className="flex items-center justify-between p-2 rounded-md border bg-card">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium">
+                                    {permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  </span>
+                                </div>
+                                <Switch
+                                  checked={hasPermission}
+                                  onCheckedChange={() => togglePermission(permission)}
+                                  data-testid={`switch-${permission}`}
+                                />
                               </div>
                             );
                           })}
@@ -562,10 +617,22 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setManagingPermissions(null)} data-testid="button-close-permissions">
-                  Close
-                </Button>
+              <div className="flex justify-between items-center pt-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  {userPermissions.length} permissions selected
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => setManagingPermissions(null)} data-testid="button-close-permissions">
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={savePermissions} 
+                    disabled={updatePermissionsMutation.isPending}
+                    data-testid="button-save-permissions"
+                  >
+                    {updatePermissionsMutation.isPending ? "Saving..." : "Save Permissions"}
+                  </Button>
+                </div>
               </div>
             </div>
           )}

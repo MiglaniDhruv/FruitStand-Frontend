@@ -1,128 +1,8 @@
 import { authService } from "./auth";
+import { PERMISSIONS, ROLE_PERMISSIONS } from "@shared/permissions";
 
-type PermissionKey = keyof typeof PERMISSIONS;
-
-// Define all available permissions in the system
-export const PERMISSIONS = {
-  // User Management
-  MANAGE_USERS: 'manage_users',
-  VIEW_USERS: 'view_users',
-  
-  // Vendor Management
-  MANAGE_VENDORS: 'manage_vendors',
-  VIEW_VENDORS: 'view_vendors',
-  DELETE_VENDORS: 'delete_vendors',
-  
-  // Item Management
-  MANAGE_ITEMS: 'manage_items',
-  VIEW_ITEMS: 'view_items',
-  DELETE_ITEMS: 'delete_items',
-  
-  // Purchase Invoices
-  CREATE_PURCHASE_INVOICES: 'create_purchase_invoices',
-  VIEW_PURCHASE_INVOICES: 'view_purchase_invoices',
-  EDIT_PURCHASE_INVOICES: 'edit_purchase_invoices',
-  DELETE_PURCHASE_INVOICES: 'delete_purchase_invoices',
-  
-  // Payments
-  CREATE_PAYMENTS: 'create_payments',
-  VIEW_PAYMENTS: 'view_payments',
-  EDIT_PAYMENTS: 'edit_payments',
-  DELETE_PAYMENTS: 'delete_payments',
-  
-  // Stock Management
-  MANAGE_STOCK: 'manage_stock',
-  VIEW_STOCK: 'view_stock',
-  
-  // Financial Reports & Ledgers
-  VIEW_LEDGERS: 'view_ledgers',
-  VIEW_REPORTS: 'view_reports',
-  VIEW_CASHBOOK: 'view_cashbook',
-  VIEW_BANKBOOK: 'view_bankbook',
-  
-  // Bank Accounts
-  MANAGE_BANK_ACCOUNTS: 'manage_bank_accounts',
-  VIEW_BANK_ACCOUNTS: 'view_bank_accounts',
-  
-  // System Settings
-  MANAGE_SETTINGS: 'manage_settings',
-  VIEW_SETTINGS: 'view_settings',
-  
-  // Dashboard & Analytics
-  VIEW_DASHBOARD: 'view_dashboard',
-  VIEW_ANALYTICS: 'view_analytics',
-} as const;
-
-// Define permissions for each role
-export const ROLE_PERMISSIONS = {
-  Admin: [
-    // Full system access
-    PERMISSIONS.MANAGE_USERS,
-    PERMISSIONS.VIEW_USERS,
-    PERMISSIONS.MANAGE_VENDORS,
-    PERMISSIONS.VIEW_VENDORS,
-    PERMISSIONS.DELETE_VENDORS,
-    PERMISSIONS.MANAGE_ITEMS,
-    PERMISSIONS.VIEW_ITEMS,
-    PERMISSIONS.DELETE_ITEMS,
-    PERMISSIONS.CREATE_PURCHASE_INVOICES,
-    PERMISSIONS.VIEW_PURCHASE_INVOICES,
-    PERMISSIONS.EDIT_PURCHASE_INVOICES,
-    PERMISSIONS.DELETE_PURCHASE_INVOICES,
-    PERMISSIONS.CREATE_PAYMENTS,
-    PERMISSIONS.VIEW_PAYMENTS,
-    PERMISSIONS.EDIT_PAYMENTS,
-    PERMISSIONS.DELETE_PAYMENTS,
-    PERMISSIONS.MANAGE_STOCK,
-    PERMISSIONS.VIEW_STOCK,
-    PERMISSIONS.VIEW_LEDGERS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.VIEW_CASHBOOK,
-    PERMISSIONS.VIEW_BANKBOOK,
-    PERMISSIONS.MANAGE_BANK_ACCOUNTS,
-    PERMISSIONS.VIEW_BANK_ACCOUNTS,
-    PERMISSIONS.MANAGE_SETTINGS,
-    PERMISSIONS.VIEW_SETTINGS,
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.VIEW_ANALYTICS,
-  ],
-  
-  Operator: [
-    // Operations focused permissions
-    PERMISSIONS.VIEW_VENDORS,
-    PERMISSIONS.MANAGE_VENDORS, // Can add/edit vendors
-    PERMISSIONS.VIEW_ITEMS,
-    PERMISSIONS.MANAGE_ITEMS, // Can add/edit items
-    PERMISSIONS.CREATE_PURCHASE_INVOICES,
-    PERMISSIONS.VIEW_PURCHASE_INVOICES,
-    PERMISSIONS.EDIT_PURCHASE_INVOICES,
-    PERMISSIONS.CREATE_PAYMENTS,
-    PERMISSIONS.VIEW_PAYMENTS,
-    PERMISSIONS.MANAGE_STOCK,
-    PERMISSIONS.VIEW_STOCK,
-    PERMISSIONS.VIEW_LEDGERS,
-    PERMISSIONS.VIEW_BANK_ACCOUNTS,
-    PERMISSIONS.VIEW_DASHBOARD,
-  ],
-  
-  Accountant: [
-    // Finance focused permissions
-    PERMISSIONS.VIEW_VENDORS,
-    PERMISSIONS.VIEW_ITEMS,
-    PERMISSIONS.VIEW_PURCHASE_INVOICES,
-    PERMISSIONS.CREATE_PAYMENTS,
-    PERMISSIONS.VIEW_PAYMENTS,
-    PERMISSIONS.EDIT_PAYMENTS,
-    PERMISSIONS.VIEW_STOCK,
-    PERMISSIONS.VIEW_LEDGERS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.VIEW_CASHBOOK,
-    PERMISSIONS.VIEW_BANKBOOK,
-    PERMISSIONS.VIEW_BANK_ACCOUNTS,
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.VIEW_ANALYTICS,
-  ],
-} as const;
+// Re-export for compatibility
+export { PERMISSIONS, ROLE_PERMISSIONS };
 
 // Permission checking utilities
 export const permissionService = {
@@ -133,8 +13,9 @@ export const permissionService = {
     const user = authService.getCurrentUser();
     if (!user) return false;
     
-    const rolePermissions = ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS];
-    return rolePermissions ? rolePermissions.includes(permission as any) : false;
+    // Check individual user permissions first, fallback to role permissions
+    const userPermissions = (user as any).permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS];
+    return userPermissions ? userPermissions.includes(permission as any) : false;
   },
 
   /**
@@ -158,7 +39,7 @@ export const permissionService = {
     const user = authService.getCurrentUser();
     if (!user) return [];
     
-    return ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
+    return (user as any).permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
   },
 
   /**

@@ -428,6 +428,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/users/:id/permissions", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+    try {
+      const { permissions } = req.body;
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ message: "Permissions must be an array" });
+      }
+      
+      const user = await storage.updateUserPermissions(req.params.id, permissions);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Remove password from response
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update user permissions" });
+    }
+  });
+
   // Dashboard KPIs
   app.get("/api/dashboard/kpis", authenticateToken, async (req, res) => {
     try {

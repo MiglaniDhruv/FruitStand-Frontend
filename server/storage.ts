@@ -21,6 +21,7 @@ import {
   type PaymentWithDetails,
   type StockWithItem
 } from "@shared/schema";
+import { ROLE_PERMISSIONS } from "@shared/permissions";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
@@ -31,6 +32,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  updateUserPermissions(id: string, permissions: string[]): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   
   // Vendor management
@@ -105,6 +107,7 @@ export class MemStorage implements IStorage {
       password: hashedPassword,
       role: "Admin",
       name: "System Administrator",
+      permissions: ROLE_PERMISSIONS.Admin,
       createdAt: new Date(),
     };
     this.users.set(admin.id, admin);
@@ -174,10 +177,13 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    // Set default permissions based on role
+    const defaultPermissions = ROLE_PERMISSIONS[insertUser.role as keyof typeof ROLE_PERMISSIONS] || [];
     const user: User = {
       ...insertUser,
       id: randomUUID(),
       password: hashedPassword,
+      permissions: defaultPermissions,
       createdAt: new Date(),
     };
     this.users.set(user.id, user);
@@ -194,6 +200,15 @@ export class MemStorage implements IStorage {
     }
     
     const updated = { ...user, ...updateDataWithHashedPassword };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  async updateUserPermissions(id: string, permissions: string[]): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updated = { ...user, permissions };
     this.users.set(id, updated);
     return updated;
   }

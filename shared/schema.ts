@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: text("role").notNull(), // Admin, Operator, Accountant
   name: text("name").notNull(),
+  permissions: text("permissions").array().default([]).notNull(), // Individual user permissions
   createdAt: timestamp("created_at").defaultNow(),
 });
 
