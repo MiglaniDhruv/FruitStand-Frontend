@@ -1,0 +1,97 @@
+
+
+
+
+
+
+
+
+
+
+
+
+📘 Software Overview – Commission Merchant Accounting System (APMC Fruit Market)
+
+## **1. Business Context**
+Commission merchants in APMC fruit markets act as intermediaries between farmers/vendors and retailers.
+
+Fruits are purchased from vendors/farmers at a base rate.
+
+The merchant earns commission (%), and may also charge labor & freight.
+
+Fruits are sold to retailers at the same base rate (commission is vendor-side).
+
+The business is currently managed on physical books:
+
+Board Book (summary of transactions)
+Cashbook (cash inflows/outflows)
+Vapari Book (vendor transactions)
+Udhaar Book (retailer credit balances)
+This results in inefficiency, errors, and lack of real-time analytics.
+
+The new software will replace physical books with a centralized digital system that automates:
+✅ Vendor-side accounting
+✅ Purchase invoices
+✅ Payments (multiple per invoice)
+✅ Stock in Crates & Kgs
+✅ Vendor-ledger, cashbook, and bankbook
+
+--- ## **2. Phase 1 Objectives**
+The first phase focuses on the Vendor-side (Purchases). It will:
+
+Digitize vendor creation & master data.
+Manage commodities (quality, unit, rate, vendor link).
+Generate purchase invoices with commission, freight, labor.
+Record vendor payments (supporting multiple per invoice).
+Maintain vendor ledger balances.
+Update stock in Crates & Kgs.
+Auto-update cashbook & bankbook.
+This ensures commission merchants can fully replace Vapari Book & Board Book with the system.
+
+--- ## **3. Stakeholders**
+Admin (Owner): Full access, overview of accounts.
+Operator (Clerk): Data entry for purchases & stock.
+Accountant: Payment entry, ledger checks, reports.
+--- ## **4. Functional Scope (Phase 1)** ### 🔹 **User & Role Management**
+Authentication (JWT).
+Role-based permissions.
+### 🔹 **Master Data Management**
+Vendors, Retailers (future phases), Commodities, Bank Accounts.
+Commodities linked to Vendors with quality, rate, unit (Crates/Kgs).
+### 🔹 **Purchase Management**
+Create Purchase Invoice (multi-item).
+Auto-calculate gross, commission, freight, labor, net payable.
+Support invoice status (Paid / Partially Paid / Unpaid).
+### 🔹 **Vendor Payments**
+Multiple payments per invoice.
+Payment modes: Cash, Bank, UPI, Cheque.
+Auto-update invoice balance & vendor ledger.
+### 🔹 **Stock Management**
+Update stock (Crates or Kgs).
+Track by commodity + quality.
+### 🔹 **Ledger & Book Automation (Vendor-side only)**
+Vendor Ledger: invoices + payments + balances.
+Cashbook: auto-updated when payment mode = cash.
+Bankbook: auto-updated when payment mode = bank/UPI/cheque.
+--- ## **5. Technical Scope**
+Stack: Node.js + Express, MongoDB (official driver).
+Architecture: REST APIs, modular folder structure.
+Security: JWT auth, role-based access control.
+Validation: Input validation (express-validator / joi).
+Error Handling: Centralized error middleware.
+Environment Config: .env for secrets & DB connection.
+--- ## **6. Expected Deliverables (Phase 1)**
+CRUD APIs: Vendors, Retailers, Commodities, Bank Accounts.
+
+APIs: Purchase Invoice, Vendor Payments, Vendor Ledger, Stock, Cashbook, Bankbook.
+
+Example JSON request & response for each API.
+
+End-to-end workflow tested:
+
+Create Vendor →
+Create Commodity tied to Vendor →
+Generate Purchase Invoice →
+Record Vendor Payments (multiple) →
+Check Ledger →
+Check Stock.
