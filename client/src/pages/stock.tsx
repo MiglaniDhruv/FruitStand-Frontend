@@ -37,8 +37,8 @@ export default function Stock() {
   });
 
   const updateStockMutation = useMutation({
-    mutationFn: async ({ commodityId, data }: { commodityId: string; data: any }) => {
-      const response = await authenticatedApiRequest("PUT", `/api/stock/${commodityId}`, data);
+    mutationFn: async ({ itemId, data }: { itemId: string; data: any }) => {
+      const response = await authenticatedApiRequest("PUT", `/api/stock/${itemId}`, data);
       return response.json();
     },
     onSuccess: () => {
@@ -62,9 +62,9 @@ export default function Stock() {
   const filteredStock = stock?.filter((item: any) => {
     const searchString = searchTerm.toLowerCase();
     return (
-      item.commodity.name.toLowerCase().includes(searchString) ||
-      item.commodity.quality.toLowerCase().includes(searchString) ||
-      item.commodity.vendor.name.toLowerCase().includes(searchString)
+      item.item.name.toLowerCase().includes(searchString) ||
+      item.item.quality.toLowerCase().includes(searchString) ||
+      item.item.vendor.name.toLowerCase().includes(searchString)
     );
   }) || [];
 
@@ -85,7 +85,7 @@ export default function Stock() {
     if (!editingStock) return;
 
     updateStockMutation.mutate({
-      commodityId: editingStock.commodityId,
+      itemId: editingStock.itemId,
       data: {
         quantityInCrates: quantities.crates,
         quantityInKgs: quantities.kgs,
@@ -132,7 +132,7 @@ export default function Stock() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Commodity</TableHead>
+                    <TableHead>Item</TableHead>
                     <TableHead>Quality</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Quantity (Crates)</TableHead>
@@ -158,9 +158,9 @@ export default function Stock() {
                   ) : (
                     filteredStock.map((item: any) => (
                       <TableRow key={item.id} data-testid={`stock-row-${item.id}`}>
-                        <TableCell className="font-medium">{item.commodity.name}</TableCell>
-                        <TableCell>{item.commodity.quality}</TableCell>
-                        <TableCell>{item.commodity.vendor.name}</TableCell>
+                        <TableCell className="font-medium">{item.item.name}</TableCell>
+                        <TableCell>{item.item.quality}</TableCell>
+                        <TableCell>{item.item.vendor.name}</TableCell>
                         <TableCell>{parseFloat(item.quantityInCrates).toFixed(2)}</TableCell>
                         <TableCell>{parseFloat(item.quantityInKgs).toFixed(2)}</TableCell>
                         <TableCell>{format(new Date(item.lastUpdated), "MMM dd, yyyy")}</TableCell>
@@ -203,7 +203,7 @@ export default function Stock() {
           <div className="space-y-4">
             {editingStock && (
               <div className="text-sm text-muted-foreground">
-                {editingStock.commodity.name} - {editingStock.commodity.quality}
+                {editingStock.item.name} - {editingStock.item.quality}
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
