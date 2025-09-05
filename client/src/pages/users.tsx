@@ -38,9 +38,10 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Users, Plus, Edit, Trash2 } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { PERMISSIONS, ROLE_PERMISSIONS, permissionService } from "@/lib/permissions";
 
 const userSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -66,6 +67,7 @@ type EditUserFormData = z.infer<typeof editUserSchema>;
 export default function UserManagement() {
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [managingPermissions, setManagingPermissions] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -196,6 +198,10 @@ export default function UserManagement() {
     if (confirm("Are you sure you want to delete this user?")) {
       deleteUserMutation.mutate(id);
     }
+  };
+
+  const handleManagePermissions = (user: any) => {
+    setManagingPermissions(user);
   };
 
   const onSubmit = (data: UserFormData) => {
@@ -343,19 +349,20 @@ export default function UserManagement() {
                     <TableHead>Username</TableHead>
                     <TableHead>Full Name</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Permissions</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8">
+                      <TableCell colSpan={5} className="text-center py-8">
                         Loading users...
                       </TableCell>
                     </TableRow>
                   ) : filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         No users found
                       </TableCell>
                     </TableRow>
@@ -370,7 +377,21 @@ export default function UserManagement() {
                           </Badge>
                         </TableCell>
                         <TableCell>
+                          <div className="text-sm text-muted-foreground">
+                            {ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS]?.length || 0} permissions
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleManagePermissions(user)}
+                              data-testid={`button-manage-permissions-${user.id}`}
+                              title="Manage Permissions"
+                            >
+                              <Shield className="h-4 w-4" />
+                            </Button>
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -478,6 +499,76 @@ export default function UserManagement() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Management Modal */}
+      <Dialog open={!!managingPermissions} onOpenChange={() => setManagingPermissions(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Permissions - {managingPermissions?.name}</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Role: <Badge variant={getRoleBadgeVariant(managingPermissions?.role)}>
+                {managingPermissions?.role}
+              </Badge>
+            </p>
+          </DialogHeader>
+          
+          {managingPermissions && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium">Current Permissions</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ROLE_PERMISSIONS[managingPermissions.role as keyof typeof ROLE_PERMISSIONS]?.map((permission: string) => (
+                      <div key={permission} className="flex items-center space-x-2 p-2 bg-secondary rounded-md">
+                        <Shield className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">{permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      </div>
+                    )) || []}
+                  </div>
+                </div>
+
+                <div className="space-y-4 border-t pt-4">
+                  <h4 className="text-lg font-medium">All Available Permissions</h4>
+                  <div className="grid grid-cols-1 gap-3">
+                    {Object.entries({
+                      "User Management": [PERMISSIONS.MANAGE_USERS, PERMISSIONS.VIEW_USERS],
+                      "Vendor Management": [PERMISSIONS.MANAGE_VENDORS, PERMISSIONS.VIEW_VENDORS, PERMISSIONS.DELETE_VENDORS],
+                      "Item Management": [PERMISSIONS.MANAGE_ITEMS, PERMISSIONS.VIEW_ITEMS, PERMISSIONS.DELETE_ITEMS],
+                      "Purchase Invoices": [PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES, PERMISSIONS.DELETE_PURCHASE_INVOICES],
+                      "Payments": [PERMISSIONS.CREATE_PAYMENTS, PERMISSIONS.VIEW_PAYMENTS, PERMISSIONS.EDIT_PAYMENTS, PERMISSIONS.DELETE_PAYMENTS],
+                      "Stock Management": [PERMISSIONS.MANAGE_STOCK, PERMISSIONS.VIEW_STOCK],
+                      "Financial Reports": [PERMISSIONS.VIEW_LEDGERS, PERMISSIONS.VIEW_REPORTS, PERMISSIONS.VIEW_CASHBOOK, PERMISSIONS.VIEW_BANKBOOK],
+                      "Bank Accounts": [PERMISSIONS.MANAGE_BANK_ACCOUNTS, PERMISSIONS.VIEW_BANK_ACCOUNTS],
+                      "System": [PERMISSIONS.MANAGE_SETTINGS, PERMISSIONS.VIEW_SETTINGS, PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_ANALYTICS],
+                    }).map(([category, permissions]) => (
+                      <div key={category} className="border rounded-lg p-3">
+                        <h5 className="font-medium mb-2">{category}</h5>
+                        <div className="grid grid-cols-2 gap-1">
+                          {permissions.map((permission: string) => {
+                            const hasPermission = ROLE_PERMISSIONS[managingPermissions.role as keyof typeof ROLE_PERMISSIONS]?.includes(permission);
+                            return (
+                              <div key={permission} className={`flex items-center space-x-2 p-1 rounded text-xs ${hasPermission ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                                <div className={`w-2 h-2 rounded-full ${hasPermission ? 'bg-green-600' : 'bg-gray-400'}`} />
+                                <span>{permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setManagingPermissions(null)} data-testid="button-close-permissions">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
