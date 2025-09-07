@@ -208,7 +208,7 @@ export default function SalesInvoiceManagement() {
   });
 
   const createInvoiceMutation = useMutation({
-    mutationFn: async (data: InvoiceFormData) => {
+    mutationFn: async (data: any) => {
       const response = await authenticatedApiRequest("POST", "/api/sales-invoices", data);
       return response.json();
     },

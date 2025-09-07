@@ -92,7 +92,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
       const paymentData = {
         ...data,
         paymentDate: data.paymentDate,
-        bankAccountId: data.bankAccountId || null,
+        bankAccountId: data.bankAccountId || undefined,
       };
       const response = await authenticatedApiRequest("POST", "/api/payments", paymentData);
       return response.json();
