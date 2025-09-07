@@ -585,9 +585,10 @@ export default function ExpenseManagement() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
+      </main>
+    </div>
 
-      {/* Add Expense Dialog */}
+    {/* Add Expense Dialog */}
       <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

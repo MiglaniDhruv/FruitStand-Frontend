@@ -226,14 +226,14 @@ export default function Reports() {
 
   // Recent activity (last 7 days)
   const sevenDaysAgo = subDays(new Date(), 7);
-  const recentPurchases = purchaseInvoices.filter(inv => 
+  const recentPurchases = purchaseInvoices.filter((inv: any) => 
     isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() })
   ).length;
-  const recentSales = salesInvoices.filter(inv => 
+  const recentSales = salesInvoices.filter((inv: any) => 
     isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() })
   ).length;
-  const recentExpenses = expenses.filter(exp => 
-    isWithinInterval(parseISO(exp.expenseDate), { start: sevenDaysAgo, end: new Date() })
+  const recentExpenses = expenses.filter((exp: any) => 
+    isWithinInterval(parseISO(exp.paymentDate), { start: sevenDaysAgo, end: new Date() })
   ).length;
 
   if (purchasesLoading || salesLoading) {

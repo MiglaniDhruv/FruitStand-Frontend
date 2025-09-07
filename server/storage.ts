@@ -169,7 +169,7 @@ export class MemStorage implements IStorage {
       password: hashedPassword,
       role: "Admin",
       name: "System Administrator",
-      permissions: ROLE_PERMISSIONS.Admin,
+      permissions: [...ROLE_PERMISSIONS.Admin],
       createdAt: new Date(),
     };
     this.users.set(admin.id, admin);
@@ -278,7 +278,7 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const hashedPassword = await bcrypt.hash(insertUser.password, 10);
     // Set default permissions based on role
-    const defaultPermissions = ROLE_PERMISSIONS[insertUser.role as keyof typeof ROLE_PERMISSIONS] || [];
+    const defaultPermissions = [...(ROLE_PERMISSIONS[insertUser.role as keyof typeof ROLE_PERMISSIONS] || [])];
     const user: User = {
       ...insertUser,
       id: randomUUID(),
@@ -331,6 +331,7 @@ export class MemStorage implements IStorage {
       ...insertVendor,
       id: randomUUID(),
       balance: "0.00",
+      isActive: insertVendor.isActive ?? true,
       createdAt: new Date(),
     };
     this.vendors.set(vendor.id, vendor);
@@ -373,6 +374,7 @@ export class MemStorage implements IStorage {
     const item: Item = {
       ...insertItem,
       id: randomUUID(),
+      isActive: insertItem.isActive ?? true,
       createdAt: new Date(),
     };
     this.items.set(item.id, item);
@@ -472,6 +474,15 @@ export class MemStorage implements IStorage {
       paidAmount: "0.00",
       balanceAmount,
       status,
+      commission: insertInvoice.commission ?? "0.00",
+      labour: insertInvoice.labour ?? "0.00",
+      truckFreight: insertInvoice.truckFreight ?? "0.00",
+      crateFreight: insertInvoice.crateFreight ?? "0.00",
+      postExpenses: insertInvoice.postExpenses ?? "0.00",
+      draftExpenses: insertInvoice.draftExpenses ?? "0.00",
+      vatav: insertInvoice.vatav ?? "0.00",
+      otherExpenses: insertInvoice.otherExpenses ?? "0.00",
+      advance: insertInvoice.advance ?? "0.00",
       createdAt: new Date(),
     };
     this.purchaseInvoices.set(invoice.id, invoice);
@@ -495,7 +506,7 @@ export class MemStorage implements IStorage {
     // Update vendor balance
     const vendor = this.vendors.get(invoice.vendorId);
     if (vendor) {
-      vendor.balance = (parseFloat(vendor.balance!) + parseFloat(invoice.netAmount)).toFixed(2);
+      vendor.balance = (parseFloat(vendor.balance || "0.00") + parseFloat(invoice.netAmount)).toFixed(2);
       this.vendors.set(vendor.id, vendor);
     }
 
@@ -522,8 +533,8 @@ export class MemStorage implements IStorage {
     }
 
     // Update both weight and crates from purchase invoice
-    stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs!) + parseFloat(invoiceItem.weight)).toFixed(2);
-    stockEntry.quantityInCrates = (parseFloat(stockEntry.quantityInCrates!) + parseFloat(invoiceItem.crates)).toFixed(2);
+    stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs || "0.00") + parseFloat(invoiceItem.weight)).toFixed(2);
+    stockEntry.quantityInCrates = (parseFloat(stockEntry.quantityInCrates || "0.00") + parseFloat(invoiceItem.crates)).toFixed(2);
     stockEntry.lastUpdated = new Date();
     this.stock.set(stockEntry.id, stockEntry);
   }
@@ -553,6 +564,10 @@ export class MemStorage implements IStorage {
     const payment: Payment = {
       ...insertPayment,
       id: randomUUID(),
+      bankAccountId: insertPayment.bankAccountId ?? null,
+      chequeNumber: insertPayment.chequeNumber ?? null,
+      upiReference: insertPayment.upiReference ?? null,
+      notes: insertPayment.notes ?? null,
       createdAt: new Date(),
     };
     this.payments.set(payment.id, payment);
@@ -579,7 +594,7 @@ export class MemStorage implements IStorage {
     // Update vendor balance
     const vendor = this.vendors.get(payment.vendorId);
     if (vendor) {
-      vendor.balance = (parseFloat(vendor.balance!) - parseFloat(payment.amount)).toFixed(2);
+      vendor.balance = (parseFloat(vendor.balance || "0.00") - parseFloat(payment.amount)).toFixed(2);
       this.vendors.set(vendor.id, vendor);
     }
 
