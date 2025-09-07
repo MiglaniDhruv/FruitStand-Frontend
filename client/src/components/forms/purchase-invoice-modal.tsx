@@ -181,7 +181,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   }, [form, watchedItems, totalExpense, totalSelling, totalLessExpenses, netAmount]);
 
   const onSubmit = (data: InvoiceFormData) => {
-    const invoiceData = {
+    const invoice = {
       vendorId: data.vendorId,
       invoiceDate: data.invoiceDate,
       commission: commissionAmount,
@@ -199,15 +199,16 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       netAmount: parseFloat(data.netAmount),
       balanceAmount: parseFloat(data.netAmount), // Initially balance equals net amount
       status: "Unpaid",
-      items: data.items.map(item => ({
-        itemId: item.itemId,
-        weight: parseFloat(item.weight),
-        rate: parseFloat(item.rate),
-        amount: parseFloat(item.amount),
-      })),
     };
 
-    createInvoiceMutation.mutate(invoiceData);
+    const items = data.items.map(item => ({
+      itemId: item.itemId,
+      weight: parseFloat(item.weight),
+      rate: parseFloat(item.rate),
+      amount: parseFloat(item.amount),
+    }));
+
+    createInvoiceMutation.mutate({ invoice, items });
   };
 
   const addItem = () => {
