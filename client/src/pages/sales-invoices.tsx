@@ -70,7 +70,8 @@ const invoiceFormSchema = z.object({
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
 const paymentSchema = z.object({
-  salesInvoiceId: z.string().min(1, "Sales invoice is required"),
+  invoiceId: z.string().min(1, "Sales invoice is required"),
+  retailerId: z.string().min(1, "Retailer is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
   paymentDate: z.string().min(1, "Payment date is required"),
   paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"]),
@@ -124,7 +125,8 @@ export default function SalesInvoiceManagement() {
   const paymentForm = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      salesInvoiceId: "",
+      invoiceId: "",
+      retailerId: "",
       amount: 0,
       paymentDate: format(new Date(), "yyyy-MM-dd"),
       paymentMode: "Cash",
@@ -185,7 +187,12 @@ export default function SalesInvoiceManagement() {
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
-      const response = await authenticatedApiRequest("POST", "/api/sales-payments", data);
+      const paymentData = {
+        ...data,
+        amount: data.amount.toFixed(2), // Convert number to string for backend
+        bankAccountId: data.bankAccountId || null,
+      };
+      const response = await authenticatedApiRequest("POST", "/api/sales-payments", paymentData);
       return response.json();
     },
     onSuccess: () => {
@@ -322,7 +329,8 @@ export default function SalesInvoiceManagement() {
   const handleRecordPayment = (invoice: any) => {
     setSelectedInvoice(invoice);
     paymentForm.reset({
-      salesInvoiceId: invoice.id,
+      invoiceId: invoice.id,
+      retailerId: invoice.retailerId,
       amount: 0,
       paymentDate: format(new Date(), "yyyy-MM-dd"),
       paymentMode: "Cash",
@@ -343,7 +351,7 @@ export default function SalesInvoiceManagement() {
   };
 
   const getInvoicePayments = (invoiceId: string) => {
-    return salesPayments.filter((payment: any) => payment.salesInvoiceId === invoiceId);
+    return salesPayments.filter((payment: any) => payment.invoiceId === invoiceId);
   };
 
   const filteredInvoices = invoices.filter((invoice: any) =>
