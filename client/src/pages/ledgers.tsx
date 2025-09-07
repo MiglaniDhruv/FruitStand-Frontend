@@ -224,7 +224,7 @@ export default function Ledgers() {
     filteredExpenses.forEach((expense: any) => {
       const amount = parseFloat(expense.amount || "0");
       allEntries.push({
-        date: expense.expenseDate,
+        date: expense.paymentDate,
         description: `${expense.paymentMode} expense - ${expense.description}`,
         paymentMode: expense.paymentMode,
         bankAccount: expense.paymentMode !== "Cash" ? getBankAccountName(expense.bankAccountId || "") : "Cash",
@@ -234,8 +234,10 @@ export default function Ledgers() {
       });
     });
 
-    // Sort entries by date
-    const sortedEntries = allEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort entries by date (with validation)
+    const sortedEntries = allEntries
+      .filter(entry => entry.date && !isNaN(new Date(entry.date).getTime())) // Filter out invalid dates
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Calculate running balance and add daily opening/closing
     let runningBalance = 0;
@@ -245,7 +247,25 @@ export default function Ledgers() {
 
     for (let i = 0; i < sortedEntries.length; i++) {
       const entry = sortedEntries[i];
-      const entryDate = format(new Date(entry.date), "yyyy-MM-dd");
+      
+      // Validate date before formatting
+      if (!entry.date) {
+        console.warn('Entry has no date, skipping:', entry);
+        continue;
+      }
+      
+      let entryDate;
+      try {
+        const dateObj = new Date(entry.date);
+        if (isNaN(dateObj.getTime())) {
+          console.warn('Invalid date in entry, skipping:', entry.date, entry);
+          continue;
+        }
+        entryDate = format(dateObj, "yyyy-MM-dd");
+      } catch (error) {
+        console.warn('Error formatting date, skipping entry:', entry.date, error);
+        continue;
+      }
       
       // Add opening balance for new day
       if (entryDate !== currentDate) {
