@@ -300,7 +300,22 @@ export default function SalesInvoiceManagement() {
   };
 
   const onSubmit = (data: InvoiceFormData) => {
-    createInvoiceMutation.mutate(data);
+    // Convert numbers to strings for backend compatibility
+    const formattedData = {
+      invoice: {
+        ...data.invoice,
+        totalAmount: data.invoice.totalAmount.toFixed(2),
+        paidAmount: data.invoice.paidAmount.toFixed(2),
+        dueAmount: data.invoice.dueAmount.toFixed(2),
+      },
+      items: data.items.map(item => ({
+        ...item,
+        quantity: item.quantity.toFixed(2),
+        rate: item.rate.toFixed(2),
+        amount: item.amount.toFixed(2),
+      })),
+    };
+    createInvoiceMutation.mutate(formattedData);
   };
 
   const handleRecordPayment = (invoice: any) => {

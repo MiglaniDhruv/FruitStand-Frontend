@@ -135,6 +135,7 @@ export default function ExpenseManagement() {
     mutationFn: async (data: ExpenseFormData) => {
       const expenseData = {
         ...data,
+        amount: data.amount.toFixed(2), // Convert number to string
         bankAccountId: data.bankAccountId || null,
       };
       const response = await authenticatedApiRequest("POST", "/api/expenses", expenseData);
