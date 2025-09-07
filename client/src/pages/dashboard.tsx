@@ -8,6 +8,7 @@ import RecentPayments from "@/components/dashboard/recent-payments";
 import { Search, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DashboardKPIs } from "@/types";
 
 export default function Dashboard() {
   const { data: kpis, isLoading: kpisLoading } = useQuery<DashboardKPIs>({
