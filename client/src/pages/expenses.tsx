@@ -340,12 +340,15 @@ export default function ExpenseManagement() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <div className="flex-1 p-8 overflow-auto">
-        <div className="max-w-7xl mx-auto space-y-8">
-          <div className="flex justify-between items-center">
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-card border-b border-border px-6 py-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Expense Management</h1>
-              <p className="text-muted-foreground">Track business expenses and manage categories</p>
+              <h2 className="text-2xl font-semibold text-foreground">Expense Management</h2>
+              <p className="text-sm text-muted-foreground">
+                Track business expenses and manage categories
+              </p>
             </div>
             <div className="flex space-x-2">
               <Button variant="outline" onClick={handleCreateCategory} data-testid="button-add-category">
@@ -358,6 +361,11 @@ export default function ExpenseManagement() {
               </Button>
             </div>
           </div>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-auto p-6">
+          <div className="max-w-7xl mx-auto space-y-8">
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -805,6 +813,9 @@ export default function ExpenseManagement() {
           </Form>
         </DialogContent>
       </Dialog>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
