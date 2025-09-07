@@ -34,6 +34,7 @@ import { Plus, Trash2 } from "lucide-react";
 const invoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
   weight: z.string().min(1, "Weight is required"),
+  crates: z.string().min(1, "Crates is required"),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
 });
@@ -73,7 +74,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      items: [{ itemId: "", weight: "", rate: "", amount: "0" }],
+      items: [{ itemId: "", weight: "", crates: "", rate: "", amount: "0" }],
       commission: "0",
       labour: "0",
       truckFreight: "0",
@@ -204,6 +205,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     const items = data.items.map(item => ({
       itemId: item.itemId,
       weight: parseFloat(item.weight).toFixed(2),
+      crates: parseFloat(item.crates).toFixed(2),
       rate: parseFloat(item.rate).toFixed(2),
       amount: parseFloat(item.amount).toFixed(2),
     }));
@@ -212,7 +214,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   };
 
   const addItem = () => {
-    append({ itemId: "", weight: "", rate: "", amount: "0" });
+    append({ itemId: "", weight: "", crates: "", rate: "", amount: "0" });
   };
 
   const removeItem = (index: number) => {
@@ -297,7 +299,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border rounded-lg">
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
                     <FormField
                       control={form.control}
                       name={`items.${index}.itemId`}
@@ -328,7 +330,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                       name={`items.${index}.weight`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Weight *</FormLabel>
+                          <FormLabel>Weight (Kgs) *</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
@@ -336,6 +338,26 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                               placeholder="0.00" 
                               {...field} 
                               data-testid={`input-weight-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.crates`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Crates *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-crates-${index}`}
                             />
                           </FormControl>
                           <FormMessage />
