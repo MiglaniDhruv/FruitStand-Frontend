@@ -43,7 +43,6 @@ import { format, parseISO } from "date-fns";
 export default function Ledgers() {
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [selectedRetailer, setSelectedRetailer] = useState("all");
-  const [selectedBankAccount, setSelectedBankAccount] = useState("all");
   const [dateFilter, setDateFilter] = useState({
     startDate: format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd")
@@ -171,180 +170,132 @@ export default function Ledgers() {
   const filteredExpenses = filterByDate(expenses, "expenseDate");
   const filteredCrateTransactions = filterByDate(crateTransactions, "transactionDate");
 
-  // 1. Board Book - Summary of all transactions
-  const getBoardBookEntries = () => {
-    const entries: any[] = [];
+  // Combined Cashbook - All cash and bank transactions with daily balances
+  const getCombinedCashbookEntries = () => {
+    const allEntries: any[] = [];
 
-    // Add purchase invoices
-    filteredPurchases.forEach(purchase => {
-      entries.push({
-        date: purchase.invoiceDate,
-        description: `Purchase from ${getVendorName(purchase.vendorId)} - Invoice ${purchase.invoiceNumber}`,
-        type: "Purchase",
-        debit: parseFloat(purchase.totalAmount || "0"),
-        credit: 0,
-        reference: purchase.invoiceNumber,
-      });
-    });
-
-    // Add sales invoices
-    filteredSales.forEach(sale => {
-      entries.push({
-        date: sale.invoiceDate,
-        description: `Sale to ${getRetailerName(sale.retailerId)} - Invoice ${sale.invoiceNumber}`,
-        type: "Sale",
-        debit: 0,
-        credit: parseFloat(sale.totalAmount || "0"),
-        reference: sale.invoiceNumber,
-      });
-    });
-
-    // Add purchase payments
-    filteredPayments.forEach(payment => {
-      const purchase = purchaseInvoices.find(p => p.id === payment.invoiceId);
-      entries.push({
-        date: payment.paymentDate,
-        description: `Payment to ${getVendorName(purchase?.vendorId || "")} - ${payment.paymentMode}`,
-        type: "Payment Out",
-        debit: 0,
-        credit: parseFloat(payment.amount || "0"),
-        reference: `PAY-${payment.id?.slice(0, 8)}`,
-      });
-    });
-
-    // Add sales payments
-    filteredSalesPayments.forEach(payment => {
-      const sale = salesInvoices.find(s => s.id === payment.salesInvoiceId);
-      entries.push({
-        date: payment.paymentDate,
-        description: `Payment from ${getRetailerName(sale?.retailerId || "")} - ${payment.paymentMode}`,
-        type: "Payment In",
-        debit: parseFloat(payment.amount || "0"),
-        credit: 0,
-        reference: `REC-${payment.id?.slice(0, 8)}`,
-      });
-    });
-
-    // Add expenses
-    filteredExpenses.forEach(expense => {
-      entries.push({
-        date: expense.expenseDate,
-        description: `${getCategoryName(expense.categoryId)} - ${expense.description}`,
-        type: "Expense",
-        debit: 0,
-        credit: parseFloat(expense.amount || "0"),
-        reference: `EXP-${expense.id?.slice(0, 8)}`,
-      });
-    });
-
-    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };
-
-  // 2. Cashbook - Cash inflows/outflows
-  const getCashbookEntries = () => {
-    const entries: any[] = [];
-    let runningBalance = 0;
-
-    // Sales payments in cash
-    const cashSalesPayments = filteredSalesPayments.filter((p: any) => p.paymentMode === "Cash");
-    cashSalesPayments.forEach((payment: any) => {
+    // Sales payments (all modes)
+    filteredSalesPayments.forEach((payment: any) => {
       const sale = salesInvoices.find((s: any) => s.id === payment.salesInvoiceId);
       const amount = parseFloat(payment.amount || "0");
-      runningBalance += amount;
-      entries.push({
-        date: payment.paymentDate,
-        description: `Cash receipt from ${getRetailerName(sale?.retailerId || "")}`,
-        inflow: amount,
-        outflow: 0,
-        balance: runningBalance,
-      });
-    });
-
-    // Purchase payments in cash
-    const cashPurchasePayments = filteredPayments.filter((p: any) => p.paymentMode === "Cash");
-    cashPurchasePayments.forEach((payment: any) => {
-      const purchase = purchaseInvoices.find((p: any) => p.id === payment.invoiceId);
-      const amount = parseFloat(payment.amount || "0");
-      runningBalance -= amount;
-      entries.push({
-        date: payment.paymentDate,
-        description: `Cash payment to ${getVendorName(purchase?.vendorId || "")}`,
-        inflow: 0,
-        outflow: amount,
-        balance: runningBalance,
-      });
-    });
-
-    // Cash expenses
-    const cashExpenses = filteredExpenses.filter((e: any) => e.paymentMode === "Cash");
-    cashExpenses.forEach((expense: any) => {
-      const amount = parseFloat(expense.amount || "0");
-      runningBalance -= amount;
-      entries.push({
-        date: expense.expenseDate,
-        description: `Cash expense - ${expense.description}`,
-        inflow: 0,
-        outflow: amount,
-        balance: runningBalance,
-      });
-    });
-
-    return entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  };
-
-  // 3. Bankbook - Bank/UPI/Cheque inflows/outflows
-  const getBankbookEntries = () => {
-    const entries: any[] = [];
-
-    // Non-cash sales payments
-    const bankSalesPayments = filteredSalesPayments.filter((p: any) => p.paymentMode !== "Cash");
-    bankSalesPayments.forEach((payment: any) => {
-      const sale = salesInvoices.find((s: any) => s.id === payment.salesInvoiceId);
-      entries.push({
+      allEntries.push({
         date: payment.paymentDate,
         description: `${payment.paymentMode} receipt from ${getRetailerName(sale?.retailerId || "")}`,
-        bankAccount: getBankAccountName(payment.bankAccountId || ""),
-        debit: parseFloat(payment.amount || "0"),
-        credit: 0,
         paymentMode: payment.paymentMode,
+        bankAccount: payment.paymentMode !== "Cash" ? getBankAccountName(payment.bankAccountId || "") : "Cash",
+        inflow: amount,
+        outflow: 0,
+        type: "Receipt",
       });
     });
 
-    // Non-cash purchase payments
-    const bankPurchasePayments = filteredPayments.filter((p: any) => p.paymentMode !== "Cash");
-    bankPurchasePayments.forEach((payment: any) => {
+    // Purchase payments (all modes)
+    filteredPayments.forEach((payment: any) => {
       const purchase = purchaseInvoices.find((p: any) => p.id === payment.invoiceId);
-      entries.push({
+      const amount = parseFloat(payment.amount || "0");
+      allEntries.push({
         date: payment.paymentDate,
         description: `${payment.paymentMode} payment to ${getVendorName(purchase?.vendorId || "")}`,
-        bankAccount: getBankAccountName(payment.bankAccountId || ""),
-        debit: 0,
-        credit: parseFloat(payment.amount || "0"),
         paymentMode: payment.paymentMode,
+        bankAccount: payment.paymentMode !== "Cash" ? getBankAccountName(payment.bankAccountId || "") : "Cash",
+        inflow: 0,
+        outflow: amount,
+        type: "Payment",
       });
     });
 
-    // Non-cash expenses
-    const bankExpenses = filteredExpenses.filter((e: any) => e.paymentMode !== "Cash");
-    bankExpenses.forEach((expense: any) => {
-      entries.push({
+    // Expenses (all modes)
+    filteredExpenses.forEach((expense: any) => {
+      const amount = parseFloat(expense.amount || "0");
+      allEntries.push({
         date: expense.expenseDate,
         description: `${expense.paymentMode} expense - ${expense.description}`,
-        bankAccount: getBankAccountName(expense.bankAccountId || ""),
-        debit: 0,
-        credit: parseFloat(expense.amount || "0"),
         paymentMode: expense.paymentMode,
+        bankAccount: expense.paymentMode !== "Cash" ? getBankAccountName(expense.bankAccountId || "") : "Cash",
+        inflow: 0,
+        outflow: amount,
+        type: "Expense",
       });
     });
 
-    const filteredEntries = selectedBankAccount === "all" 
-      ? entries 
-      : entries.filter(e => e.bankAccount === getBankAccountName(selectedBankAccount));
+    // Sort entries by date
+    const sortedEntries = allEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    return filteredEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Calculate running balance and add daily opening/closing
+    let runningBalance = 0;
+    const entriesWithBalance = [];
+    let currentDate = "";
+    let dayOpeningBalance = 0;
+
+    for (let i = 0; i < sortedEntries.length; i++) {
+      const entry = sortedEntries[i];
+      const entryDate = format(new Date(entry.date), "yyyy-MM-dd");
+      
+      // Add opening balance for new day
+      if (entryDate !== currentDate) {
+        if (currentDate !== "") {
+          // Add closing balance for previous day
+          entriesWithBalance.push({
+            date: currentDate,
+            description: "Day Closing Balance",
+            paymentMode: "Balance",
+            bankAccount: "All Accounts",
+            inflow: 0,
+            outflow: 0,
+            balance: runningBalance,
+            type: "Closing",
+            isBalanceEntry: true,
+          });
+        }
+        
+        currentDate = entryDate;
+        dayOpeningBalance = runningBalance;
+        
+        // Add opening balance for new day
+        entriesWithBalance.push({
+          date: entryDate,
+          description: "Day Opening Balance",
+          paymentMode: "Balance",
+          bankAccount: "All Accounts",
+          inflow: 0,
+          outflow: 0,
+          balance: runningBalance,
+          type: "Opening",
+          isBalanceEntry: true,
+        });
+      }
+      
+      // Calculate new balance
+      runningBalance += entry.inflow - entry.outflow;
+      
+      // Add the actual transaction
+      entriesWithBalance.push({
+        ...entry,
+        balance: runningBalance,
+        isBalanceEntry: false,
+      });
+    }
+    
+    // Add final closing balance
+    if (currentDate !== "") {
+      entriesWithBalance.push({
+        date: currentDate,
+        description: "Day Closing Balance",
+        paymentMode: "Balance",
+        bankAccount: "All Accounts",
+        inflow: 0,
+        outflow: 0,
+        balance: runningBalance,
+        type: "Closing",
+        isBalanceEntry: true,
+      });
+    }
+
+    return entriesWithBalance;
   };
 
-  // 4. Vapari Book (Vendor Ledger) - Vendor-wise purchases, payments, balances
+
+  // 2. Vapari Book (Vendor Ledger) - Vendor-wise purchases, payments, balances
   const getVendorLedgerEntries = () => {
     if (selectedVendor === "all") return [];
 
@@ -387,7 +338,7 @@ export default function Ledgers() {
     return entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
-  // 5. Retailer Ledger - Retailer-wise sales, payments, balances
+  // 3. Retailer Ledger - Retailer-wise sales, payments, balances
   const getRetailerLedgerEntries = () => {
     if (selectedRetailer === "all") return [];
 
@@ -520,9 +471,7 @@ export default function Ledgers() {
     }
   };
 
-  const boardBookEntries = getBoardBookEntries();
-  const cashbookEntries = getCashbookEntries();
-  const bankbookEntries = getBankbookEntries();
+  const cashbookEntries = getCombinedCashbookEntries();
   const vendorLedgerEntries = getVendorLedgerEntries();
   const retailerLedgerEntries = getRetailerLedgerEntries();
   const udhaarBookEntries = getUdhaarBookEntries();
@@ -568,79 +517,23 @@ export default function Ledgers() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto p-6">
-          <Tabs defaultValue="board-book" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-7">
-              <TabsTrigger value="board-book" data-testid="tab-board-book">Board Book</TabsTrigger>
+          <Tabs defaultValue="cashbook" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="cashbook" data-testid="tab-cashbook">Cashbook</TabsTrigger>
-              <TabsTrigger value="bankbook" data-testid="tab-bankbook">Bankbook</TabsTrigger>
               <TabsTrigger value="vapari-book" data-testid="tab-vapari-book">Vapari Book</TabsTrigger>
               <TabsTrigger value="retailer-ledger" data-testid="tab-retailer-ledger">Retailer Ledger</TabsTrigger>
               <TabsTrigger value="udhaar-book" data-testid="tab-udhaar-book">Udhaar Book</TabsTrigger>
               <TabsTrigger value="crate-ledger" data-testid="tab-crate-ledger">Crate Ledger</TabsTrigger>
             </TabsList>
 
-            {/* 1. Board Book */}
-            <TabsContent value="board-book">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Book className="h-5 w-5" />
-                    <span>Board Book - All Transactions Summary</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Debit</TableHead>
-                        <TableHead>Credit</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {boardBookEntries.map((entry, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              entry.type === "Sale" ? "default" :
-                              entry.type === "Payment In" ? "default" :
-                              "secondary"
-                            }>
-                              {entry.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{entry.description}</TableCell>
-                          <TableCell><code className="text-xs">{entry.reference}</code></TableCell>
-                          <TableCell>{entry.debit > 0 ? formatCurrency(entry.debit) : "-"}</TableCell>
-                          <TableCell className="text-green-600">
-                            {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {boardBookEntries.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            No transactions found for the selected period
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
 
-            {/* 2. Cashbook */}
+            {/* Combined Cashbook */}
             <TabsContent value="cashbook">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <DollarSign className="h-5 w-5" />
-                    <span>Cashbook - Cash Inflows & Outflows</span>
+                    <span>Cashbook - All Cash & Bank Transactions</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -649,16 +542,29 @@ export default function Ledgers() {
                       <TableRow>
                         <TableHead>Date</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Payment Mode</TableHead>
+                        <TableHead>Account</TableHead>
                         <TableHead>Inflow</TableHead>
                         <TableHead>Outflow</TableHead>
-                        <TableHead>Running Balance</TableHead>
+                        <TableHead>Balance</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cashbookEntries.map((entry, index) => (
-                        <TableRow key={index}>
+                      {cashbookEntries.map((entry: any, index: number) => (
+                        <TableRow 
+                          key={index} 
+                          className={entry.isBalanceEntry ? "bg-muted/50 font-medium" : ""}
+                        >
                           <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
                           <TableCell>{entry.description}</TableCell>
+                          <TableCell>
+                            {entry.isBalanceEntry ? (
+                              <Badge variant="secondary">{entry.paymentMode}</Badge>
+                            ) : (
+                              <Badge variant="outline">{entry.paymentMode}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{entry.bankAccount}</TableCell>
                           <TableCell className="text-green-600">
                             {entry.inflow > 0 ? formatCurrency(entry.inflow) : "-"}
                           </TableCell>
@@ -672,8 +578,8 @@ export default function Ledgers() {
                       ))}
                       {cashbookEntries.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            No cash transactions found for the selected period
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            No transactions found for the selected period
                           </TableCell>
                         </TableRow>
                       )}
@@ -683,73 +589,8 @@ export default function Ledgers() {
               </Card>
             </TabsContent>
 
-            {/* 3. Bankbook */}
-            <TabsContent value="bankbook">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center space-x-2">
-                      <CreditCard className="h-5 w-5" />
-                      <span>Bankbook - Bank/UPI/Cheque Transactions</span>
-                    </CardTitle>
-                    <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
-                      <SelectTrigger className="w-64" data-testid="select-bank-account">
-                        <SelectValue placeholder="All bank accounts" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Accounts</SelectItem>
-                        {bankAccounts.map((account: any) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.bankName} - {account.accountNumber?.slice(-4)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Bank Account</TableHead>
-                        <TableHead>Mode</TableHead>
-                        <TableHead>Debit</TableHead>
-                        <TableHead>Credit</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {bankbookEntries.map((entry, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
-                          <TableCell>{entry.description}</TableCell>
-                          <TableCell>{entry.bankAccount}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{entry.paymentMode}</Badge>
-                          </TableCell>
-                          <TableCell className="text-green-600">
-                            {entry.debit > 0 ? formatCurrency(entry.debit) : "-"}
-                          </TableCell>
-                          <TableCell className="text-red-600">
-                            {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {bankbookEntries.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            No bank transactions found for the selected period
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
 
-            {/* 4. Vapari Book (Vendor Ledger) */}
+            {/* 2. Vapari Book (Vendor Ledger) */}
             <TabsContent value="vapari-book">
               <Card>
                 <CardHeader>
@@ -823,7 +664,7 @@ export default function Ledgers() {
               </Card>
             </TabsContent>
 
-            {/* 5. Retailer Ledger */}
+            {/* 3. Retailer Ledger */}
             <TabsContent value="retailer-ledger">
               <Card>
                 <CardHeader>
@@ -897,7 +738,7 @@ export default function Ledgers() {
               </Card>
             </TabsContent>
 
-            {/* 6. Udhaar Book */}
+            {/* 4. Udhaar Book */}
             <TabsContent value="udhaar-book">
               <Card>
                 <CardHeader>
@@ -948,7 +789,7 @@ export default function Ledgers() {
               </Card>
             </TabsContent>
 
-            {/* 7. Crate Ledger */}
+            {/* 5. Crate Ledger */}
             <TabsContent value="crate-ledger">
               <Card>
                 <CardHeader>
