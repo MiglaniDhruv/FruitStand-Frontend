@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +62,16 @@ const crateTransactionSchema = z.object({
   transactionDate: z.string().min(1, "Transaction date is required"),
   salesInvoiceId: z.string().optional(),
   notes: z.string().optional(),
+  withDeposit: z.boolean().default(false),
+  depositAmount: z.number().optional(),
+}).refine((data) => {
+  if (data.withDeposit && (!data.depositAmount || data.depositAmount <= 0)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Deposit amount is required when with deposit is selected",
+  path: ["depositAmount"],
 });
 
 type CrateTransactionFormData = z.infer<typeof crateTransactionSchema>;
@@ -81,6 +93,8 @@ export default function CrateManagement() {
       transactionDate: format(new Date(), "yyyy-MM-dd"),
       salesInvoiceId: "",
       notes: "",
+      withDeposit: false,
+      depositAmount: undefined,
     },
   });
 
@@ -115,6 +129,7 @@ export default function CrateManagement() {
       const transactionData = {
         ...data,
         salesInvoiceId: data.salesInvoiceId || null,
+        depositAmount: data.withDeposit ? data.depositAmount : null,
       };
       const response = await authenticatedApiRequest("POST", "/api/crate-transactions", transactionData);
       return response.json();
@@ -146,6 +161,8 @@ export default function CrateManagement() {
       transactionDate: format(new Date(), "yyyy-MM-dd"),
       salesInvoiceId: "",
       notes: "",
+      withDeposit: false,
+      depositAmount: undefined,
     });
     setDialogOpen(true);
   };
@@ -567,6 +584,60 @@ export default function CrateManagement() {
                   )}
                 />
               </div>
+
+              {/* Deposit Option */}
+              <FormField
+                control={form.control}
+                name="withDeposit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Deposit Option</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={(value) => field.onChange(value === "true")}
+                        value={field.value ? "true" : "false"}
+                        className="flex flex-row space-x-6"
+                        data-testid="radio-deposit-option"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="false" id="without-deposit" />
+                          <Label htmlFor="without-deposit">Without Deposit</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="true" id="with-deposit" />
+                          <Label htmlFor="with-deposit">With Deposit</Label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Deposit Amount (Conditional) */}
+              {form.watch("withDeposit") && (
+                <FormField
+                  control={form.control}
+                  name="depositAmount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deposit Amount *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          placeholder="Enter deposit amount"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          data-testid="input-deposit-amount"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
