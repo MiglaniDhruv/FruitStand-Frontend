@@ -75,6 +75,7 @@ export const invoiceItems = pgTable("invoice_items", {
   invoiceId: uuid("invoice_id").references(() => purchaseInvoices.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
+  crates: decimal("crates", { precision: 8, scale: 2 }).notNull(),
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -162,8 +163,8 @@ export const salesInvoiceItems = pgTable("sales_invoice_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceId: uuid("invoice_id").references(() => salesInvoices.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
-  quantity: decimal("quantity", { precision: 8, scale: 2 }).notNull(),
-  unit: text("unit").notNull(), // Crates, Kgs
+  weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
+  crates: decimal("crates", { precision: 8, scale: 2 }).notNull(),
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
