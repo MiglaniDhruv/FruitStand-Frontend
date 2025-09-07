@@ -172,63 +172,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Commodity routes
-  app.get("/api/commodities", authenticateToken, async (req, res) => {
+  // Items routes
+  app.get("/api/items", authenticateToken, async (req, res) => {
     try {
-      const commodities = await storage.getCommodities();
-      res.json(commodities);
+      const items = await storage.getItems();
+      res.json(items);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch commodities" });
+      res.status(500).json({ message: "Failed to fetch items" });
     }
   });
 
-  app.get("/api/commodities/vendor/:vendorId", authenticateToken, async (req, res) => {
+  app.get("/api/items/vendor/:vendorId", authenticateToken, async (req, res) => {
     try {
-      const commodities = await storage.getCommoditiesByVendor(req.params.vendorId);
-      res.json(commodities);
+      const items = await storage.getItemsByVendor(req.params.vendorId);
+      res.json(items);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch commodities" });
+      res.status(500).json({ message: "Failed to fetch items" });
     }
   });
 
-  app.post("/api/commodities", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.post("/api/items", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
     try {
-      const commodityData = insertCommoditySchema.parse(req.body);
-      const commodity = await storage.createCommodity(commodityData);
-      res.status(201).json(commodity);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create commodity" });
-    }
-  });
-
-  app.put("/api/commodities/:id", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
-    try {
-      const commodityData = insertCommoditySchema.partial().parse(req.body);
-      const commodity = await storage.updateCommodity(req.params.id, commodityData);
-      if (!commodity) {
-        return res.status(404).json({ message: "Commodity not found" });
-      }
-      res.json(commodity);
+      const itemData = insertItemSchema.parse(req.body);
+      const item = await storage.createItem(itemData);
+      res.status(201).json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to update commodity" });
+      res.status(500).json({ message: "Failed to create item" });
     }
   });
 
-  app.delete("/api/commodities/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.put("/api/items/:id", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
     try {
-      const success = await storage.deleteCommodity(req.params.id);
+      const itemData = insertItemSchema.partial().parse(req.body);
+      const item = await storage.updateItem(req.params.id, itemData);
+      if (!item) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update item" });
+    }
+  });
+
+  app.delete("/api/items/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+    try {
+      const success = await storage.deleteItem(req.params.id);
       if (!success) {
-        return res.status(404).json({ message: "Commodity not found" });
+        return res.status(404).json({ message: "Item not found" });
       }
-      res.json({ message: "Commodity deleted successfully" });
+      res.json({ message: "Item deleted successfully" });
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete commodity" });
+      res.status(500).json({ message: "Failed to delete item" });
     }
   });
 
