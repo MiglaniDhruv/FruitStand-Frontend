@@ -146,7 +146,8 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     return sum + (weight * rate);
   }, 0);
   
-  const commission = parseFloat(watchedCommission) || 0;
+  const commissionPercentage = parseFloat(watchedCommission) || 0;
+  const commissionAmount = (totalSelling * commissionPercentage) / 100;
   const labour = parseFloat(watchedLabour) || 0;
   const truckFreight = parseFloat(watchedTruckFreight) || 0;
   const crateFreight = parseFloat(watchedCrateFreight) || 0;
@@ -156,7 +157,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const otherExpenses = parseFloat(watchedOtherExpenses) || 0;
   const advance = parseFloat(watchedAdvance) || 0;
   
-  const totalExpense = commission + labour + truckFreight + crateFreight + postExpenses + draftExpenses + vatav + otherExpenses + advance;
+  const totalExpense = commissionAmount + labour + truckFreight + crateFreight + postExpenses + draftExpenses + vatav + otherExpenses + advance;
   const totalLessExpenses = totalSelling - totalExpense;
   const netAmount = totalLessExpenses;
 
@@ -183,7 +184,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     const invoiceData = {
       vendorId: data.vendorId,
       invoiceDate: data.invoiceDate,
-      commission: parseFloat(data.commission),
+      commission: commissionAmount,
       labour: parseFloat(data.labour),
       truckFreight: parseFloat(data.truckFreight),
       crateFreight: parseFloat(data.crateFreight),
@@ -408,16 +409,23 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   name="commission"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Commission (₹)</FormLabel>
+                      <FormLabel>Commission (%)</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
                           step="0.01" 
+                          min="0"
+                          max="100"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-commission" 
                         />
                       </FormControl>
+                      {commissionPercentage > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          = ₹{commissionAmount.toFixed(2)}
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

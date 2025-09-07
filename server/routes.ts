@@ -281,8 +281,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { invoice, items } = req.body;
       
+      if (!invoice || !items || !Array.isArray(items)) {
+        return res.status(400).json({ message: "Invoice and items are required" });
+      }
+
       const invoiceData = insertPurchaseInvoiceSchema.parse(invoice);
-      const itemsData = z.array(insertInvoiceItemSchema.omit({ invoiceId: true })).parse(items);
+      const itemsData = items.map((item: any) => insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
       
       const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData);
       res.status(201).json(createdInvoice);
