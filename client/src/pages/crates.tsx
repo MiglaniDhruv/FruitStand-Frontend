@@ -635,9 +635,8 @@ export default function CrateManagement() {
           </Form>
         </DialogContent>
       </Dialog>
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

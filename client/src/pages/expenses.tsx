@@ -813,9 +813,8 @@ export default function ExpenseManagement() {
           </Form>
         </DialogContent>
       </Dialog>
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
