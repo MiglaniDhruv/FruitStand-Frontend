@@ -56,10 +56,10 @@ const salesInvoiceSchema = z.object({
 
 const salesInvoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
-  quantity: z.number().min(0.1, "Quantity must be positive"),
+  weight: z.number().min(0.1, "Weight must be positive"),
+  crates: z.number().min(0.1, "Crates must be positive"),
   rate: z.number().min(0.01, "Rate must be positive"),
   amount: z.number().min(0, "Amount must be positive"),
-  unit: z.enum(["Crates", "Kgs"]),
 });
 
 const invoiceFormSchema = z.object({
