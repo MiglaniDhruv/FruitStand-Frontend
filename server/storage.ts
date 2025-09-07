@@ -248,6 +248,7 @@ export class MemStorage implements IStorage {
       { name: "Market Fee", description: "Market and commission fees" },
       { name: "Utilities", description: "Electricity, water, and utilities" },
       { name: "Office Expenses", description: "Stationary, office supplies" },
+      { name: "Purchase", description: "Purchase invoice expenses" },
     ];
 
     expenseCategories.forEach(cat => {
