@@ -12,7 +12,6 @@ import Retailers from "@/pages/retailers";
 import Items from "@/pages/items";
 import PurchaseInvoices from "@/pages/purchase-invoices";
 import SalesInvoices from "@/pages/sales-invoices";
-import Payments from "@/pages/payments";
 import Expenses from "@/pages/expenses";
 import Crates from "@/pages/crates";
 import Stock from "@/pages/stock";
@@ -60,7 +59,6 @@ function Router() {
       <Route path="/items" component={() => <ProtectedRoute component={Items} />} />
       <Route path="/purchase-invoices" component={() => <ProtectedRoute component={PurchaseInvoices} />} />
       <Route path="/sales-invoices" component={() => <ProtectedRoute component={SalesInvoices} />} />
-      <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
       <Route path="/expenses" component={() => <ProtectedRoute component={Expenses} />} />
       <Route path="/crates" component={() => <ProtectedRoute component={Crates} />} />
       <Route path="/stock" component={() => <ProtectedRoute component={Stock} />} />

@@ -68,12 +68,6 @@ const navigationItems = [
     permission: PERMISSIONS.VIEW_PURCHASE_INVOICES, // Using existing permission for now
   },
   {
-    title: "Payments",
-    href: "/payments",
-    icon: CreditCard,
-    permission: PERMISSIONS.VIEW_PAYMENTS,
-  },
-  {
     title: "Expenses",
     href: "/expenses",
     icon: TrendingDown,
