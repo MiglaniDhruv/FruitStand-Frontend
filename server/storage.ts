@@ -500,6 +500,22 @@ export class MemStorage implements IStorage {
       this.vendors.set(vendor.id, vendor);
     }
 
+    // Automatically create expense entry for this purchase invoice
+    const purchaseCategory = Array.from(this.expenseCategories.values()).find(cat => cat.name === "Purchase");
+    if (purchaseCategory) {
+      const expenseEntry: InsertExpense = {
+        categoryId: purchaseCategory.id,
+        amount: invoice.netAmount,
+        paymentMode: "Cash", // Default to Cash as invoices are typically paid later
+        paymentDate: invoice.invoiceDate,
+        description: `Purchase Invoice - ${invoice.invoiceNumber}`,
+        notes: `Auto-generated expense for purchase invoice ${invoice.invoiceNumber} from vendor ${vendor?.name || 'Unknown'}`,
+      };
+      
+      // Create the expense without await to avoid circular dependency issues
+      await this.createExpense(expenseEntry);
+    }
+
     return {
       ...invoice,
       items: createdItems,
