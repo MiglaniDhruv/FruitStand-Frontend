@@ -45,14 +45,70 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 
+// Payment form schema
+const paymentSchema = z.object({
+  invoiceId: z.string().min(1, "Invoice is required"),
+  vendorId: z.string().min(1, "Vendor is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  paymentDate: z.string().min(1, "Payment date is required"),
+  paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"], {
+    required_error: "Payment mode is required",
+  }),
+  bankAccountId: z.string().optional(),
+  transactionReference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+type PaymentFormData = z.infer<typeof paymentSchema>;
+
 export default function PurchaseInvoices() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  
+  // Payment management state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentHistoryDialogOpen, setPaymentHistoryDialogOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<any>(null);
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
+  // Payment form
+  const paymentForm = useForm<PaymentFormData>({
+    resolver: zodResolver(paymentSchema),
+    defaultValues: {
+      invoiceId: "",
+      vendorId: "",
+      amount: 0,
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
+      paymentMode: "Cash",
+      bankAccountId: "",
+      transactionReference: "",
+      notes: "",
+    },
+  });
+
+  // Fetch data
   const { data: invoices, isLoading } = useQuery<any[]>({
     queryKey: ["/api/purchase-invoices"],
+  });
+
+  const { data: payments = [] } = useQuery({
+    queryKey: ["/api/payments"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/payments");
+      return response.json();
+    },
+  });
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["/api/bank-accounts"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
+      return response.json();
+    },
   });
 
   const filteredInvoices = invoices?.filter((invoice: any) => {
