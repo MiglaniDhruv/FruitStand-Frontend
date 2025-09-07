@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,10 +23,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Eye } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import { Search, Plus, Eye, CreditCard, History } from "lucide-react";
 import PurchaseInvoiceModal from "@/components/forms/purchase-invoice-modal";
 import InvoiceDetailsModal from "@/components/modals/invoice-details-modal";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { authenticatedApiRequest } from "@/lib/auth";
 
 export default function PurchaseInvoices() {
   const [searchTerm, setSearchTerm] = useState("");
