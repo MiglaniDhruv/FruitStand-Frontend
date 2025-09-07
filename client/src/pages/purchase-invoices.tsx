@@ -111,6 +111,70 @@ export default function PurchaseInvoices() {
     },
   });
 
+  // Payment creation mutation
+  const createPaymentMutation = useMutation({
+    mutationFn: async (data: PaymentFormData) => {
+      const paymentData = {
+        ...data,
+        amount: data.amount.toString(), // Convert number to string for backend
+        bankAccountId: data.bankAccountId || null,
+      };
+      const response = await authenticatedApiRequest("POST", "/api/payments", paymentData);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Payment recorded",
+        description: "Purchase payment has been recorded successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
+      setPaymentDialogOpen(false);
+      paymentForm.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to record payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Helper functions
+  const getBankAccountName = (bankAccountId: string) => {
+    const account = bankAccounts.find((account: any) => account.id === bankAccountId);
+    return account?.accountName || "Unknown Bank";
+  };
+
+  const getInvoicePayments = (invoiceId: string) => {
+    return payments.filter((payment: any) => payment.invoiceId === invoiceId);
+  };
+
+  const handleRecordPayment = (invoice: any) => {
+    setSelectedInvoiceForPayment(invoice);
+    paymentForm.reset({
+      invoiceId: invoice.id,
+      vendorId: invoice.vendorId,
+      amount: 0,
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
+      paymentMode: "Cash",
+      bankAccountId: "",
+      transactionReference: "",
+      notes: "",
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  const handleViewPaymentHistory = (invoice: any) => {
+    setSelectedInvoiceForPayment(invoice);
+    setPaymentHistoryDialogOpen(true);
+  };
+
+  const onSubmitPayment = (data: PaymentFormData) => {
+    createPaymentMutation.mutate(data);
+  };
+
   const filteredInvoices = invoices?.filter((invoice: any) => {
     const matchesSearch = 
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
