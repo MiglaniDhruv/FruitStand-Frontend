@@ -477,9 +477,10 @@ export default function CrateManagement() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
+      </main>
+    </div>
 
-      {/* Record Transaction Dialog */}
+    {/* Record Transaction Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

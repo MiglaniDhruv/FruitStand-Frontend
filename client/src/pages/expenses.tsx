@@ -338,6 +338,7 @@ export default function ExpenseManagement() {
   }
 
   return (
+    <>
     <div className="flex h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col">
@@ -814,8 +815,7 @@ export default function ExpenseManagement() {
           </Form>
         </DialogContent>
       </Dialog>
-        </div>
-      </main>
     </div>
+    </>
   );
 }
