@@ -156,10 +156,26 @@ export default function Ledgers() {
   // Filter data by date range
   const filterByDate = (data: any[], dateField: string) => {
     return data.filter((item) => {
-      const itemDate = parseISO(item[dateField]);
-      const startDate = parseISO(dateFilter.startDate);
-      const endDate = parseISO(dateFilter.endDate);
-      return itemDate >= startDate && itemDate <= endDate;
+      // Safety check: ensure item and dateField exist
+      if (!item || !item[dateField]) {
+        return false;
+      }
+      
+      try {
+        const itemDate = parseISO(item[dateField]);
+        const startDate = parseISO(dateFilter.startDate);
+        const endDate = parseISO(dateFilter.endDate);
+        
+        // Check if dates are valid
+        if (isNaN(itemDate.getTime()) || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return false;
+        }
+        
+        return itemDate >= startDate && itemDate <= endDate;
+      } catch (error) {
+        console.warn(`Error parsing date for field ${dateField}:`, item[dateField]);
+        return false;
+      }
     });
   };
 
@@ -167,7 +183,7 @@ export default function Ledgers() {
   const filteredSales = filterByDate(salesInvoices, "invoiceDate");
   const filteredPayments = filterByDate(payments, "paymentDate");
   const filteredSalesPayments = filterByDate(salesPayments, "paymentDate");
-  const filteredExpenses = filterByDate(expenses, "expenseDate");
+  const filteredExpenses = filterByDate(expenses, "paymentDate");
   const filteredCrateTransactions = filterByDate(crateTransactions, "transactionDate");
 
   // Combined Cashbook - All cash and bank transactions with daily balances
