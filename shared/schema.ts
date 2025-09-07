@@ -298,6 +298,7 @@ export const insertSalesInvoiceSchema = createInsertSchema(salesInvoices, {
 
 export const insertSalesInvoiceItemSchema = createInsertSchema(salesInvoiceItems).omit({
   id: true,
+  invoiceId: true,
   createdAt: true,
 });
 
