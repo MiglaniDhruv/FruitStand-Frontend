@@ -508,11 +508,22 @@ export class MemStorage implements IStorage {
 
   private async updateStockFromInvoiceItem(invoiceItem: InvoiceItem): Promise<void> {
     const stockEntry = Array.from(this.stock.values()).find(s => s.itemId === invoiceItem.itemId);
-    if (!stockEntry) return;
+    if (!stockEntry) {
+      // Create new stock entry if it doesn't exist
+      const newStock: Stock = {
+        id: randomUUID(),
+        itemId: invoiceItem.itemId,
+        quantityInCrates: parseFloat(invoiceItem.crates).toFixed(2),
+        quantityInKgs: parseFloat(invoiceItem.weight).toFixed(2),
+        lastUpdated: new Date(),
+      };
+      this.stock.set(newStock.id, newStock);
+      return;
+    }
 
-    // For invoice items, we use weight directly instead of checking unit
+    // Update both weight and crates from purchase invoice
     stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs!) + parseFloat(invoiceItem.weight)).toFixed(2);
-
+    stockEntry.quantityInCrates = (parseFloat(stockEntry.quantityInCrates!) + parseFloat(invoiceItem.crates)).toFixed(2);
     stockEntry.lastUpdated = new Date();
     this.stock.set(stockEntry.id, stockEntry);
   }
@@ -867,23 +878,27 @@ export class MemStorage implements IStorage {
       return invoiceItem;
     });
 
-    // Update stock (decrease quantities)
+    // Update stock (decrease quantities) - Using new weight and crates structure
     for (const item of items) {
       const stock = await this.getStockByItem(item.itemId);
       if (stock) {
         const currentCrates = parseFloat(stock.quantityInCrates);
         const currentKgs = parseFloat(stock.quantityInKgs);
-        const saleQuantity = parseFloat(item.quantity.toString());
+        const saleWeight = parseFloat(item.weight.toString());
+        const saleCrates = parseFloat(item.crates.toString());
 
-        if (item.unit === "Crates") {
-          await this.updateStock(item.itemId, {
-            quantityInCrates: (currentCrates - saleQuantity).toFixed(2),
-          });
-        } else if (item.unit === "Kgs") {
-          await this.updateStock(item.itemId, {
-            quantityInKgs: (currentKgs - saleQuantity).toFixed(2),
-          });
+        // Check if we have enough stock
+        if (currentKgs < saleWeight || currentCrates < saleCrates) {
+          throw new Error(`Insufficient stock for item ${item.itemId}. Available: ${currentKgs} Kgs, ${currentCrates} Crates. Required: ${saleWeight} Kgs, ${saleCrates} Crates`);
         }
+
+        // Update stock by reducing both weight and crates
+        await this.updateStock(item.itemId, {
+          quantityInCrates: (currentCrates - saleCrates).toFixed(2),
+          quantityInKgs: (currentKgs - saleWeight).toFixed(2),
+        });
+      } else {
+        throw new Error(`No stock found for item ${item.itemId}`);
       }
     }
 
