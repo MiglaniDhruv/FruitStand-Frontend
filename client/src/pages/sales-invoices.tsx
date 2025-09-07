@@ -107,10 +107,10 @@ export default function SalesInvoiceManagement() {
       items: [
         {
           itemId: "",
-          quantity: 0,
+          weight: 0,
+          crates: 0,
           rate: 0,
           amount: 0,
-          unit: "Crates",
         },
       ],
     },
@@ -247,10 +247,10 @@ export default function SalesInvoiceManagement() {
       items: [
         {
           itemId: "",
-          quantity: 0,
+          weight: 0,
+          crates: 0,
           rate: 0,
           amount: 0,
-          unit: "Crates",
         },
       ],
     });
@@ -258,9 +258,9 @@ export default function SalesInvoiceManagement() {
   };
 
   const calculateItemAmount = (index: number) => {
-    const quantity = form.watch(`items.${index}.quantity`);
+    const weight = form.watch(`items.${index}.weight`);
     const rate = form.watch(`items.${index}.rate`);
-    const amount = quantity * rate;
+    const amount = weight * rate;
     form.setValue(`items.${index}.amount`, amount);
     calculateTotalAmount();
   };
@@ -310,7 +310,8 @@ export default function SalesInvoiceManagement() {
       },
       items: data.items.map(item => ({
         ...item,
-        quantity: item.quantity.toFixed(2),
+        weight: item.weight.toFixed(2),
+        crates: item.crates.toFixed(2),
         rate: item.rate.toFixed(2),
         amount: item.amount.toFixed(2),
       })),
@@ -620,10 +621,10 @@ export default function SalesInvoiceManagement() {
                     size="sm"
                     onClick={() => append({
                       itemId: "",
-                      quantity: 0,
+                      weight: 0,
+                      crates: 0,
                       rate: 0,
                       amount: 0,
-                      unit: "Crates",
                     })}
                     data-testid="button-add-item"
                   >
@@ -662,10 +663,10 @@ export default function SalesInvoiceManagement() {
 
                       <FormField
                         control={form.control}
-                        name={`items.${index}.quantity`}
+                        name={`items.${index}.weight`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Quantity</FormLabel>
+                            <FormLabel>Weight (Kgs) *</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
@@ -675,7 +676,7 @@ export default function SalesInvoiceManagement() {
                                   field.onChange(parseFloat(e.target.value) || 0);
                                   calculateItemAmount(index);
                                 }}
-                                data-testid={`input-quantity-${index}`}
+                                data-testid={`input-weight-${index}`}
                               />
                             </FormControl>
                             <FormMessage />
@@ -685,21 +686,22 @@ export default function SalesInvoiceManagement() {
 
                       <FormField
                         control={form.control}
-                        name={`items.${index}.unit`}
+                        name={`items.${index}.crates`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Unit</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid={`select-unit-${index}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="Crates">Crates</SelectItem>
-                                <SelectItem value="Kgs">Kgs</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormLabel>Crates *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => {
+                                  field.onChange(parseFloat(e.target.value) || 0);
+                                }}
+                                data-testid={`input-crates-${index}`}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
