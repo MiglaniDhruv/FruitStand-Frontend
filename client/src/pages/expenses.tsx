@@ -64,7 +64,7 @@ const expenseSchema = z.object({
   categoryId: z.string().min(1, "Category is required"),
   description: z.string().min(1, "Description is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
-  expenseDate: z.string().min(1, "Expense date is required"),
+  paymentDate: z.string().min(1, "Payment date is required"),
   paymentMode: z.enum(["Cash", "Bank", "UPI", "Card"]),
   bankAccountId: z.string().optional(),
   notes: z.string().optional(),
@@ -90,7 +90,7 @@ export default function ExpenseManagement() {
       categoryId: "",
       description: "",
       amount: 0,
-      expenseDate: format(new Date(), "yyyy-MM-dd"),
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
       paymentMode: "Cash",
       bankAccountId: "",
       notes: "",
@@ -233,7 +233,7 @@ export default function ExpenseManagement() {
       categoryId: "",
       description: "",
       amount: 0,
-      expenseDate: format(new Date(), "yyyy-MM-dd"),
+      paymentDate: format(new Date(), "yyyy-MM-dd"),
       paymentMode: "Cash",
       bankAccountId: "",
       notes: "",
@@ -310,7 +310,7 @@ export default function ExpenseManagement() {
   );
   const todaysExpenses = expenses.filter((expense: any) => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const expenseDate = format(new Date(expense.expenseDate), "yyyy-MM-dd");
+    const expenseDate = format(new Date(expense.paymentDate), "yyyy-MM-dd");
     return expenseDate === today;
   });
   const todaysAmount = todaysExpenses.reduce((sum: number, expense: any) => 
@@ -473,7 +473,7 @@ export default function ExpenseManagement() {
                     <TableBody>
                       {filteredExpenses.map((expense: any) => (
                         <TableRow key={expense.id}>
-                          <TableCell>{format(new Date(expense.expenseDate), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{format(new Date(expense.paymentDate), "dd/MM/yyyy")}</TableCell>
                           <TableCell className="font-medium">{expense.description}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{getCategoryName(expense.categoryId)}</Badge>
@@ -651,7 +651,7 @@ export default function ExpenseManagement() {
 
                 <FormField
                   control={expenseForm.control}
-                  name="expenseDate"
+                  name="paymentDate"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Date *</FormLabel>
