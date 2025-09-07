@@ -350,6 +350,230 @@ export default function PurchaseInvoices() {
         open={!!selectedInvoice}
         onOpenChange={() => setSelectedInvoice(null)}
       />
+
+      {/* Payment Recording Dialog */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          
+          {selectedInvoiceForPayment && (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="text-sm space-y-1">
+                  <div><strong>Invoice:</strong> {selectedInvoiceForPayment.invoiceNumber}</div>
+                  <div><strong>Vendor:</strong> {selectedInvoiceForPayment.vendor.name}</div>
+                  <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.netAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Paid Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.paidAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Balance Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.balanceAmount).toLocaleString("en-IN")}</div>
+                </div>
+              </div>
+
+              <Form {...paymentForm}>
+                <form onSubmit={paymentForm.handleSubmit(onSubmitPayment)} className="space-y-4">
+                  <FormField
+                    control={paymentForm.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Amount</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Enter payment amount"
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                            data-testid="input-payment-amount"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={paymentForm.control}
+                    name="paymentDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} data-testid="input-payment-date" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={paymentForm.control}
+                    name="paymentMode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Mode</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-payment-mode">
+                              <SelectValue placeholder="Select payment mode" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Cash">Cash</SelectItem>
+                            <SelectItem value="Bank">Bank Transfer</SelectItem>
+                            <SelectItem value="UPI">UPI</SelectItem>
+                            <SelectItem value="Cheque">Cheque</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {(paymentForm.watch("paymentMode") === "Bank" || 
+                    paymentForm.watch("paymentMode") === "UPI" || 
+                    paymentForm.watch("paymentMode") === "Cheque") && (
+                    <FormField
+                      control={paymentForm.control}
+                      name="bankAccountId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bank Account</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-bank-account">
+                                <SelectValue placeholder="Select bank account" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {bankAccounts.map((account: any) => (
+                                <SelectItem key={account.id} value={account.id}>
+                                  {account.accountName} - {account.accountNumber}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={paymentForm.control}
+                    name="transactionReference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Transaction Reference</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Reference number/ID" {...field} data-testid="input-transaction-reference" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={paymentForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Additional notes" {...field} data-testid="input-payment-notes" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPaymentDialogOpen(false)}
+                      data-testid="button-payment-cancel"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createPaymentMutation.isPending}
+                      data-testid="button-payment-submit"
+                    >
+                      {createPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={paymentHistoryDialogOpen} onOpenChange={setPaymentHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Payment History</DialogTitle>
+          </DialogHeader>
+          
+          {selectedInvoiceForPayment && (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="text-sm space-y-1">
+                  <div><strong>Invoice:</strong> {selectedInvoiceForPayment.invoiceNumber}</div>
+                  <div><strong>Vendor:</strong> {selectedInvoiceForPayment.vendor.name}</div>
+                  <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.netAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Paid Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.paidAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Balance Amount:</strong> ₹{parseFloat(selectedInvoiceForPayment.balanceAmount).toLocaleString("en-IN")}</div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium mb-3">Payment Records</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Reference</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getInvoicePayments(selectedInvoiceForPayment.id).map((payment: any) => (
+                      <TableRow key={payment.id}>
+                        <TableCell>{format(new Date(payment.paymentDate), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="font-medium">₹{parseFloat(payment.amount).toLocaleString("en-IN")}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{payment.paymentMode}</Badge>
+                        </TableCell>
+                        <TableCell>{payment.transactionReference || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                    {getInvoicePayments(selectedInvoiceForPayment.id).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                          No payments recorded for this invoice
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <Button variant="outline" onClick={() => setPaymentHistoryDialogOpen(false)} data-testid="button-history-close">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
