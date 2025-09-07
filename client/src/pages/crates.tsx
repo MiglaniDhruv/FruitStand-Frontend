@@ -374,6 +374,7 @@ export default function CrateManagement() {
                         <TableHead>Retailer</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Quantity</TableHead>
+                        <TableHead>Deposit</TableHead>
                         <TableHead>Sales Invoice</TableHead>
                         <TableHead>Notes</TableHead>
                       </TableRow>
@@ -393,6 +394,22 @@ export default function CrateManagement() {
                           </TableCell>
                           <TableCell className="font-medium">{transaction.quantity}</TableCell>
                           <TableCell>
+                            {transaction.depositAmount && parseFloat(transaction.depositAmount) > 0 ? (
+                              <div className="flex items-center space-x-1">
+                                <span className="font-medium">₹{parseFloat(transaction.depositAmount).toLocaleString("en-IN")}</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                  transaction.transactionType === "Given" 
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" 
+                                    : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                                }`}>
+                                  {transaction.transactionType === "Given" ? "Received" : "Paid"}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">No deposit</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {transaction.salesInvoiceId ? (
                               <Badge variant="outline">
                                 {getSalesInvoiceNumber(transaction.salesInvoiceId)}
@@ -406,7 +423,7 @@ export default function CrateManagement() {
                       ))}
                       {filteredTransactions.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
+                          <TableCell colSpan={7} className="text-center py-8">
                             {searchTerm || selectedRetailer !== "all" || selectedTransactionType !== "all"
                               ? "No transactions found matching your filters."
                               : "No crate transactions found. Record your first transaction!"
@@ -619,23 +636,43 @@ export default function CrateManagement() {
                 <FormField
                   control={form.control}
                   name="depositAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Deposit Amount *</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          placeholder="Enter deposit amount"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
-                          data-testid="input-deposit-amount"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const transactionType = form.watch("transactionType");
+                    const isGiven = transactionType === "Given";
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel className="flex items-center space-x-2">
+                          <span>Deposit Amount *</span>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            isGiven 
+                              ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" 
+                              : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                          }`}>
+                            {isGiven ? "Received from retailer" : "Paid to retailer"}
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder={`Enter deposit amount ${isGiven ? "received" : "to pay"}`}
+                            {...field}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                            data-testid="input-deposit-amount"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                        <p className="text-xs text-muted-foreground">
+                          {isGiven 
+                            ? "Amount received from retailer as deposit for crates given"
+                            : "Amount to be paid back to retailer for returned crates"
+                          }
+                        </p>
+                      </FormItem>
+                    );
+                  }}
                 />
               )}
 
