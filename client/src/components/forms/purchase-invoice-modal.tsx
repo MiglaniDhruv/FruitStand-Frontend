@@ -184,28 +184,28 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     const invoice = {
       vendorId: data.vendorId,
       invoiceDate: data.invoiceDate,
-      commission: commissionAmount,
-      labour: parseFloat(data.labour),
-      truckFreight: parseFloat(data.truckFreight),
-      crateFreight: parseFloat(data.crateFreight),
-      postExpenses: parseFloat(data.postExpenses),
-      draftExpenses: parseFloat(data.draftExpenses),
-      vatav: parseFloat(data.vatav),
-      otherExpenses: parseFloat(data.otherExpenses),
-      advance: parseFloat(data.advance),
-      totalExpense: parseFloat(data.totalExpense),
-      totalSelling: parseFloat(data.totalSelling),
-      totalLessExpenses: parseFloat(data.totalLessExpenses),
-      netAmount: parseFloat(data.netAmount),
-      balanceAmount: parseFloat(data.netAmount), // Initially balance equals net amount
+      commission: commissionAmount.toFixed(2),
+      labour: parseFloat(data.labour).toFixed(2),
+      truckFreight: parseFloat(data.truckFreight).toFixed(2),
+      crateFreight: parseFloat(data.crateFreight).toFixed(2),
+      postExpenses: parseFloat(data.postExpenses).toFixed(2),
+      draftExpenses: parseFloat(data.draftExpenses).toFixed(2),
+      vatav: parseFloat(data.vatav).toFixed(2),
+      otherExpenses: parseFloat(data.otherExpenses).toFixed(2),
+      advance: parseFloat(data.advance).toFixed(2),
+      totalExpense: parseFloat(data.totalExpense).toFixed(2),
+      totalSelling: parseFloat(data.totalSelling).toFixed(2),
+      totalLessExpenses: parseFloat(data.totalLessExpenses).toFixed(2),
+      netAmount: parseFloat(data.netAmount).toFixed(2),
+      balanceAmount: parseFloat(data.netAmount).toFixed(2), // Initially balance equals net amount
       status: "Unpaid",
     };
 
     const items = data.items.map(item => ({
       itemId: item.itemId,
-      weight: parseFloat(item.weight),
-      rate: parseFloat(item.rate),
-      amount: parseFloat(item.amount),
+      weight: parseFloat(item.weight).toFixed(2),
+      rate: parseFloat(item.rate).toFixed(2),
+      amount: parseFloat(item.amount).toFixed(2),
     }));
 
     createInvoiceMutation.mutate({ invoice, items });
