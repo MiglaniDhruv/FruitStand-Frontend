@@ -297,14 +297,38 @@ export default function PurchaseInvoices() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewInvoice(invoice)}
-                            data-testid={`button-view-invoice-${invoice.id}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleViewInvoice(invoice)}
+                              data-testid={`button-view-invoice-${invoice.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            
+                            {invoice.status !== "Paid" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRecordPayment(invoice)}
+                                data-testid={`button-record-payment-${invoice.id}`}
+                                title="Record Payment"
+                              >
+                                <CreditCard className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleViewPaymentHistory(invoice)}
+                              data-testid={`button-payment-history-${invoice.id}`}
+                              title="View Payment History"
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
