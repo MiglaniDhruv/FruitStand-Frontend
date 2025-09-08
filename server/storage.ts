@@ -1701,7 +1701,8 @@ export class MemStorage implements IStorage {
         throw new Error(`Insufficient stock for item ${item.itemId}. Available: ${currentBalance.kgs} Kgs, ${currentBalance.crates} Crates. Required: ${saleWeight} Kgs, ${saleCrates} Crates`);
       }
 
-      // Create Stock OUT movement entry
+      // Create Stock OUT movement entry with rate
+      const itemRate = parseFloat(item.rate.toString());
       await this.createStockMovement({
         itemId: item.itemId,
         movementType: "OUT",
@@ -1712,6 +1713,7 @@ export class MemStorage implements IStorage {
         referenceNumber: invoice.invoiceNumber,
         vendorId: null,
         retailerId: invoice.retailerId,
+        rate: itemRate.toFixed(2),
         notes: `Stock sold to retailer via sales invoice ${invoice.invoiceNumber}`,
         movementDate: invoice.invoiceDate,
       });
