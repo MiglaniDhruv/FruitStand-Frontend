@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Edit, AlertTriangle, History, Plus, Trash2, PlusCircle } from "lucide-react";
+import { Search, Edit, AlertTriangle, History, Plus, Trash2, PlusCircle, AlertCircle } from "lucide-react";
 import { 
   Select,
   SelectContent,
@@ -38,11 +38,19 @@ export default function Stock() {
   const [editingStock, setEditingStock] = useState<any>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
+  const [showWastageEntry, setShowWastageEntry] = useState(false);
   const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
   const [manualEntry, setManualEntry] = useState({
     vendorId: "",
     notes: "",
     lineItems: [{ itemId: "", crates: "", kgs: "" }] as Array<{itemId: string, crates: string, kgs: string}>,
+  });
+  const [wastageEntry, setWastageEntry] = useState({
+    itemId: "",
+    crates: "",
+    kgs: "",
+    reason: "",
+    notes: "",
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -96,15 +104,27 @@ export default function Stock() {
       const response = await authenticatedApiRequest("POST", "/api/stock-movements", movementData);
       return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Stock entry added",
-        description: "Manual stock entry has been added successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
-      setShowManualEntry(false);
-      setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+    onSuccess: (data, variables) => {
+      // Check if this is a wastage entry
+      if (variables.referenceType === "WASTAGE") {
+        toast({
+          title: "Wastage recorded",
+          description: "Stock wastage has been recorded successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
+        setShowWastageEntry(false);
+        setWastageEntry({ itemId: "", crates: "", kgs: "", reason: "", notes: "" });
+      } else {
+        toast({
+          title: "Stock entry added",
+          description: "Manual stock entry has been added successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
+        setShowManualEntry(false);
+        setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+      }
     },
     onError: (error) => {
       toast({
@@ -233,6 +253,40 @@ export default function Stock() {
     !manualEntry.vendorId || item.vendorId === manualEntry.vendorId
   ) || [];
 
+  const handleWastageEntry = () => {
+    if (!wastageEntry.itemId || (!wastageEntry.crates && !wastageEntry.kgs)) {
+      toast({
+        title: "Missing information",
+        description: "Please select an item and enter wastage quantities",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!wastageEntry.reason) {
+      toast({
+        title: "Missing information", 
+        description: "Please provide a reason for wastage",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createStockMovementMutation.mutate({
+      itemId: wastageEntry.itemId,
+      movementType: "OUT",
+      quantityInCrates: wastageEntry.crates || "0",
+      quantityInKgs: wastageEntry.kgs || "0",
+      referenceType: "WASTAGE",
+      referenceId: null,
+      referenceNumber: "WASTAGE",
+      vendorId: null,
+      retailerId: null,
+      notes: `Wastage: ${wastageEntry.reason}${wastageEntry.notes ? ` - ${wastageEntry.notes}` : ''}`,
+      movementDate: new Date().toISOString(),
+    });
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -263,6 +317,14 @@ export default function Stock() {
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Stock
+                  </Button>
+                  <Button 
+                    variant="destructive"
+                    onClick={() => setShowWastageEntry(true)}
+                    data-testid="button-add-wastage"
+                  >
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Record Wastage
                   </Button>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -617,6 +679,115 @@ export default function Stock() {
                 data-testid="button-add-manual-entry"
               >
                 {createStockMovementMutation.isPending ? "Adding..." : "Add Stock"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Wastage Entry Modal */}
+      <Dialog open={showWastageEntry} onOpenChange={(open) => {
+        if (!open) {
+          setWastageEntry({ itemId: "", crates: "", kgs: "", reason: "", notes: "" });
+        }
+        setShowWastageEntry(open);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Stock Wastage</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="wastage-item-select">Select Item</Label>
+              <Select 
+                value={wastageEntry.itemId} 
+                onValueChange={(value) => setWastageEntry({ ...wastageEntry, itemId: value })}
+              >
+                <SelectTrigger data-testid="select-wastage-item">
+                  <SelectValue placeholder="Select an item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items?.map((item: any) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name} - {item.quality} ({item.vendor.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="wastage-crates">Wastage in Crates</Label>
+                <Input
+                  id="wastage-crates"
+                  type="number"
+                  step="0.01"
+                  value={wastageEntry.crates}
+                  onChange={(e) => setWastageEntry({ ...wastageEntry, crates: e.target.value })}
+                  data-testid="input-wastage-crates"
+                />
+              </div>
+              <div>
+                <Label htmlFor="wastage-kgs">Wastage in Kgs</Label>
+                <Input
+                  id="wastage-kgs"
+                  type="number"
+                  step="0.01"
+                  value={wastageEntry.kgs}
+                  onChange={(e) => setWastageEntry({ ...wastageEntry, kgs: e.target.value })}
+                  data-testid="input-wastage-kgs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="wastage-reason">Reason for Wastage *</Label>
+              <Select 
+                value={wastageEntry.reason} 
+                onValueChange={(value) => setWastageEntry({ ...wastageEntry, reason: value })}
+              >
+                <SelectTrigger data-testid="select-wastage-reason">
+                  <SelectValue placeholder="Select reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Spoilage">Spoilage</SelectItem>
+                  <SelectItem value="Damaged">Damaged/Broken</SelectItem>
+                  <SelectItem value="Overripe">Overripe</SelectItem>
+                  <SelectItem value="Pest Damage">Pest Damage</SelectItem>
+                  <SelectItem value="Physical Damage">Physical Damage</SelectItem>
+                  <SelectItem value="Quality Issues">Quality Issues</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="wastage-notes">Additional Notes</Label>
+              <Textarea
+                id="wastage-notes"
+                placeholder="Enter additional notes about the wastage"
+                value={wastageEntry.notes}
+                onChange={(e) => setWastageEntry({ ...wastageEntry, notes: e.target.value })}
+                data-testid="textarea-wastage-notes"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowWastageEntry(false)}
+                data-testid="button-cancel-wastage"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleWastageEntry}
+                disabled={createStockMovementMutation.isPending}
+                data-testid="button-record-wastage"
+              >
+                {createStockMovementMutation.isPending ? "Recording..." : "Record Wastage"}
               </Button>
             </div>
           </div>
