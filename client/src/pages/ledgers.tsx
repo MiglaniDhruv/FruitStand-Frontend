@@ -856,6 +856,7 @@ export default function Ledgers() {
                         <TableHead>Total Sales</TableHead>
                         <TableHead>Total Payments</TableHead>
                         <TableHead>Outstanding Balance</TableHead>
+                        <TableHead>Shortfall Amount</TableHead>
                         <TableHead>Invoices</TableHead>
                         <TableHead>Last Sale Date</TableHead>
                       </TableRow>
@@ -869,6 +870,12 @@ export default function Ledgers() {
                           <TableCell className="text-amber-600 font-bold">
                             {formatCurrency(entry.outstandingBalance)}
                           </TableCell>
+                          <TableCell className="text-red-600 font-medium">
+                            {parseFloat(entry.retailer.shortfallBalance || "0") > 0 
+                              ? formatCurrency(entry.retailer.shortfallBalance) 
+                              : "-"
+                            }
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{entry.invoiceCount}</Badge>
                           </TableCell>
@@ -879,7 +886,7 @@ export default function Ledgers() {
                       ))}
                       {udhaarBookEntries.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             No outstanding credit balances found
                           </TableCell>
                         </TableRow>
