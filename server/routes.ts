@@ -13,6 +13,7 @@ import {
   insertInvoiceItemSchema,
   insertPaymentSchema,
   insertStockSchema,
+  insertStockMovementSchema,
   insertRetailerSchema,
   insertSalesInvoiceSchema,
   insertSalesInvoiceItemSchema,
@@ -350,6 +351,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update stock" });
+    }
+  });
+
+  // Stock movement routes
+  app.get("/api/stock-movements", authenticateToken, async (req, res) => {
+    try {
+      const movements = await storage.getStockMovements();
+      res.json(movements);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stock movements" });
+    }
+  });
+
+  app.get("/api/stock-movements/item/:itemId", authenticateToken, async (req, res) => {
+    try {
+      const movements = await storage.getStockMovementsByItem(req.params.itemId);
+      res.json(movements);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stock movements for item" });
+    }
+  });
+
+  app.post("/api/stock-movements", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+    try {
+      const movementData = insertStockMovementSchema.parse(req.body);
+      const movement = await storage.createStockMovement(movementData);
+      res.status(201).json(movement);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create stock movement" });
+    }
+  });
+
+  app.get("/api/stock/balance/:itemId", authenticateToken, async (req, res) => {
+    try {
+      const balance = await storage.calculateStockBalance(req.params.itemId);
+      res.json(balance);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to calculate stock balance" });
     }
   });
 

@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Edit, AlertTriangle } from "lucide-react";
+import { Search, Edit, AlertTriangle, History, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { format } from "date-fns";
@@ -28,12 +28,22 @@ import { format } from "date-fns";
 export default function Stock() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingStock, setEditingStock] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
   const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: stock, isLoading } = useQuery<any[]>({
     queryKey: ["/api/stock"],
+  });
+
+  const { data: stockMovements, isLoading: movementsLoading } = useQuery<any[]>({
+    queryKey: ["/api/stock-movements"],
+  });
+
+  const { data: itemMovements } = useQuery<any[]>({
+    queryKey: ["/api/stock-movements/item", selectedItem?.itemId],
+    enabled: !!selectedItem?.itemId,
   });
 
   const updateStockMutation = useMutation({
@@ -175,14 +185,24 @@ export default function Stock() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditStock(item)}
-                            data-testid={`button-edit-stock-${item.id}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditStock(item)}
+                              data-testid={`button-edit-stock-${item.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedItem(item)}
+                              data-testid={`button-view-history-${item.id}`}
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -247,6 +267,66 @@ export default function Stock() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Movement History Modal */}
+      <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Stock Movement History</DialogTitle>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="border-b pb-2">
+                <h3 className="font-semibold">{selectedItem.item.name} - {selectedItem.item.quality}</h3>
+                <p className="text-sm text-muted-foreground">Vendor: {selectedItem.item.vendor.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Current Stock: {parseFloat(selectedItem.quantityInCrates).toFixed(2)} Crates, {parseFloat(selectedItem.quantityInKgs).toFixed(2)} Kgs
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="font-medium mb-2">Movement History</h4>
+                {itemMovements && itemMovements.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Crates</TableHead>
+                        <TableHead>Kgs</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {itemMovements.map((movement: any) => (
+                        <TableRow key={movement.id}>
+                          <TableCell>{format(new Date(movement.movementDate), "MMM dd, yyyy")}</TableCell>
+                          <TableCell>
+                            <Badge variant={movement.movementType === "IN" ? "default" : "secondary"}>
+                              {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
+                            {movement.movementType === "IN" ? "+" : "-"}{parseFloat(movement.quantityInCrates).toFixed(2)}
+                          </TableCell>
+                          <TableCell className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
+                            {movement.movementType === "IN" ? "+" : "-"}{parseFloat(movement.quantityInKgs).toFixed(2)}
+                          </TableCell>
+                          <TableCell>{movement.referenceNumber || movement.referenceType}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{movement.notes}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-center text-muted-foreground py-4">No movement history found</p>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
