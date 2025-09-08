@@ -162,34 +162,54 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     
     // Aggregate data from all selected entries
     if (newSelectedEntries.length > 0) {
-      const aggregatedItems: any[] = [];
+      const itemMap = new Map<string, {
+        itemId: string;
+        totalWeight: number;
+        totalCrates: number;
+        totalValue: number; // For weighted average rate calculation
+        rates: { rate: number; weight: number }[]; // For tracking individual rates and weights
+      }>();
       
+      // First pass: collect all data by item
       newSelectedEntries.forEach(selectedId => {
         const entry = availableStockOutEntries?.find((e: any) => e.id === selectedId);
         if (entry) {
-          // Check if we already have this item
-          const existingItemIndex = aggregatedItems.findIndex(item => item.itemId === entry.itemId);
+          const itemId = entry.itemId;
+          const weight = parseFloat(entry.quantityInKgs) || 0;
+          const crates = parseFloat(entry.quantityInCrates) || 0;
+          const rate = parseFloat(entry.rate) || 0;
+          const value = weight * rate; // Total value for this entry
           
-          if (existingItemIndex >= 0) {
-            // Add to existing item quantities
-            const existingItem = aggregatedItems[existingItemIndex];
-            aggregatedItems[existingItemIndex] = {
-              ...existingItem,
-              weight: (parseFloat(existingItem.weight) + parseFloat(entry.quantityInKgs)).toString(),
-              crates: (parseFloat(existingItem.crates) + parseFloat(entry.quantityInCrates)).toString(),
-              amount: "0" // Will be calculated
-            };
+          if (itemMap.has(itemId)) {
+            const existing = itemMap.get(itemId)!;
+            existing.totalWeight += weight;
+            existing.totalCrates += crates;
+            existing.totalValue += value;
+            existing.rates.push({ rate, weight });
           } else {
-            // Add new item
-            aggregatedItems.push({
-              itemId: entry.itemId,
-              weight: entry.quantityInKgs,
-              crates: entry.quantityInCrates,
-              rate: entry.rate || "0",
-              amount: "0" // Will be calculated
+            itemMap.set(itemId, {
+              itemId,
+              totalWeight: weight,
+              totalCrates: crates,
+              totalValue: value,
+              rates: [{ rate, weight }]
             });
           }
         }
+      });
+      
+      // Second pass: calculate aggregated items with weighted average rates
+      const aggregatedItems = Array.from(itemMap.values()).map(item => {
+        // Calculate weighted average rate
+        const averageRate = item.totalWeight > 0 ? item.totalValue / item.totalWeight : 0;
+        
+        return {
+          itemId: item.itemId,
+          weight: item.totalWeight.toString(),
+          crates: item.totalCrates.toString(),
+          rate: averageRate.toFixed(2),
+          amount: "0" // Will be calculated
+        };
       });
       
       form.setValue("items", aggregatedItems);
