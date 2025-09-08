@@ -49,8 +49,8 @@ const salesInvoiceSchema = z.object({
   invoiceDate: z.string().min(1, "Invoice date is required"),
   totalAmount: z.number().min(0, "Total amount must be positive"),
   paidAmount: z.number().min(0, "Paid amount cannot be negative"),
-  dueAmount: z.number().min(0, "Due amount cannot be negative"),
-  paymentStatus: z.enum(["Pending", "Partial", "Paid"]),
+  balanceAmount: z.number().min(0, "Balance amount cannot be negative"),
+  status: z.enum(["Pending", "Partial", "Paid"]),
   notes: z.string().optional(),
 });
 
@@ -101,8 +101,8 @@ export default function SalesInvoiceManagement() {
         invoiceDate: format(new Date(), "yyyy-MM-dd"),
         totalAmount: 0,
         paidAmount: 0,
-        dueAmount: 0,
-        paymentStatus: "Pending",
+        balanceAmount: 0,
+        status: "Pending",
         notes: "",
       },
       items: [
@@ -269,8 +269,8 @@ export default function SalesInvoiceManagement() {
         invoiceDate: format(new Date(), "yyyy-MM-dd"),
         totalAmount: 0,
         paidAmount: 0,
-        dueAmount: 0,
-        paymentStatus: "Pending",
+        balanceAmount: 0,
+        status: "Pending",
         notes: "",
       },
       items: [
@@ -300,16 +300,16 @@ export default function SalesInvoiceManagement() {
     form.setValue("invoice.totalAmount", totalAmount);
     
     const paidAmount = form.getValues("invoice.paidAmount");
-    const dueAmount = totalAmount - paidAmount;
-    form.setValue("invoice.dueAmount", dueAmount);
+    const balanceAmount = totalAmount - paidAmount;
+    form.setValue("invoice.balanceAmount", balanceAmount);
     
     // Update payment status
     if (paidAmount === 0) {
-      form.setValue("invoice.paymentStatus", "Pending");
+      form.setValue("invoice.status", "Pending");
     } else if (paidAmount < totalAmount) {
-      form.setValue("invoice.paymentStatus", "Partial");
+      form.setValue("invoice.status", "Partial");
     } else {
-      form.setValue("invoice.paymentStatus", "Paid");
+      form.setValue("invoice.status", "Paid");
     }
   };
 
@@ -335,7 +335,7 @@ export default function SalesInvoiceManagement() {
         ...data.invoice,
         totalAmount: data.invoice.totalAmount.toFixed(2),
         paidAmount: data.invoice.paidAmount.toFixed(2),
-        dueAmount: data.invoice.dueAmount.toFixed(2),
+        balanceAmount: data.invoice.balanceAmount.toFixed(2),
       },
       items: data.items.map(item => ({
         ...item,
@@ -391,9 +391,9 @@ export default function SalesInvoiceManagement() {
     sum + parseFloat(invoice.totalAmount || "0"), 0
   );
   const pendingAmount = invoices
-    .filter((invoice: any) => invoice.paymentStatus !== "Paid")
+    .filter((invoice: any) => invoice.status !== "Paid")
     .reduce((sum: number, invoice: any) => 
-      sum + parseFloat(invoice.dueAmount || "0"), 0
+      sum + parseFloat(invoice.balanceAmount || "0"), 0
     );
   const paidAmount = invoices.reduce((sum: number, invoice: any) => 
     sum + parseFloat(invoice.paidAmount || "0"), 0
@@ -546,10 +546,10 @@ export default function SalesInvoiceManagement() {
                       <TableCell>{getRetailerName(invoice.retailerId)}</TableCell>
                       <TableCell>₹{parseFloat(invoice.totalAmount).toLocaleString("en-IN")}</TableCell>
                       <TableCell>₹{parseFloat(invoice.paidAmount).toLocaleString("en-IN")}</TableCell>
-                      <TableCell>₹{parseFloat(invoice.dueAmount).toLocaleString("en-IN")}</TableCell>
+                      <TableCell>₹{parseFloat(invoice.balanceAmount).toLocaleString("en-IN")}</TableCell>
                       <TableCell>
-                        <Badge className={getPaymentStatusColor(invoice.paymentStatus)}>
-                          {invoice.paymentStatus}
+                        <Badge className={getPaymentStatusColor(invoice.status)}>
+                          {invoice.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -867,7 +867,7 @@ export default function SalesInvoiceManagement() {
 
                 <FormField
                   control={form.control}
-                  name="invoice.dueAmount"
+                  name="invoice.balanceAmount"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Due Amount</FormLabel>
@@ -886,7 +886,7 @@ export default function SalesInvoiceManagement() {
 
                 <FormField
                   control={form.control}
-                  name="invoice.paymentStatus"
+                  name="invoice.status"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Payment Status</FormLabel>
@@ -949,7 +949,7 @@ export default function SalesInvoiceManagement() {
                     <div><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</div>
                     <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
                     <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
-                    <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.dueAmount).toLocaleString("en-IN")}</div>
+                    <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString("en-IN")}</div>
                   </div>
                 </div>
               )}
@@ -1099,7 +1099,7 @@ export default function SalesInvoiceManagement() {
                   <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
                   <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
                   <div><strong>Paid Amount:</strong> ₹{parseFloat(selectedInvoice.paidAmount).toLocaleString("en-IN")}</div>
-                  <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.dueAmount).toLocaleString("en-IN")}</div>
+                  <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString("en-IN")}</div>
                 </div>
               </div>
 
