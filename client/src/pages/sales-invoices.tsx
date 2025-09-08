@@ -534,6 +534,7 @@ export default function SalesInvoiceManagement() {
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Paid Amount</TableHead>
                     <TableHead>Due Amount</TableHead>
+                    <TableHead>Shortfall Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -547,6 +548,12 @@ export default function SalesInvoiceManagement() {
                       <TableCell>₹{parseFloat(invoice.totalAmount).toLocaleString("en-IN")}</TableCell>
                       <TableCell>₹{parseFloat(invoice.paidAmount).toLocaleString("en-IN")}</TableCell>
                       <TableCell>₹{parseFloat(invoice.balanceAmount).toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-amber-600 font-medium">
+                        {parseFloat(invoice.shortfallAmount || "0") > 0 
+                          ? `₹${parseFloat(invoice.shortfallAmount).toLocaleString("en-IN")}` 
+                          : "-"
+                        }
+                      </TableCell>
                       <TableCell>
                         <Badge className={getPaymentStatusColor(invoice.status)}>
                           {invoice.status}
