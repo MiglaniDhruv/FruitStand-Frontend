@@ -1194,7 +1194,7 @@ export class MemStorage implements IStorage {
     };
   }
 
-  async createPurchaseInvoice(insertInvoice: InsertPurchaseInvoice, items: InsertInvoiceItem[], stockOutEntryId?: string): Promise<InvoiceWithItems> {
+  async createPurchaseInvoice(insertInvoice: InsertPurchaseInvoice, items: InsertInvoiceItem[], stockOutEntryIds?: string[]): Promise<InvoiceWithItems> {
     const invoiceNumber = `INV-${new Date().getFullYear()}-${this.invoiceCounter.toString().padStart(3, '0')}`;
     this.invoiceCounter++;
 
@@ -1249,14 +1249,16 @@ export class MemStorage implements IStorage {
       });
     }
 
-    // Mark stock out entry as used if stockOutEntryId was provided
-    if (stockOutEntryId) {
-      const stockOutEntry = this.stockMovements.get(stockOutEntryId);
-      if (stockOutEntry) {
-        // Update the stock out entry to mark it as used for this purchase invoice
-        stockOutEntry.purchaseInvoiceId = invoice.id;
-        this.stockMovements.set(stockOutEntryId, stockOutEntry);
-      }
+    // Mark stock out entries as used if stockOutEntryIds were provided
+    if (stockOutEntryIds && stockOutEntryIds.length > 0) {
+      stockOutEntryIds.forEach(entryId => {
+        const stockOutEntry = this.stockMovements.get(entryId);
+        if (stockOutEntry) {
+          // Update the stock out entry to mark it as used for this purchase invoice
+          stockOutEntry.purchaseInvoiceId = invoice.id;
+          this.stockMovements.set(entryId, stockOutEntry);
+        }
+      });
     }
 
     // Update vendor balance
