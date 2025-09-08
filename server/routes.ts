@@ -597,6 +597,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/sales-invoices/:id/mark-paid", authenticateToken, async (req, res) => {
+    try {
+      const invoiceId = req.params.id;
+      const result = await storage.markSalesInvoiceAsPaid(invoiceId);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark invoice as paid" });
+    }
+  });
+
   // Crate Transaction routes
   app.get("/api/crate-transactions", authenticateToken, async (req, res) => {
     try {

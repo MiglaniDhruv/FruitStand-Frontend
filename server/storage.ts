@@ -99,6 +99,7 @@ export interface IStorage {
   getSalesInvoices(): Promise<SalesInvoiceWithDetails[]>;
   getSalesInvoice(id: string): Promise<SalesInvoiceWithDetails | undefined>;
   createSalesInvoice(invoice: InsertSalesInvoice, items: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails>;
+  markSalesInvoiceAsPaid(invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallAdded: string; retailer: Retailer }>;
   
   // Sales payment management
   getSalesPayments(): Promise<SalesPayment[]>;
@@ -1465,6 +1466,41 @@ export class MemStorage implements IStorage {
       retailer,
       items: invoiceItems,
       payments: [],
+    };
+  }
+
+  async markSalesInvoiceAsPaid(invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallAdded: string; retailer: Retailer }> {
+    const invoice = this.salesInvoices.get(invoiceId);
+    if (!invoice) {
+      throw new Error("Sales invoice not found");
+    }
+
+    const retailer = this.retailers.get(invoice.retailerId);
+    if (!retailer) {
+      throw new Error("Retailer not found");
+    }
+
+    // Calculate the remaining balance amount
+    const remainingAmount = parseFloat(invoice.balanceAmount);
+    const shortfallAdded = remainingAmount.toFixed(2);
+
+    // Update invoice status to paid
+    invoice.status = "Paid";
+    invoice.paidAmount = invoice.totalAmount; // Set paid amount to total amount
+    invoice.balanceAmount = "0.00"; // Set balance to zero
+    invoice.shortfallAmount = shortfallAdded; // Track the shortfall amount
+
+    this.salesInvoices.set(invoiceId, invoice);
+
+    // Update retailer shortfall balance
+    const currentShortfall = parseFloat(retailer.shortfallBalance);
+    retailer.shortfallBalance = (currentShortfall + remainingAmount).toFixed(2);
+    this.retailers.set(retailer.id, retailer);
+
+    return {
+      invoice,
+      shortfallAdded,
+      retailer,
     };
   }
 
