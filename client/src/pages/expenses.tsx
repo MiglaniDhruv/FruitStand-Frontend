@@ -482,7 +482,7 @@ export default function ExpenseManagement() {
                     <TableBody>
                       {filteredExpenses.map((expense: any) => (
                         <TableRow key={expense.id}>
-                          <TableCell>{format(new Date(expense.paymentDate), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{format(new Date(expense.expenseDate), "dd/MM/yyyy")}</TableCell>
                           <TableCell className="font-medium">{expense.description}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{getCategoryName(expense.categoryId)}</Badge>
