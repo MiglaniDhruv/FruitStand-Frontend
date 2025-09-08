@@ -1486,7 +1486,7 @@ export class MemStorage implements IStorage {
 
     // Update invoice status to paid
     invoice.status = "Paid";
-    invoice.paidAmount = invoice.totalAmount; // Set paid amount to total amount
+    // Keep paid amount the same - do not change it
     invoice.balanceAmount = "0.00"; // Set balance to zero
     invoice.shortfallAmount = shortfallAdded; // Track the shortfall amount
 
