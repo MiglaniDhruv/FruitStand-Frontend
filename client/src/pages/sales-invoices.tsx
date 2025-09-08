@@ -40,7 +40,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { z } from "zod";
-import { Plus, Edit, Trash2, FileText, IndianRupee, Users, TrendingUp, Minus, DollarSign, Eye, History } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, IndianRupee, Users, TrendingUp, Minus, DollarSign, Eye, History, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 
 const salesInvoiceSchema = z.object({
@@ -238,6 +238,28 @@ export default function SalesInvoiceManagement() {
     },
   });
 
+  const markAsPaidMutation = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const response = await authenticatedApiRequest("POST", `/api/sales-invoices/${invoiceId}/mark-paid`);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Invoice marked as paid",
+        description: `Invoice marked as paid. Shortfall of ₹${parseFloat(data.shortfallAdded).toLocaleString("en-IN")} added to retailer balance.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to mark invoice as paid",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateNew = () => {
     setEditingInvoice(null);
     form.reset({
@@ -344,6 +366,10 @@ export default function SalesInvoiceManagement() {
   const handleViewPaymentHistory = (invoice: any) => {
     setSelectedInvoice(invoice);
     setPaymentHistoryDialogOpen(true);
+  };
+
+  const handleMarkAsPaid = (invoice: any) => {
+    markAsPaidMutation.mutate(invoice.id);
   };
 
   const onSubmitPayment = (data: PaymentFormData) => {
@@ -544,6 +570,17 @@ export default function SalesInvoiceManagement() {
                           >
                             <History className="h-4 w-4" />
                           </Button>
+                          {invoice.status !== "Paid" && parseFloat(invoice.balanceAmount) > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMarkAsPaid(invoice)}
+                              data-testid={`button-mark-paid-${invoice.id}`}
+                              disabled={markAsPaidMutation.isPending}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
