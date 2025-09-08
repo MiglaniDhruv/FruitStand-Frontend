@@ -1461,12 +1461,15 @@ export class MemStorage implements IStorage {
 
   async getAvailableStockOutEntriesByVendor(vendorId: string): Promise<StockMovementWithItem[]> {
     const movements = Array.from(this.stockMovements.values())
-      .filter(movement => 
-        movement.vendorId === vendorId && 
-        movement.movementType === "OUT" && 
-        movement.referenceType === "SALES_INVOICE" &&
-        !movement.purchaseInvoiceId // Only movements not yet used for purchase invoices
-      )
+      .filter(movement => {
+        // For stock OUT movements, we need to check the item's vendor, not the movement's vendor
+        const item = this.items.get(movement.itemId!);
+        return item &&
+          item.vendorId === vendorId &&
+          movement.movementType === "OUT" && 
+          movement.referenceType === "SALES_INVOICE" &&
+          !movement.purchaseInvoiceId; // Only movements not yet used for purchase invoices
+      })
       .sort((a, b) => new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime());
 
     return movements.map(movement => {
