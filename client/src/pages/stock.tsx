@@ -43,6 +43,10 @@ export default function Stock() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingStock, setEditingStock] = useState<any>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [dateFilter, setDateFilter] = useState({
+    startDate: "",
+    endDate: ""
+  });
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showWastageEntry, setShowWastageEntry] = useState(false);
   const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
@@ -478,8 +482,11 @@ export default function Stock() {
       </Dialog>
 
       {/* Stock Movement History Modal */}
-      <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={!!selectedItem} onOpenChange={() => {
+        setSelectedItem(null);
+        setDateFilter({ startDate: "", endDate: "" });
+      }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Stock Movement History</DialogTitle>
           </DialogHeader>
@@ -494,104 +501,164 @@ export default function Stock() {
               </div>
               
               <div>
-                <h4 className="font-medium mb-4">Movement History</h4>
-                {itemMovements && itemMovements.length > 0 ? (
-                  <Accordion type="multiple" className="w-full">
-                    {itemMovements.map((movement: any, index: number) => (
-                      <AccordionItem key={movement.id} value={`movement-${index}`}>
-                        <AccordionTrigger className="hover:no-underline">
-                          <div className="flex items-center justify-between w-full pr-4">
-                            <div className="flex items-center space-x-4">
-                              <Badge variant={movement.movementType === "IN" ? "default" : "secondary"}>
-                                {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
-                              </Badge>
-                              <span className="text-sm font-medium">
-                                {format(new Date(movement.movementDate), "MMM dd, yyyy")}
-                              </span>
-                              <span className={`text-sm font-semibold ${
-                                movement.movementType === "IN" ? "text-green-600" : "text-red-600"
-                              }`}>
-                                {movement.movementType === "IN" ? "+" : "-"}
-                                {parseFloat(movement.quantityInCrates).toFixed(2)} Crates, 
-                                {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm text-muted-foreground">
-                                {movement.referenceNumber || movement.referenceType}
-                              </div>
-                              {movement.movementType === "OUT" && movement.retailer && (
-                                <div className="text-xs text-muted-foreground">
-                                  Retailer: {movement.retailer.name}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="pt-2 pb-4 space-y-3">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <span className="font-medium text-muted-foreground">Date:</span>
-                                <div>{format(new Date(movement.movementDate), "PPP")}</div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-muted-foreground">Type:</span>
-                                <div>
-                                  <Badge variant={movement.movementType === "IN" ? "default" : "secondary"} className="text-xs">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">Movement History</h4>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="start-date" className="text-sm font-medium whitespace-nowrap">From:</Label>
+                      <Input
+                        id="start-date"
+                        type="date"
+                        value={dateFilter.startDate}
+                        onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                        className="w-40"
+                        data-testid="input-start-date"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="end-date" className="text-sm font-medium whitespace-nowrap">To:</Label>
+                      <Input
+                        id="end-date"
+                        type="date"
+                        value={dateFilter.endDate}
+                        onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
+                        className="w-40"
+                        data-testid="input-end-date"
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDateFilter({ startDate: "", endDate: "" })}
+                      data-testid="button-clear-filter"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+{(() => {
+                  // Filter movements based on date range
+                  let filteredMovements = itemMovements || [];
+                  
+                  if (dateFilter.startDate) {
+                    filteredMovements = filteredMovements.filter((movement: any) => 
+                      new Date(movement.movementDate) >= new Date(dateFilter.startDate)
+                    );
+                  }
+                  
+                  if (dateFilter.endDate) {
+                    filteredMovements = filteredMovements.filter((movement: any) => 
+                      new Date(movement.movementDate) <= new Date(dateFilter.endDate + 'T23:59:59')
+                    );
+                  }
+                  
+                  if (filteredMovements.length > 0) {
+                    return (
+                      <Accordion type="multiple" className="w-full">
+                        {filteredMovements.map((movement: any, index: number) => (
+                          <AccordionItem key={movement.id} value={`movement-${index}`}>
+                            <AccordionTrigger className="hover:no-underline">
+                              <div className="flex items-center justify-between w-full pr-4">
+                                <div className="flex items-center space-x-4">
+                                  <Badge variant={movement.movementType === "IN" ? "default" : "secondary"}>
                                     {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
                                   </Badge>
+                                  <span className="text-sm font-medium">
+                                    {format(new Date(movement.movementDate), "MMM dd, yyyy")}
+                                  </span>
+                                  <span className={`text-sm font-semibold ${
+                                    movement.movementType === "IN" ? "text-green-600" : "text-red-600"
+                                  }`}>
+                                    {movement.movementType === "IN" ? "+" : "-"}
+                                    {parseFloat(movement.quantityInCrates).toFixed(2)} Crates, 
+                                    {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
+                                  </span>
                                 </div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-muted-foreground">Quantity:</span>
-                                <div className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
-                                  {movement.movementType === "IN" ? "+" : "-"}
-                                  {parseFloat(movement.quantityInCrates).toFixed(2)} Crates
-                                  <br />
-                                  {movement.movementType === "IN" ? "+" : "-"}
-                                  {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
-                                </div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-muted-foreground">Reference:</span>
-                                <div>{movement.referenceNumber || movement.referenceType}</div>
-                              </div>
-                            </div>
-                            
-                            {movement.movementType === "OUT" && movement.retailer && (
-                              <div className="bg-muted/50 rounded-lg p-3">
-                                <span className="font-medium text-muted-foreground text-sm">Retailer Information:</span>
-                                <div className="mt-1">
-                                  <div className="font-medium">{movement.retailer.name}</div>
-                                  {movement.retailer.contactPerson && (
-                                    <div className="text-sm text-muted-foreground">Contact: {movement.retailer.contactPerson}</div>
+                                <div className="text-right">
+                                  <div className="text-sm text-muted-foreground">
+                                    {movement.referenceNumber || movement.referenceType}
+                                  </div>
+                                  {movement.movementType === "OUT" && movement.retailer && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Retailer: {movement.retailer.name}
+                                    </div>
                                   )}
                                 </div>
                               </div>
-                            )}
-                            
-                            {movement.rate && (
-                              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
-                                <span className="font-medium text-muted-foreground text-sm">Rate Information:</span>
-                                <div className="mt-1 font-medium">₹{parseFloat(movement.rate).toFixed(2)} per Kg</div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="pt-2 pb-4 space-y-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">Date:</span>
+                                    <div>{format(new Date(movement.movementDate), "PPP")}</div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">Type:</span>
+                                    <div>
+                                      <Badge variant={movement.movementType === "IN" ? "default" : "secondary"} className="text-xs">
+                                        {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">Quantity:</span>
+                                    <div className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
+                                      {movement.movementType === "IN" ? "+" : "-"}
+                                      {parseFloat(movement.quantityInCrates).toFixed(2)} Crates
+                                      <br />
+                                      {movement.movementType === "IN" ? "+" : "-"}
+                                      {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">Reference:</span>
+                                    <div>{movement.referenceNumber || movement.referenceType}</div>
+                                  </div>
+                                </div>
+                                
+                                {movement.movementType === "OUT" && movement.retailer && (
+                                  <div className="bg-muted/50 rounded-lg p-3">
+                                    <span className="font-medium text-muted-foreground text-sm">Retailer Information:</span>
+                                    <div className="mt-1">
+                                      <div className="font-medium">{movement.retailer.name}</div>
+                                      {movement.retailer.contactPerson && (
+                                        <div className="text-sm text-muted-foreground">Contact: {movement.retailer.contactPerson}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {movement.rate && (
+                                  <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                                    <span className="font-medium text-muted-foreground text-sm">Rate Information:</span>
+                                    <div className="mt-1 font-medium">₹{parseFloat(movement.rate).toFixed(2)} per Kg</div>
+                                  </div>
+                                )}
+                                
+                                {movement.notes && (
+                                  <div>
+                                    <span className="font-medium text-muted-foreground text-sm">Notes:</span>
+                                    <div className="mt-1 text-sm bg-muted/30 rounded p-2">{movement.notes}</div>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            
-                            {movement.notes && (
-                              <div>
-                                <span className="font-medium text-muted-foreground text-sm">Notes:</span>
-                                <div className="mt-1 text-sm bg-muted/30 rounded p-2">{movement.notes}</div>
-                              </div>
-                            )}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">No movement history found</p>
-                )}
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    );
+                  } else {
+                    return (
+                      <p className="text-center text-muted-foreground py-8">
+                        {dateFilter.startDate || dateFilter.endDate ? 
+                          "No movements found for the selected date range" : 
+                          "No movement history found"
+                        }
+                      </p>
+                    );
+                  }
+                })()}
               </div>
             </div>
           )}
