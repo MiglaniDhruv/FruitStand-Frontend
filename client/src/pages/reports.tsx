@@ -136,8 +136,24 @@ export default function Reports() {
     const endDate = parseISO(filters.endDate);
     
     return data.filter((item) => {
-      const itemDate = parseISO(item[dateField]);
-      return isWithinInterval(itemDate, { start: startDate, end: endDate });
+      try {
+        const dateValue = item[dateField];
+        if (!dateValue) return false;
+        
+        // Handle both ISO strings and Date objects
+        const itemDate = typeof dateValue === 'string' ? parseISO(dateValue) : new Date(dateValue);
+        
+        // Check if date is valid
+        if (isNaN(itemDate.getTime())) {
+          console.warn(`Invalid date found: ${dateValue}`);
+          return false;
+        }
+        
+        return isWithinInterval(itemDate, { start: startDate, end: endDate });
+      } catch (error) {
+        console.warn(`Error parsing date for ${dateField}:`, error);
+        return false;
+      }
     });
   };
 
@@ -160,8 +176,8 @@ export default function Reports() {
   const netCashFlow = totalSalesPayments - totalPurchasePayments - totalExpenses;
 
   // Outstanding amounts
-  const purchaseOutstanding = filteredPurchases.reduce((sum, inv) => sum + parseFloat(inv.dueAmount || "0"), 0);
-  const salesOutstanding = filteredSales.reduce((sum, inv) => sum + parseFloat(inv.dueAmount || "0"), 0);
+  const purchaseOutstanding = filteredPurchases.reduce((sum, inv) => sum + parseFloat(inv.balanceAmount || "0"), 0);
+  const salesOutstanding = filteredSales.reduce((sum, inv) => sum + parseFloat(inv.balanceAmount || "0"), 0);
 
   // Top performers
   const retailerSales = filteredSales.reduce((acc: any, sale) => {
@@ -792,16 +808,16 @@ export default function Reports() {
                       ₹{salesOutstanding.toLocaleString("en-IN")}
                     </div>
                     <div className="space-y-2">
-                      {filteredSales.filter(s => parseFloat(s.dueAmount || "0") > 0)
-                        .sort((a, b) => parseFloat(b.dueAmount || "0") - parseFloat(a.dueAmount || "0"))
+                      {filteredSales.filter(s => parseFloat(s.balanceAmount || "0") > 0)
+                        .sort((a, b) => parseFloat(b.balanceAmount || "0") - parseFloat(a.balanceAmount || "0"))
                         .slice(0, 5)
                         .map((sale) => {
-                          const retailer = retailers.find(r => r.id === sale.retailerId);
+                          const retailer = retailers.find((r: any) => r.id === sale.retailerId);
                           return (
                             <div key={sale.id} className="flex justify-between items-center text-sm">
                               <span>{retailer?.name || "Unknown"}</span>
                               <span className="text-amber-600 font-medium">
-                                ₹{parseFloat(sale.dueAmount || "0").toLocaleString("en-IN")}
+                                ₹{parseFloat(sale.balanceAmount || "0").toLocaleString("en-IN")}
                               </span>
                             </div>
                           );
@@ -822,16 +838,16 @@ export default function Reports() {
                       ₹{purchaseOutstanding.toLocaleString("en-IN")}
                     </div>
                     <div className="space-y-2">
-                      {filteredPurchases.filter(p => parseFloat(p.dueAmount || "0") > 0)
-                        .sort((a, b) => parseFloat(b.dueAmount || "0") - parseFloat(a.dueAmount || "0"))
+                      {filteredPurchases.filter(p => parseFloat(p.balanceAmount || "0") > 0)
+                        .sort((a, b) => parseFloat(b.balanceAmount || "0") - parseFloat(a.balanceAmount || "0"))
                         .slice(0, 5)
                         .map((purchase) => {
-                          const vendor = vendors.find(v => v.id === purchase.vendorId);
+                          const vendor = vendors.find((v: any) => v.id === purchase.vendorId);
                           return (
                             <div key={purchase.id} className="flex justify-between items-center text-sm">
                               <span>{vendor?.name || "Unknown"}</span>
                               <span className="text-red-600 font-medium">
-                                ₹{parseFloat(purchase.dueAmount || "0").toLocaleString("en-IN")}
+                                ₹{parseFloat(purchase.balanceAmount || "0").toLocaleString("en-IN")}
                               </span>
                             </div>
                           );
