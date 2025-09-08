@@ -288,7 +288,7 @@ export default function SalesInvoiceManagement() {
 
   // Helper function to get quantity based on item unit
   const getQuantityForCalculation = (itemId: string, weight: number, crates: number) => {
-    const itemDetails = items.find(i => i.id === itemId);
+    const itemDetails = items.find((i: any) => i.id === itemId);
     if (!itemDetails) return weight;
     
     switch (itemDetails.unit) {
