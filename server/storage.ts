@@ -804,6 +804,191 @@ export class MemStorage implements IStorage {
     // Update invoice counters
     this.invoiceCounter = 3;
     this.salesInvoiceCounter = 3;
+
+    // Create sample stock movements for testing
+    const sampleStockMovements = [
+      // Stock IN movements from purchase invoices
+      {
+        itemId: item1.id,
+        movementType: "IN" as const,
+        quantityInCrates: "30.00",
+        quantityInKgs: "900.00",
+        referenceType: "PURCHASE_INVOICE",
+        referenceId: purchaseInvoice1.id,
+        referenceNumber: "PI001",
+        vendorId: vendor1.id,
+        retailerId: null,
+        notes: "Stock received from purchase invoice PI001",
+        movementDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item3.id,
+        movementType: "IN" as const,
+        quantityInCrates: "20.00",
+        quantityInKgs: "500.00",
+        referenceType: "PURCHASE_INVOICE",
+        referenceId: purchaseInvoice2.id,
+        referenceNumber: "PI002",
+        vendorId: vendor2.id,
+        retailerId: null,
+        notes: "Stock received from purchase invoice PI002",
+        movementDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      },
+      
+      // Manual stock IN entries
+      {
+        itemId: item2.id,
+        movementType: "IN" as const,
+        quantityInCrates: "25.00",
+        quantityInKgs: "750.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: vendor1.id,
+        retailerId: null,
+        notes: "Manual stock entry - direct procurement",
+        movementDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item5.id,
+        movementType: "IN" as const,
+        quantityInCrates: "15.00",
+        quantityInKgs: "300.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: vendor3.id,
+        retailerId: null,
+        notes: "Manual stock entry - warehouse transfer",
+        movementDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item4.id,
+        movementType: "IN" as const,
+        quantityInCrates: "18.00",
+        quantityInKgs: "450.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: vendor2.id,
+        retailerId: null,
+        notes: "Manual stock entry - received from different location",
+        movementDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item6.id,
+        movementType: "IN" as const,
+        quantityInCrates: "22.00",
+        quantityInKgs: "440.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: vendor3.id,
+        retailerId: null,
+        notes: "Manual stock entry - bulk procurement",
+        movementDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      },
+
+      // Stock OUT movements from sales invoices
+      {
+        itemId: item1.id,
+        movementType: "OUT" as const,
+        quantityInCrates: "15.00",
+        quantityInKgs: "450.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: salesInvoice1.id,
+        referenceNumber: "SI001",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Stock sold via sales invoice SI001",
+        movementDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item3.id,
+        movementType: "OUT" as const,
+        quantityInCrates: "12.00",
+        quantityInKgs: "300.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: salesInvoice2.id,
+        referenceNumber: "SI002",
+        vendorId: null,
+        retailerId: retailer2.id,
+        notes: "Stock sold via sales invoice SI002",
+        movementDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      },
+
+      // Additional manual OUT entries (returns, damage, etc.)
+      {
+        itemId: item2.id,
+        movementType: "OUT" as const,
+        quantityInCrates: "3.00",
+        quantityInKgs: "90.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: null,
+        retailerId: null,
+        notes: "Manual stock reduction - damaged goods removed",
+        movementDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item4.id,
+        movementType: "OUT" as const,
+        quantityInCrates: "5.00",
+        quantityInKgs: "125.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: null,
+        retailerId: retailer3.id,
+        notes: "Manual stock reduction - direct sale without invoice",
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item5.id,
+        movementType: "OUT" as const,
+        quantityInCrates: "2.00",
+        quantityInKgs: "40.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: null,
+        retailerId: null,
+        notes: "Manual stock reduction - spoilage and waste",
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+
+      // More recent stock IN movements
+      {
+        itemId: item1.id,
+        movementType: "IN" as const,
+        quantityInCrates: "10.00",
+        quantityInKgs: "300.00",
+        referenceType: "MANUAL_ENTRY",
+        referenceId: null,
+        referenceNumber: "MANUAL",
+        vendorId: vendor1.id,
+        retailerId: null,
+        notes: "Manual stock entry - fresh arrival today",
+        movementDate: new Date(),
+      },
+    ];
+
+    // Add all stock movements
+    sampleStockMovements.forEach((movementData) => {
+      const movement: StockMovement = {
+        id: randomUUID(),
+        ...movementData,
+        createdAt: new Date(),
+      };
+      this.stockMovements.set(movement.id, movement);
+    });
+
+    // Recalculate stock balances for all items after adding movements
+    const allItems = Array.from(this.items.values());
+    allItems.forEach(async (item) => {
+      await this.updateCalculatedStock(item.id);
+    });
   }
 
   // User methods
