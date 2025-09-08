@@ -470,7 +470,12 @@ export default function Stock() {
       </Dialog>
 
       {/* Manual Stock Entry Modal */}
-      <Dialog open={showManualEntry} onOpenChange={() => setShowManualEntry(false)}>
+      <Dialog open={showManualEntry} onOpenChange={(open) => {
+        if (!open) {
+          setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+        }
+        setShowManualEntry(open);
+      }}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Stock Entry</DialogTitle>
