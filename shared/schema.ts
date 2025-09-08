@@ -30,6 +30,7 @@ export const items = pgTable("items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   quality: text("quality").notNull(),
+  unit: text("unit").notNull(), // box, crate, kgs
   vendorId: uuid("vendor_id").references(() => vendors.id),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -248,7 +249,12 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   createdAt: true,
 });
 
-export const insertItemSchema = createInsertSchema(items).omit({
+export const insertItemSchema = createInsertSchema(items, {
+  unit: z.enum(["box", "crate", "kgs"], {
+    required_error: "Unit is required",
+    invalid_type_error: "Unit must be box, crate, or kgs"
+  })
+}).omit({
   id: true,
   createdAt: true,
 });
