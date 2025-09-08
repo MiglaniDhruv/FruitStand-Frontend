@@ -33,6 +33,10 @@ import { authenticatedApiRequest } from "@/lib/auth";
 const itemSchema = z.object({
   name: z.string().min(1, "Name is required"),
   quality: z.string().min(1, "Quality is required"),
+  unit: z.enum(["box", "crate", "kgs"], {
+    required_error: "Unit is required",
+    invalid_type_error: "Unit must be box, crate, or kgs"
+  }),
   vendorId: z.string().min(1, "Vendor is required"),
   isActive: z.boolean().default(true),
 });
@@ -55,6 +59,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     defaultValues: {
       name: item?.name || "",
       quality: item?.quality || "",
+      unit: item?.unit || "crate",
       vendorId: item?.vendorId || "",
       isActive: item?.isActive ?? true,
     },
@@ -65,6 +70,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     form.reset({
       name: item?.name || "",
       quality: item?.quality || "",
+      unit: item?.unit || "crate",
       vendorId: item?.vendorId || "",
       isActive: item?.isActive ?? true,
     });
@@ -136,6 +142,29 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     <FormControl>
                       <Input placeholder="Enter quality grade" {...field} data-testid="input-quality" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-item-unit">
+                          <SelectValue placeholder="Select unit" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="box">Box</SelectItem>
+                        <SelectItem value="crate">Crate</SelectItem>
+                        <SelectItem value="kgs">Kgs</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
