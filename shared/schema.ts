@@ -103,6 +103,22 @@ export const stock = pgTable("stock", {
   lastUpdated: timestamp("last_updated").defaultNow(),
 });
 
+export const stockMovements = pgTable("stock_movements", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  itemId: uuid("item_id").references(() => items.id).notNull(),
+  movementType: text("movement_type").notNull(), // "IN" or "OUT"
+  quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).notNull(),
+  quantityInKgs: decimal("quantity_in_kgs", { precision: 8, scale: 2 }).notNull(),
+  referenceType: text("reference_type").notNull(), // "PURCHASE_INVOICE", "SALES_INVOICE", "ADJUSTMENT"
+  referenceId: uuid("reference_id"), // Links to purchase invoice, sales invoice, etc.
+  referenceNumber: text("reference_number"), // Invoice number for display
+  vendorId: uuid("vendor_id").references(() => vendors.id), // For purchase entries
+  retailerId: uuid("retailer_id").references(() => retailers.id), // For sales entries
+  notes: text("notes"),
+  movementDate: timestamp("movement_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const cashbook = pgTable("cashbook", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   date: timestamp("date").notNull(),
@@ -273,6 +289,15 @@ export const insertStockSchema = createInsertSchema(stock).omit({
   lastUpdated: true,
 });
 
+export const insertStockMovementSchema = createInsertSchema(stockMovements, {
+  movementDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertRetailerSchema = createInsertSchema(retailers).omit({
   id: true,
   balance: true,
@@ -359,6 +384,9 @@ export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
 export type Stock = typeof stock.$inferSelect;
 export type InsertStock = z.infer<typeof insertStockSchema>;
+
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 
 export type Retailer = typeof retailers.$inferSelect;
 export type InsertRetailer = z.infer<typeof insertRetailerSchema>;
