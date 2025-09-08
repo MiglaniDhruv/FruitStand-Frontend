@@ -234,6 +234,38 @@ export default function Ledgers() {
       });
     });
 
+    // Crate deposit transactions (cash transactions)
+    filteredCrateTransactions
+      .filter((transaction: any) => parseFloat(transaction.depositAmount || "0") > 0)
+      .forEach((transaction: any) => {
+        const amount = parseFloat(transaction.depositAmount || "0");
+        const retailerName = getRetailerName(transaction.retailerId);
+        
+        if (transaction.transactionType === "Given") {
+          // Retailer pays deposit to business (cash inflow)
+          allEntries.push({
+            date: transaction.transactionDate,
+            description: `Crate deposit received from ${retailerName} - ${transaction.quantity} crates`,
+            paymentMode: "Cash",
+            bankAccount: "Cash",
+            inflow: amount,
+            outflow: 0,
+            type: "Crate Deposit",
+          });
+        } else if (transaction.transactionType === "Returned") {
+          // Business pays deposit back to retailer (cash outflow)
+          allEntries.push({
+            date: transaction.transactionDate,
+            description: `Crate deposit returned to ${retailerName} - ${transaction.quantity} crates`,
+            paymentMode: "Cash",
+            bankAccount: "Cash",
+            inflow: 0,
+            outflow: amount,
+            type: "Crate Deposit",
+          });
+        }
+      });
+
     // Sort entries by date (with validation)
     const sortedEntries = allEntries
       .filter(entry => entry.date && !isNaN(new Date(entry.date).getTime())) // Filter out invalid dates
