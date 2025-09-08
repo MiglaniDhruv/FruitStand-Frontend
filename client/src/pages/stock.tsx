@@ -20,7 +20,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Edit, AlertTriangle, History, Eye } from "lucide-react";
+import { Search, Edit, AlertTriangle, History, Plus } from "lucide-react";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { format } from "date-fns";
@@ -29,7 +37,14 @@ export default function Stock() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingStock, setEditingStock] = useState<any>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
+  const [manualEntry, setManualEntry] = useState({
+    itemId: "",
+    crates: "",
+    kgs: "",
+    notes: "",
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -44,6 +59,10 @@ export default function Stock() {
   const { data: itemMovements } = useQuery<any[]>({
     queryKey: ["/api/stock-movements/item", selectedItem?.itemId],
     enabled: !!selectedItem?.itemId,
+  });
+
+  const { data: items } = useQuery<any[]>({
+    queryKey: ["/api/items"],
   });
 
   const updateStockMutation = useMutation({
@@ -64,6 +83,30 @@ export default function Stock() {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update stock",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createStockMovementMutation = useMutation({
+    mutationFn: async (movementData: any) => {
+      const response = await authenticatedApiRequest("POST", "/api/stock-movements", movementData);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Stock entry added",
+        description: "Manual stock entry has been added successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
+      setShowManualEntry(false);
+      setManualEntry({ itemId: "", crates: "", kgs: "", notes: "" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add stock entry",
         variant: "destructive",
       });
     },
@@ -103,6 +146,31 @@ export default function Stock() {
     });
   };
 
+  const handleManualStockEntry = () => {
+    if (!manualEntry.itemId || !manualEntry.crates && !manualEntry.kgs) {
+      toast({
+        title: "Missing information",
+        description: "Please select an item and enter quantities",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createStockMovementMutation.mutate({
+      itemId: manualEntry.itemId,
+      movementType: "IN",
+      quantityInCrates: manualEntry.crates || "0",
+      quantityInKgs: manualEntry.kgs || "0",
+      referenceType: "MANUAL_ENTRY",
+      referenceId: null,
+      referenceNumber: "MANUAL",
+      vendorId: null,
+      retailerId: null,
+      notes: manualEntry.notes || "Manual stock entry",
+      movementDate: new Date().toISOString(),
+    });
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -126,15 +194,24 @@ export default function Stock() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Current Stock</CardTitle>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search stock..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-64"
-                    data-testid="input-search-stock"
-                  />
+                <div className="flex items-center space-x-4">
+                  <Button
+                    onClick={() => setShowManualEntry(true)}
+                    data-testid="button-add-stock"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Stock
+                  </Button>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Search stock..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 w-64"
+                      data-testid="input-search-stock"
+                    />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -327,6 +404,88 @@ export default function Stock() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Stock Entry Modal */}
+      <Dialog open={showManualEntry} onOpenChange={() => setShowManualEntry(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Stock Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="item-select">Select Item</Label>
+              <Select 
+                value={manualEntry.itemId} 
+                onValueChange={(value) => setManualEntry({ ...manualEntry, itemId: value })}
+              >
+                <SelectTrigger data-testid="select-item">
+                  <SelectValue placeholder="Select an item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items?.map((item: any) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name} - {item.quality} ({item.vendor.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="manual-crates">Quantity in Crates</Label>
+                <Input
+                  id="manual-crates"
+                  type="number"
+                  step="0.01"
+                  value={manualEntry.crates}
+                  onChange={(e) => setManualEntry({ ...manualEntry, crates: e.target.value })}
+                  data-testid="input-manual-crates"
+                />
+              </div>
+              <div>
+                <Label htmlFor="manual-kgs">Quantity in Kgs</Label>
+                <Input
+                  id="manual-kgs"
+                  type="number"
+                  step="0.01"
+                  value={manualEntry.kgs}
+                  onChange={(e) => setManualEntry({ ...manualEntry, kgs: e.target.value })}
+                  data-testid="input-manual-kgs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="manual-notes">Notes</Label>
+              <Textarea
+                id="manual-notes"
+                placeholder="Enter any notes for this stock entry"
+                value={manualEntry.notes}
+                onChange={(e) => setManualEntry({ ...manualEntry, notes: e.target.value })}
+                data-testid="textarea-manual-notes"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowManualEntry(false)}
+                data-testid="button-cancel-manual-entry"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleManualStockEntry}
+                disabled={createStockMovementMutation.isPending}
+                data-testid="button-add-manual-entry"
+              >
+                {createStockMovementMutation.isPending ? "Adding..." : "Add Stock"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
