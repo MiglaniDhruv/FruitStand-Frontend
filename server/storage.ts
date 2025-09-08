@@ -972,6 +972,154 @@ export class MemStorage implements IStorage {
         notes: "Manual stock entry - fresh arrival today",
         movementDate: new Date(),
       },
+
+      // Additional stock OUT entries for multi-select testing (same item, different rates)
+      {
+        itemId: item1.id, // Mangoes A-Grade
+        movementType: "OUT" as const,
+        quantityInCrates: "8.00",
+        quantityInKgs: "240.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-001",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - Batch 1",
+        rate: 85.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item1.id, // Mangoes A-Grade (same item, different rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "6.00",
+        quantityInKgs: "180.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-002",
+        vendorId: null,
+        retailerId: retailer2.id,
+        notes: "Test entry for multi-select - Batch 2",
+        rate: 95.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item1.id, // Mangoes A-Grade (same item, another rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "4.00",
+        quantityInKgs: "120.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-003",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - Batch 3",
+        rate: 90.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+
+      // Different item (Mangoes B-Grade) for same vendor - multiple entries
+      {
+        itemId: item2.id, // Mangoes B-Grade
+        movementType: "OUT" as const,
+        quantityInCrates: "10.00",
+        quantityInKgs: "300.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-004",
+        vendorId: null,
+        retailerId: retailer2.id,
+        notes: "Test entry for multi-select - B-Grade Batch 1",
+        rate: 75.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item2.id, // Mangoes B-Grade (same item, different rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "12.00",
+        quantityInKgs: "360.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-005",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - B-Grade Batch 2",
+        rate: 80.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+
+      // Different vendor items for testing cross-vendor selection
+      {
+        itemId: item3.id, // Apples Premium (vendor2)
+        movementType: "OUT" as const,
+        quantityInCrates: "7.00",
+        quantityInKgs: "175.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-006",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - Apples Batch 1",
+        rate: 120.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item3.id, // Apples Premium (same item, different rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "5.00",
+        quantityInKgs: "125.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-007",
+        vendorId: null,
+        retailerId: retailer2.id,
+        notes: "Test entry for multi-select - Apples Batch 2",
+        rate: 130.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+
+      // Third vendor items for comprehensive testing
+      {
+        itemId: item5.id, // Grapes Export Quality (vendor3)
+        movementType: "OUT" as const,
+        quantityInCrates: "3.00",
+        quantityInKgs: "60.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-008",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - Grapes Batch 1",
+        rate: 200.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item5.id, // Grapes Export Quality (same item, different rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "2.00",
+        quantityInKgs: "40.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-009",
+        vendorId: null,
+        retailerId: retailer2.id,
+        notes: "Test entry for multi-select - Grapes Batch 2",
+        rate: 220.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+      {
+        itemId: item5.id, // Grapes Export Quality (same item, third rate)
+        movementType: "OUT" as const,
+        quantityInCrates: "4.00",
+        quantityInKgs: "80.00",
+        referenceType: "SALES_INVOICE",
+        referenceId: null,
+        referenceNumber: "TEST-010",
+        vendorId: null,
+        retailerId: retailer1.id,
+        notes: "Test entry for multi-select - Grapes Batch 3",
+        rate: 210.00,
+        movementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
     ];
 
     // Add all stock movements
