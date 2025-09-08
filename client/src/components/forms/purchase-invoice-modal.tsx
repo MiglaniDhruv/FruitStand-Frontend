@@ -231,11 +231,28 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const watchedOtherExpenses = form.watch("otherExpenses");
   const watchedAdvance = form.watch("advance");
 
+  // Helper function to get quantity based on item unit
+  const getQuantityForCalculation = (item: any, itemDetails: any) => {
+    if (!itemDetails) return parseFloat(item.weight) || 0;
+    
+    switch (itemDetails.unit) {
+      case "kgs":
+        return parseFloat(item.weight) || 0;
+      case "crate":
+        return parseFloat(item.crates) || 0;
+      case "box":
+        return parseFloat(item.weight) || 0; // Using weight for box unit for now
+      default:
+        return parseFloat(item.weight) || 0;
+    }
+  };
+
   // Calculate derived values
   const totalSelling = watchedItems.reduce((sum, item) => {
-    const weight = parseFloat(item.weight) || 0;
+    const itemDetails = items?.find(i => i.id === item.itemId);
+    const quantity = getQuantityForCalculation(item, itemDetails);
     const rate = parseFloat(item.rate) || 0;
-    return sum + (weight * rate);
+    return sum + (quantity * rate);
   }, 0);
   
   const commissionPercentage = parseFloat(watchedCommission) || 0;
@@ -257,9 +274,10 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   useEffect(() => {
     // Update individual item amounts
     watchedItems.forEach((item, index) => {
-      const weight = parseFloat(item.weight) || 0;
+      const itemDetails = items?.find(i => i.id === item.itemId);
+      const quantity = getQuantityForCalculation(item, itemDetails);
       const rate = parseFloat(item.rate) || 0;
-      const amount = weight * rate;
+      const amount = quantity * rate;
       if (parseFloat(item.amount) !== amount) {
         form.setValue(`items.${index}.amount`, amount.toFixed(2));
       }
@@ -270,7 +288,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     form.setValue("totalSelling", totalSelling.toFixed(2));
     form.setValue("totalLessExpenses", totalLessExpenses.toFixed(2));
     form.setValue("netAmount", netAmount.toFixed(2));
-  }, [form, watchedItems, totalExpense, totalSelling, totalLessExpenses, netAmount]);
+  }, [form, watchedItems, items, totalExpense, totalSelling, totalLessExpenses, netAmount]);
 
   const onSubmit = (data: InvoiceFormData) => {
     const invoice = {
