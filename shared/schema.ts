@@ -114,6 +114,8 @@ export const stockMovements = pgTable("stock_movements", {
   referenceNumber: text("reference_number"), // Invoice number for display
   vendorId: uuid("vendor_id").references(() => vendors.id), // For purchase entries
   retailerId: uuid("retailer_id").references(() => retailers.id), // For sales entries
+  rate: decimal("rate", { precision: 8, scale: 2 }), // Rate per unit for OUT entries (from sales invoice)
+  purchaseInvoiceId: uuid("purchase_invoice_id").references(() => purchaseInvoices.id), // Tracks which OUT entries are used for purchase invoices
   notes: text("notes"),
   movementDate: timestamp("movement_date").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
