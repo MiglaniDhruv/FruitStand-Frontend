@@ -115,7 +115,12 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await authenticatedApiRequest("POST", "/api/purchase-invoices", data);
+      // Add stockOutEntryId if one was selected
+      const requestData = {
+        ...data,
+        stockOutEntryId: selectedStockOutEntry || undefined
+      };
+      const response = await authenticatedApiRequest("POST", "/api/purchase-invoices", requestData);
       return response.json();
     },
     onSuccess: () => {

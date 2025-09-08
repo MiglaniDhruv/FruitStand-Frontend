@@ -1194,7 +1194,7 @@ export class MemStorage implements IStorage {
     };
   }
 
-  async createPurchaseInvoice(insertInvoice: InsertPurchaseInvoice, items: InsertInvoiceItem[]): Promise<InvoiceWithItems> {
+  async createPurchaseInvoice(insertInvoice: InsertPurchaseInvoice, items: InsertInvoiceItem[], stockOutEntryId?: string): Promise<InvoiceWithItems> {
     const invoiceNumber = `INV-${new Date().getFullYear()}-${this.invoiceCounter.toString().padStart(3, '0')}`;
     this.invoiceCounter++;
 
@@ -1247,6 +1247,16 @@ export class MemStorage implements IStorage {
         notes: `Stock received from vendor via purchase invoice ${invoice.invoiceNumber}`,
         movementDate: invoice.invoiceDate,
       });
+    }
+
+    // Mark stock out entry as used if stockOutEntryId was provided
+    if (stockOutEntryId) {
+      const stockOutEntry = this.stockMovements.get(stockOutEntryId);
+      if (stockOutEntry) {
+        // Update the stock out entry to mark it as used for this purchase invoice
+        stockOutEntry.purchaseInvoiceId = invoice.id;
+        this.stockMovements.set(stockOutEntryId, stockOutEntry);
+      }
     }
 
     // Update vendor balance

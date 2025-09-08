@@ -280,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/purchase-invoices", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
     try {
-      const { invoice, items } = req.body;
+      const { invoice, items, stockOutEntryId } = req.body;
       
       if (!invoice || !items || !Array.isArray(items)) {
         return res.status(400).json({ message: "Invoice and items are required" });
@@ -289,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoiceData = insertPurchaseInvoiceSchema.parse(invoice);
       const itemsData = items.map((item: any) => insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
       
-      const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData);
+      const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData, stockOutEntryId);
       res.status(201).json(createdInvoice);
     } catch (error) {
       if (error instanceof z.ZodError) {
