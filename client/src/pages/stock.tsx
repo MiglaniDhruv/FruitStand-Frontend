@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Edit, AlertTriangle, History, Plus } from "lucide-react";
+import { Search, Edit, AlertTriangle, History, Plus, Trash2, PlusCircle } from "lucide-react";
 import { 
   Select,
   SelectContent,
@@ -40,10 +40,9 @@ export default function Stock() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
   const [manualEntry, setManualEntry] = useState({
-    itemId: "",
-    crates: "",
-    kgs: "",
+    vendorId: "",
     notes: "",
+    lineItems: [{ itemId: "", crates: "", kgs: "" }] as Array<{itemId: string, crates: string, kgs: string}>,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -63,6 +62,10 @@ export default function Stock() {
 
   const { data: items } = useQuery<any[]>({
     queryKey: ["/api/items"],
+  });
+
+  const { data: vendors } = useQuery<any[]>({
+    queryKey: ["/api/vendors"],
   });
 
   const updateStockMutation = useMutation({
@@ -101,7 +104,7 @@ export default function Stock() {
       queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
       setShowManualEntry(false);
-      setManualEntry({ itemId: "", crates: "", kgs: "", notes: "" });
+      setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
     },
     onError: (error) => {
       toast({
@@ -146,30 +149,89 @@ export default function Stock() {
     });
   };
 
-  const handleManualStockEntry = () => {
-    if (!manualEntry.itemId || !manualEntry.crates && !manualEntry.kgs) {
+  const handleManualStockEntry = async () => {
+    if (!manualEntry.vendorId) {
       toast({
         title: "Missing information",
-        description: "Please select an item and enter quantities",
+        description: "Please select a vendor",
         variant: "destructive",
       });
       return;
     }
 
-    createStockMovementMutation.mutate({
-      itemId: manualEntry.itemId,
-      movementType: "IN",
-      quantityInCrates: manualEntry.crates || "0",
-      quantityInKgs: manualEntry.kgs || "0",
-      referenceType: "MANUAL_ENTRY",
-      referenceId: null,
-      referenceNumber: "MANUAL",
-      vendorId: null,
-      retailerId: null,
-      notes: manualEntry.notes || "Manual stock entry",
-      movementDate: new Date().toISOString(),
+    const validLineItems = manualEntry.lineItems.filter(item => 
+      item.itemId && (item.crates || item.kgs)
+    );
+
+    if (validLineItems.length === 0) {
+      toast({
+        title: "Missing information",
+        description: "Please add at least one item with quantities",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Create stock movements for each line item
+      for (const lineItem of validLineItems) {
+        await createStockMovementMutation.mutateAsync({
+          itemId: lineItem.itemId,
+          movementType: "IN",
+          quantityInCrates: lineItem.crates || "0",
+          quantityInKgs: lineItem.kgs || "0",
+          referenceType: "MANUAL_ENTRY",
+          referenceId: null,
+          referenceNumber: "MANUAL",
+          vendorId: manualEntry.vendorId,
+          retailerId: null,
+          notes: manualEntry.notes || "Manual stock entry",
+          movementDate: new Date().toISOString(),
+        });
+      }
+      
+      toast({
+        title: "Stock entries added",
+        description: `Successfully added ${validLineItems.length} stock entries`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
+      setShowManualEntry(false);
+      setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add stock entries",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addLineItem = () => {
+    setManualEntry({
+      ...manualEntry,
+      lineItems: [...manualEntry.lineItems, { itemId: "", crates: "", kgs: "" }]
     });
   };
+
+  const removeLineItem = (index: number) => {
+    if (manualEntry.lineItems.length > 1) {
+      setManualEntry({
+        ...manualEntry,
+        lineItems: manualEntry.lineItems.filter((_, i) => i !== index)
+      });
+    }
+  };
+
+  const updateLineItem = (index: number, field: string, value: string) => {
+    const updatedLineItems = [...manualEntry.lineItems];
+    updatedLineItems[index] = { ...updatedLineItems[index], [field]: value };
+    setManualEntry({ ...manualEntry, lineItems: updatedLineItems });
+  };
+
+  const filteredItems = items?.filter((item: any) => 
+    !manualEntry.vendorId || item.vendorId === manualEntry.vendorId
+  ) || [];
 
   return (
     <div className="flex h-screen">
@@ -409,55 +471,121 @@ export default function Stock() {
 
       {/* Manual Stock Entry Modal */}
       <Dialog open={showManualEntry} onOpenChange={() => setShowManualEntry(false)}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Stock Entry</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Vendor Selection */}
             <div>
-              <Label htmlFor="item-select">Select Item</Label>
+              <Label htmlFor="vendor-select">Select Vendor</Label>
               <Select 
-                value={manualEntry.itemId} 
-                onValueChange={(value) => setManualEntry({ ...manualEntry, itemId: value })}
+                value={manualEntry.vendorId} 
+                onValueChange={(value) => setManualEntry({ 
+                  ...manualEntry, 
+                  vendorId: value,
+                  lineItems: [{ itemId: "", crates: "", kgs: "" }] // Reset line items when vendor changes
+                })}
               >
-                <SelectTrigger data-testid="select-item">
-                  <SelectValue placeholder="Select an item" />
+                <SelectTrigger data-testid="select-vendor">
+                  <SelectValue placeholder="Select a vendor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {items?.map((item: any) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name} - {item.quality} ({item.vendor.name})
+                  {vendors?.map((vendor: any) => (
+                    <SelectItem key={vendor.id} value={vendor.id}>
+                      {vendor.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="manual-crates">Quantity in Crates</Label>
-                <Input
-                  id="manual-crates"
-                  type="number"
-                  step="0.01"
-                  value={manualEntry.crates}
-                  onChange={(e) => setManualEntry({ ...manualEntry, crates: e.target.value })}
-                  data-testid="input-manual-crates"
-                />
-              </div>
-              <div>
-                <Label htmlFor="manual-kgs">Quantity in Kgs</Label>
-                <Input
-                  id="manual-kgs"
-                  type="number"
-                  step="0.01"
-                  value={manualEntry.kgs}
-                  onChange={(e) => setManualEntry({ ...manualEntry, kgs: e.target.value })}
-                  data-testid="input-manual-kgs"
-                />
-              </div>
-            </div>
 
+            {/* Line Items */}
+            {manualEntry.vendorId && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <Label className="text-base font-medium">Stock Items</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addLineItem}
+                    data-testid="button-add-line-item"
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Add Item
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  {manualEntry.lineItems.map((lineItem, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <Label className="text-sm font-medium">Item {index + 1}</Label>
+                        {manualEntry.lineItems.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeLineItem(index)}
+                            data-testid={`button-remove-line-item-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor={`item-select-${index}`}>Item</Label>
+                          <Select 
+                            value={lineItem.itemId} 
+                            onValueChange={(value) => updateLineItem(index, "itemId", value)}
+                          >
+                            <SelectTrigger data-testid={`select-item-${index}`}>
+                              <SelectValue placeholder="Select item" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredItems?.map((item: any) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name} - {item.quality}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`crates-${index}`}>Crates</Label>
+                          <Input
+                            id={`crates-${index}`}
+                            type="number"
+                            step="0.01"
+                            value={lineItem.crates}
+                            onChange={(e) => updateLineItem(index, "crates", e.target.value)}
+                            data-testid={`input-crates-${index}`}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`kgs-${index}`}>Kgs</Label>
+                          <Input
+                            id={`kgs-${index}`}
+                            type="number"
+                            step="0.01"
+                            value={lineItem.kgs}
+                            onChange={(e) => updateLineItem(index, "kgs", e.target.value)}
+                            data-testid={`input-kgs-${index}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
             <div>
               <Label htmlFor="manual-notes">Notes</Label>
               <Textarea
@@ -469,6 +597,7 @@ export default function Stock() {
               />
             </div>
 
+            {/* Actions */}
             <div className="flex justify-end space-x-2">
               <Button 
                 variant="outline" 
