@@ -35,10 +35,22 @@ import { Plus, Trash2 } from "lucide-react";
 
 const invoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
-  weight: z.string().min(1, "Weight is required"),
-  crates: z.string().min(1, "Crates is required"),
+  unit: z.enum(["kgs", "crate", "box"], { required_error: "Unit is required" }),
+  weight: z.string().optional(),
+  crates: z.string().optional(),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
+}).refine((data) => {
+  if (data.unit === "kgs") {
+    return data.weight && parseFloat(data.weight) > 0;
+  }
+  if (data.unit === "crate" || data.unit === "box") {
+    return data.crates && parseFloat(data.crates) > 0;
+  }
+  return true;
+}, {
+  message: "Quantity is required based on selected unit",
+  path: ["weight"], // This will show error on weight field, but it's fine
 });
 
 const invoiceSchema = z.object({
@@ -78,7 +90,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      items: [{ itemId: "", weight: "", crates: "", rate: "", amount: "0" }],
+      items: [{ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" }],
       commission: "0",
       labour: "0",
       truckFreight: "0",
@@ -215,7 +227,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       form.setValue("items", aggregatedItems);
     } else {
       // Reset to single empty item when no entries selected
-      form.setValue("items", [{ itemId: "", weight: "", crates: "", rate: "", amount: "0" }]);
+      form.setValue("items", [{ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" }]);
     }
   };
 
@@ -323,7 +335,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   };
 
   const addItem = () => {
-    append({ itemId: "", weight: "", crates: "", rate: "", amount: "0" });
+    append({ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" });
   };
 
   const removeItem = (index: number) => {
@@ -444,7 +456,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-7 gap-4 p-4 border rounded-lg">
                     <FormField
                       control={form.control}
                       name={`items.${index}.itemId`}
@@ -472,43 +484,70 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
                     <FormField
                       control={form.control}
-                      name={`items.${index}.weight`}
+                      name={`items.${index}.unit`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Weight (Kgs) *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              step="0.01" 
-                              placeholder="0.00" 
-                              {...field} 
-                              data-testid={`input-weight-${index}`}
-                            />
-                          </FormControl>
+                          <FormLabel>Unit *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid={`select-unit-${index}`}>
+                                <SelectValue placeholder="Select unit" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="kgs">Kgs</SelectItem>
+                              <SelectItem value="crate">Crate</SelectItem>
+                              <SelectItem value="box">Box</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.crates`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Crates *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              step="0.01" 
-                              placeholder="0.00" 
-                              {...field} 
-                              data-testid={`input-crates-${index}`}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {form.watch(`items.${index}.unit`) === "kgs" && (
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.weight`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Weight (Kgs) *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00" 
+                                {...field} 
+                                data-testid={`input-weight-${index}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {(form.watch(`items.${index}.unit`) === "crate" || form.watch(`items.${index}.unit`) === "box") && (
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.crates`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{form.watch(`items.${index}.unit`) === "box" ? "Boxes" : "Crates"} *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00" 
+                                {...field} 
+                                data-testid={`input-crates-${index}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}
