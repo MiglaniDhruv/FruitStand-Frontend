@@ -414,6 +414,39 @@ export default function Ledgers() {
       });
     });
 
+    // Crate deposit transactions
+    const retailerCrateTransactions = filteredCrateTransactions.filter((transaction: any) => 
+      transaction.retailerId === selectedRetailer && parseFloat(transaction.depositAmount || "0") > 0
+    );
+    retailerCrateTransactions.forEach((transaction: any) => {
+      const amount = parseFloat(transaction.depositAmount || "0");
+      const retailerName = getRetailerName(transaction.retailerId);
+      
+      // "Given" transactions = retailer pays deposit (credit to business)
+      // "Returned" transactions = retailer gets deposit back (debit from business)
+      if (transaction.transactionType === "Given") {
+        runningBalance -= amount; // Credit to business (reduces retailer's debt)
+        entries.push({
+          date: transaction.transactionDate,
+          description: `Crate ${transaction.transactionType} - ${transaction.quantity} crates (Deposit: ₹${amount.toLocaleString('en-IN')})`,
+          debit: 0,
+          credit: amount,
+          balance: runningBalance,
+          type: "Crate Deposit",
+        });
+      } else if (transaction.transactionType === "Returned") {
+        runningBalance += amount; // Debit to business (increases retailer's receivable)
+        entries.push({
+          date: transaction.transactionDate,
+          description: `Crate ${transaction.transactionType} - ${transaction.quantity} crates (Deposit: ₹${amount.toLocaleString('en-IN')})`,
+          debit: amount,
+          credit: 0,
+          balance: runningBalance,
+          type: "Crate Deposit",
+        });
+      }
+    });
+
     return entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
