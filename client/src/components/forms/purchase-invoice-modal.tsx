@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -68,6 +69,8 @@ interface PurchaseInvoiceModalProps {
 export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInvoiceModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [selectedStockOutEntry, setSelectedStockOutEntry] = useState<string>("");
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -104,6 +107,12 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     queryKey: ["/api/items"],
   });
 
+  // Fetch available stock out entries for selected vendor
+  const { data: availableStockOutEntries } = useQuery<any[]>({
+    queryKey: ["/api/stock-movements/vendor", selectedVendorId, "available"],
+    enabled: !!selectedVendorId,
+  });
+
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await authenticatedApiRequest("POST", "/api/purchase-invoices", data);
@@ -118,6 +127,8 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
       onOpenChange(false);
       form.reset();
+      setSelectedVendorId("");
+      setSelectedStockOutEntry("");
     },
     onError: (error) => {
       toast({
@@ -127,6 +138,30 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       });
     },
   });
+
+  // Handle vendor selection
+  const handleVendorChange = (vendorId: string) => {
+    setSelectedVendorId(vendorId);
+    setSelectedStockOutEntry(""); // Reset stock out entry when vendor changes
+    form.setValue("vendorId", vendorId);
+  };
+
+  // Handle stock out entry selection and prefill data
+  const handleStockOutEntrySelection = (entryId: string) => {
+    setSelectedStockOutEntry(entryId);
+    
+    const entry = availableStockOutEntries?.find((e: any) => e.id === entryId);
+    if (entry) {
+      // Clear existing items and add the prefilled item
+      form.setValue("items", [{
+        itemId: entry.itemId,
+        weight: entry.quantityInKgs,
+        crates: entry.quantityInCrates,
+        rate: entry.rate || "0",
+        amount: "0" // Will be calculated
+      }]);
+    }
+  };
 
   // Watch form fields for calculations
   const watchedItems = form.watch("items");
@@ -244,7 +279,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Vendor *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={handleVendorChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-vendor">
                             <SelectValue placeholder="Select vendor" />
@@ -262,6 +297,27 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                     </FormItem>
                   )}
                 />
+
+                {selectedVendorId && availableStockOutEntries && availableStockOutEntries.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium">Select Stock Out Entry (Optional)</label>
+                    <Select value={selectedStockOutEntry} onValueChange={handleStockOutEntrySelection}>
+                      <SelectTrigger data-testid="select-stock-out-entry">
+                        <SelectValue placeholder="Select stock out entry to prefill data" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableStockOutEntries?.map((entry: any) => (
+                          <SelectItem key={entry.id} value={entry.id}>
+                            {entry.item.name} - {entry.item.quality} | {entry.quantityInKgs} Kgs, {entry.quantityInCrates} Crates | Rate: ₹{entry.rate || 'N/A'} | Date: {new Date(entry.movementDate).toLocaleDateString()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select an existing stock out entry to prefill item, quantity, and rate data
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}

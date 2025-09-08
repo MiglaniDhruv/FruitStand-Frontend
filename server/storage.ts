@@ -1449,6 +1449,29 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime());
   }
 
+  async getAvailableStockOutEntriesByVendor(vendorId: string): Promise<StockMovementWithItem[]> {
+    const movements = Array.from(this.stockMovements.values())
+      .filter(movement => 
+        movement.vendorId === vendorId && 
+        movement.movementType === "OUT" && 
+        movement.referenceType === "SALES_INVOICE" &&
+        !movement.purchaseInvoiceId // Only movements not yet used for purchase invoices
+      )
+      .sort((a, b) => new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime());
+
+    return movements.map(movement => {
+      const item = this.items.get(movement.itemId!)!;
+      const vendor = this.vendors.get(item.vendorId!)!;
+      return {
+        ...movement,
+        item: {
+          ...item,
+          vendor,
+        },
+      };
+    });
+  }
+
   async createStockMovement(insertMovement: InsertStockMovement): Promise<StockMovement> {
     const movement: StockMovement = {
       id: randomUUID(),

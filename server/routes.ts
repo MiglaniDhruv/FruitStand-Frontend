@@ -373,6 +373,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/stock-movements/vendor/:vendorId/available", authenticateToken, async (req, res) => {
+    try {
+      const movements = await storage.getAvailableStockOutEntriesByVendor(req.params.vendorId);
+      res.json(movements);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch available stock out entries for vendor" });
+    }
+  });
+
   app.post("/api/stock-movements", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
     try {
       const movementData = insertStockMovementSchema.parse(req.body);

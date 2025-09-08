@@ -390,6 +390,10 @@ export type InsertStock = z.infer<typeof insertStockSchema>;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 
+export type StockMovementWithItem = StockMovement & {
+  item: Item & { vendor: Vendor };
+};
+
 export type Retailer = typeof retailers.$inferSelect;
 export type InsertRetailer = z.infer<typeof insertRetailerSchema>;
 
