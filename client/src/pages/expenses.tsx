@@ -310,7 +310,7 @@ export default function ExpenseManagement() {
   );
   const todaysExpenses = expenses.filter((expense: any) => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const expenseDate = format(new Date(expense.paymentDate), "yyyy-MM-dd");
+    const expenseDate = format(new Date(expense.expenseDate), "yyyy-MM-dd");
     return expenseDate === today;
   });
   const todaysAmount = todaysExpenses.reduce((sum: number, expense: any) => 
