@@ -217,6 +217,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
         
         return {
           itemId: item.itemId,
+          unit: "kgs" as const,
           weight: item.totalWeight.toString(),
           crates: item.totalCrates.toString(),
           rate: averageRate.toFixed(2),
@@ -325,8 +326,8 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
     const items = data.items.map(item => ({
       itemId: item.itemId,
-      weight: parseFloat(item.weight).toFixed(2),
-      crates: parseFloat(item.crates).toFixed(2),
+      weight: parseFloat(item.weight || "0").toFixed(2),
+      crates: parseFloat(item.crates || "0").toFixed(2),
       rate: parseFloat(item.rate).toFixed(2),
       amount: parseFloat(item.amount).toFixed(2),
     }));

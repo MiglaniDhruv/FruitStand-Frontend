@@ -322,7 +322,7 @@ export default function SalesInvoiceManagement() {
     const crates = form.watch(`items.${index}.crates`);
     const rate = form.watch(`items.${index}.rate`);
     
-    const quantity = getQuantityForCalculation(itemId, weight, crates);
+    const quantity = getQuantityForCalculation(itemId, weight || 0, crates || 0);
     const amount = quantity * rate;
     form.setValue(`items.${index}.amount`, amount);
     calculateTotalAmount();
@@ -373,8 +373,8 @@ export default function SalesInvoiceManagement() {
       },
       items: data.items.map(item => ({
         ...item,
-        weight: item.weight.toFixed(2),
-        crates: item.crates.toFixed(2),
+        weight: (item.weight || 0).toFixed(2),
+        crates: (item.crates || 0).toFixed(2),
         rate: item.rate.toFixed(2),
         amount: item.amount.toFixed(2),
       })),
