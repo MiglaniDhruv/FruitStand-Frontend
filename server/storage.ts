@@ -174,7 +174,32 @@ export class MemStorage implements IStorage {
     };
     this.users.set(admin.id, admin);
 
-    // Create sample vendors
+    // Create additional users for testing
+    const operatorPassword = await bcrypt.hash("operator123", 10);
+    const operator: User = {
+      id: randomUUID(),
+      username: "operator",
+      password: operatorPassword,
+      role: "Operator",
+      name: "Suresh Patil",
+      permissions: [...ROLE_PERMISSIONS.Operator],
+      createdAt: new Date(),
+    };
+    this.users.set(operator.id, operator);
+
+    const accountantPassword = await bcrypt.hash("accountant123", 10);
+    const accountant: User = {
+      id: randomUUID(),
+      username: "accountant",
+      password: accountantPassword,
+      role: "Accountant",
+      name: "Priya Sharma",
+      permissions: [...ROLE_PERMISSIONS.Accountant],
+      createdAt: new Date(),
+    };
+    this.users.set(accountant.id, accountant);
+
+    // Create multiple vendors
     const vendor1: Vendor = {
       id: randomUUID(),
       name: "Ramesh Fruit Supplier",
@@ -183,13 +208,41 @@ export class MemStorage implements IStorage {
       address: "Market Road, Mumbai",
       gstNumber: "27ABCDE1234F1Z5",
       panNumber: "ABCDE1234F",
-      balance: "0.00",
+      balance: "15000.00",
       isActive: true,
       createdAt: new Date(),
     };
     this.vendors.set(vendor1.id, vendor1);
 
-    // Create sample items
+    const vendor2: Vendor = {
+      id: randomUUID(),
+      name: "Krishna Produce Co.",
+      contactPerson: "Krishna Rao",
+      phone: "9876543220",
+      address: "Wholesale Market, Pune",
+      gstNumber: "27ABCDE1234H1Z7",
+      panNumber: "ABCDE1234H",
+      balance: "8500.00",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.vendors.set(vendor2.id, vendor2);
+
+    const vendor3: Vendor = {
+      id: randomUUID(),
+      name: "Mahalakshmi Fruits",
+      contactPerson: "Lakshmi Devi",
+      phone: "9876543230",
+      address: "Fruit Market, Nashik",
+      gstNumber: "27ABCDE1234I1Z8",
+      panNumber: "ABCDE1234I",
+      balance: "22000.00",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.vendors.set(vendor3.id, vendor3);
+
+    // Create multiple items for different vendors
     const item1: Item = {
       id: randomUUID(),
       name: "Mangoes",
@@ -200,30 +253,103 @@ export class MemStorage implements IStorage {
     };
     this.items.set(item1.id, item1);
 
-    // Initialize stock for the item
-    const stock1: Stock = {
+    const item2: Item = {
       id: randomUUID(),
-      itemId: item1.id,
-      quantityInCrates: "0.00",
-      quantityInKgs: "0.00",
-      lastUpdated: new Date(),
+      name: "Mangoes",
+      quality: "B-Grade",
+      vendorId: vendor1.id,
+      isActive: true,
+      createdAt: new Date(),
     };
-    this.stock.set(stock1.id, stock1);
+    this.items.set(item2.id, item2);
 
-    // Create sample bank account
+    const item3: Item = {
+      id: randomUUID(),
+      name: "Apples",
+      quality: "Premium",
+      vendorId: vendor2.id,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.items.set(item3.id, item3);
+
+    const item4: Item = {
+      id: randomUUID(),
+      name: "Oranges",
+      quality: "A-Grade",
+      vendorId: vendor2.id,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.items.set(item4.id, item4);
+
+    const item5: Item = {
+      id: randomUUID(),
+      name: "Grapes",
+      quality: "Export Quality",
+      vendorId: vendor3.id,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.items.set(item5.id, item5);
+
+    const item6: Item = {
+      id: randomUUID(),
+      name: "Pomegranates",
+      quality: "A-Grade",
+      vendorId: vendor3.id,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.items.set(item6.id, item6);
+
+    // Initialize stock for all items
+    const stockItems = [
+      { itemId: item1.id, crates: "45.00", kgs: "1350.00" },
+      { itemId: item2.id, crates: "32.00", kgs: "960.00" },
+      { itemId: item3.id, crates: "28.00", kgs: "700.00" },
+      { itemId: item4.id, crates: "38.00", kgs: "950.00" },
+      { itemId: item5.id, crates: "25.00", kgs: "500.00" },
+      { itemId: item6.id, crates: "40.00", kgs: "800.00" },
+    ];
+
+    stockItems.forEach(stockData => {
+      const stock: Stock = {
+        id: randomUUID(),
+        itemId: stockData.itemId,
+        quantityInCrates: stockData.crates,
+        quantityInKgs: stockData.kgs,
+        lastUpdated: new Date(),
+      };
+      this.stock.set(stock.id, stock);
+    });
+
+    // Create multiple bank accounts
     const bank1: BankAccount = {
       id: randomUUID(),
       name: "Business Current Account",
       accountNumber: "1234567890",
       bankName: "State Bank of India",
       ifscCode: "SBIN0001234",
-      balance: "50000.00",
+      balance: "125000.00",
       isActive: true,
       createdAt: new Date(),
     };
     this.bankAccounts.set(bank1.id, bank1);
 
-    // Create sample retailers
+    const bank2: BankAccount = {
+      id: randomUUID(),
+      name: "Savings Account",
+      accountNumber: "9876543210",
+      bankName: "HDFC Bank",
+      ifscCode: "HDFC0001234",
+      balance: "85000.00",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.bankAccounts.set(bank2.id, bank2);
+
+    // Create multiple retailers
     const retailer1: Retailer = {
       id: randomUUID(),
       name: "Raj Retail Store",
@@ -232,6 +358,57 @@ export class MemStorage implements IStorage {
       address: "Shop No. 15, Market Complex",
       gstNumber: "27ABCDE1234G1Z6",
       panNumber: "ABCDE1234G",
+      balance: "5000.00",
+      udhaaarBalance: "12000.00",
+      shortfallBalance: "0.00",
+      crateBalance: 15,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.retailers.set(retailer1.id, retailer1);
+
+    const retailer2: Retailer = {
+      id: randomUUID(),
+      name: "Fresh Fruits Mart",
+      contactPerson: "Vikram Singh",
+      phone: "9876543212",
+      address: "Main Road, Sector 7",
+      gstNumber: "27ABCDE1234J1Z9",
+      panNumber: "ABCDE1234J",
+      balance: "8500.00",
+      udhaaarBalance: "6000.00",
+      shortfallBalance: "1500.00",
+      crateBalance: 8,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.retailers.set(retailer2.id, retailer2);
+
+    const retailer3: Retailer = {
+      id: randomUUID(),
+      name: "City Fruit Center",
+      contactPerson: "Amit Joshi",
+      phone: "9876543213",
+      address: "Commercial Street, Block A",
+      gstNumber: "27ABCDE1234K1Z0",
+      panNumber: "ABCDE1234K",
+      balance: "3200.00",
+      udhaaarBalance: "4500.00",
+      shortfallBalance: "0.00",
+      crateBalance: 22,
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.retailers.set(retailer3.id, retailer3);
+
+    const retailer4: Retailer = {
+      id: randomUUID(),
+      name: "Green Valley Fruits",
+      contactPerson: "Sunita Mehta",
+      phone: "9876543214",
+      address: "Garden Plaza, Shop 8",
+      gstNumber: "27ABCDE1234L1Z1",
+      panNumber: "ABCDE1234L",
       balance: "0.00",
       udhaaarBalance: "0.00",
       shortfallBalance: "0.00",
@@ -239,7 +416,7 @@ export class MemStorage implements IStorage {
       isActive: true,
       createdAt: new Date(),
     };
-    this.retailers.set(retailer1.id, retailer1);
+    this.retailers.set(retailer4.id, retailer4);
 
     // Create sample expense categories
     const expenseCategories = [
@@ -248,6 +425,8 @@ export class MemStorage implements IStorage {
       { name: "Market Fee", description: "Market and commission fees" },
       { name: "Utilities", description: "Electricity, water, and utilities" },
       { name: "Office Expenses", description: "Stationary, office supplies" },
+      { name: "Rent", description: "Shop and storage rent" },
+      { name: "Maintenance", description: "Equipment and facility maintenance" },
     ];
 
     expenseCategories.forEach(cat => {
@@ -260,6 +439,361 @@ export class MemStorage implements IStorage {
       };
       this.expenseCategories.set(category.id, category);
     });
+
+    // Create sample purchase invoices with items
+    const purchaseInvoice1: PurchaseInvoice = {
+      id: randomUUID(),
+      invoiceNumber: "PI001",
+      vendorId: vendor1.id,
+      invoiceDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+      commission: "2500.00",
+      labour: "800.00",
+      truckFreight: "1200.00",
+      crateFreight: "400.00",
+      postExpenses: "200.00",
+      draftExpenses: "150.00",
+      vatav: "300.00",
+      otherExpenses: "250.00",
+      advance: "5000.00",
+      totalExpense: "5800.00",
+      totalSelling: "45000.00",
+      totalLessExpenses: "39200.00",
+      netAmount: "36700.00",
+      paidAmount: "25000.00",
+      balanceAmount: "11700.00",
+      status: "Partially Paid",
+      createdAt: new Date(),
+    };
+    this.purchaseInvoices.set(purchaseInvoice1.id, purchaseInvoice1);
+
+    // Invoice items for purchaseInvoice1
+    const invoiceItem1: InvoiceItem = {
+      id: randomUUID(),
+      invoiceId: purchaseInvoice1.id,
+      itemId: item1.id,
+      quantityInCrates: "30.00",
+      quantityInKgs: "900.00",
+      pricePerKg: "35.00",
+      sellingPricePerKg: "50.00",
+      totalAmount: "31500.00",
+      totalSellingAmount: "45000.00",
+    };
+    this.invoiceItems.set(invoiceItem1.id, invoiceItem1);
+
+    const purchaseInvoice2: PurchaseInvoice = {
+      id: randomUUID(),
+      invoiceNumber: "PI002",
+      vendorId: vendor2.id,
+      invoiceDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+      commission: "1800.00",
+      labour: "600.00",
+      truckFreight: "900.00",
+      crateFreight: "300.00",
+      postExpenses: "150.00",
+      draftExpenses: "100.00",
+      vatav: "200.00",
+      otherExpenses: "150.00",
+      advance: "3000.00",
+      totalExpense: "4200.00",
+      totalSelling: "32000.00",
+      totalLessExpenses: "27800.00",
+      netAmount: "25600.00",
+      paidAmount: "25600.00",
+      balanceAmount: "0.00",
+      status: "Paid",
+      createdAt: new Date(),
+    };
+    this.purchaseInvoices.set(purchaseInvoice2.id, purchaseInvoice2);
+
+    // Invoice items for purchaseInvoice2
+    const invoiceItem2: InvoiceItem = {
+      id: randomUUID(),
+      invoiceId: purchaseInvoice2.id,
+      itemId: item3.id,
+      quantityInCrates: "20.00",
+      quantityInKgs: "500.00",
+      pricePerKg: "42.00",
+      sellingPricePerKg: "64.00",
+      totalAmount: "21000.00",
+      totalSellingAmount: "32000.00",
+    };
+    this.invoiceItems.set(invoiceItem2.id, invoiceItem2);
+
+    // Create sample payments
+    const payment1: Payment = {
+      id: randomUUID(),
+      invoiceId: purchaseInvoice1.id,
+      amount: "15000.00",
+      paymentMode: "Bank Transfer",
+      bankAccountId: bank1.id,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      notes: "Partial payment received",
+      createdAt: new Date(),
+    };
+    this.payments.set(payment1.id, payment1);
+
+    const payment2: Payment = {
+      id: randomUUID(),
+      invoiceId: purchaseInvoice1.id,
+      amount: "10000.00",
+      paymentMode: "Cash",
+      bankAccountId: null,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      notes: "Cash payment",
+      createdAt: new Date(),
+    };
+    this.payments.set(payment2.id, payment2);
+
+    const payment3: Payment = {
+      id: randomUUID(),
+      invoiceId: purchaseInvoice2.id,
+      amount: "25600.00",
+      paymentMode: "UPI",
+      bankAccountId: bank2.id,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      notes: "Full payment via UPI",
+      createdAt: new Date(),
+    };
+    this.payments.set(payment3.id, payment3);
+
+    // Create sample sales invoices
+    const salesInvoice1: SalesInvoice = {
+      id: randomUUID(),
+      invoiceNumber: "SI001",
+      retailerId: retailer1.id,
+      invoiceDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      totalAmount: "18500.00",
+      paidAmount: "12000.00",
+      balanceAmount: "6500.00",
+      status: "Partially Paid",
+      createdAt: new Date(),
+    };
+    this.salesInvoices.set(salesInvoice1.id, salesInvoice1);
+
+    // Sales invoice items
+    const salesInvoiceItem1: SalesInvoiceItem = {
+      id: randomUUID(),
+      invoiceId: salesInvoice1.id,
+      itemId: item1.id,
+      quantityInCrates: "15.00",
+      quantityInKgs: "450.00",
+      pricePerKg: "40.00",
+      totalAmount: "18000.00",
+    };
+    this.salesInvoiceItems.set(salesInvoiceItem1.id, salesInvoiceItem1);
+
+    const salesInvoice2: SalesInvoice = {
+      id: randomUUID(),
+      invoiceNumber: "SI002",
+      retailerId: retailer2.id,
+      invoiceDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      totalAmount: "14800.00",
+      paidAmount: "14800.00",
+      balanceAmount: "0.00",
+      status: "Paid",
+      createdAt: new Date(),
+    };
+    this.salesInvoices.set(salesInvoice2.id, salesInvoice2);
+
+    // Sales invoice items
+    const salesInvoiceItem2: SalesInvoiceItem = {
+      id: randomUUID(),
+      invoiceId: salesInvoice2.id,
+      itemId: item3.id,
+      quantityInCrates: "12.00",
+      quantityInKgs: "300.00",
+      pricePerKg: "48.00",
+      totalAmount: "14400.00",
+    };
+    this.salesInvoiceItems.set(salesInvoiceItem2.id, salesInvoiceItem2);
+
+    // Create sample sales payments
+    const salesPayment1: SalesPayment = {
+      id: randomUUID(),
+      invoiceId: salesInvoice1.id,
+      amount: "8000.00",
+      paymentMode: "Cash",
+      bankAccountId: null,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      notes: "Partial cash payment",
+      createdAt: new Date(),
+    };
+    this.salesPayments.set(salesPayment1.id, salesPayment1);
+
+    const salesPayment2: SalesPayment = {
+      id: randomUUID(),
+      invoiceId: salesInvoice1.id,
+      amount: "4000.00",
+      paymentMode: "UPI",
+      bankAccountId: bank1.id,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      notes: "UPI payment",
+      createdAt: new Date(),
+    };
+    this.salesPayments.set(salesPayment2.id, salesPayment2);
+
+    const salesPayment3: SalesPayment = {
+      id: randomUUID(),
+      invoiceId: salesInvoice2.id,
+      amount: "14800.00",
+      paymentMode: "Bank Transfer",
+      bankAccountId: bank1.id,
+      chequeNumber: null,
+      paymentDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      notes: "Full payment via bank transfer",
+      createdAt: new Date(),
+    };
+    this.salesPayments.set(salesPayment3.id, salesPayment3);
+
+    // Create sample crate transactions with deposits
+    const crateTransaction1: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer1.id,
+      transactionType: "Given",
+      quantity: 20,
+      transactionDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: salesInvoice1.id,
+      depositAmount: "5000.00",
+      notes: "Crates given with mango delivery",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction1.id, crateTransaction1);
+
+    const crateTransaction2: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer1.id,
+      transactionType: "Returned",
+      quantity: 5,
+      transactionDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: null,
+      depositAmount: "1250.00",
+      notes: "Partial crate return with deposit refund",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction2.id, crateTransaction2);
+
+    const crateTransaction3: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer2.id,
+      transactionType: "Given",
+      quantity: 15,
+      transactionDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: salesInvoice2.id,
+      depositAmount: "3750.00",
+      notes: "Crates given with apple delivery",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction3.id, crateTransaction3);
+
+    const crateTransaction4: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer2.id,
+      transactionType: "Returned",
+      quantity: 7,
+      transactionDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: null,
+      depositAmount: "1750.00",
+      notes: "Returned crates with deposit refund",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction4.id, crateTransaction4);
+
+    const crateTransaction5: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer3.id,
+      transactionType: "Given",
+      quantity: 25,
+      transactionDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: null,
+      depositAmount: "6250.00",
+      notes: "Bulk crate delivery with deposit",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction5.id, crateTransaction5);
+
+    const crateTransaction6: CrateTransaction = {
+      id: randomUUID(),
+      retailerId: retailer3.id,
+      transactionType: "Returned",
+      quantity: 3,
+      transactionDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      salesInvoiceId: null,
+      depositAmount: "750.00",
+      notes: "Small return with partial deposit refund",
+      createdAt: new Date(),
+    };
+    this.crateTransactions.set(crateTransaction6.id, crateTransaction6);
+
+    // Create sample expenses
+    const transportCategory = Array.from(this.expenseCategories.values()).find(c => c.name === "Transport");
+    const laborCategory = Array.from(this.expenseCategories.values()).find(c => c.name === "Labor");
+    const marketFeeCategory = Array.from(this.expenseCategories.values()).find(c => c.name === "Market Fee");
+    const rentCategory = Array.from(this.expenseCategories.values()).find(c => c.name === "Rent");
+
+    if (transportCategory) {
+      const expense1: Expense = {
+        id: randomUUID(),
+        categoryId: transportCategory.id,
+        amount: "2500.00",
+        description: "Truck transportation for fruit delivery",
+        expenseDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        paymentMode: "Cash",
+        bankAccountId: null,
+        createdAt: new Date(),
+      };
+      this.expenses.set(expense1.id, expense1);
+    }
+
+    if (laborCategory) {
+      const expense2: Expense = {
+        id: randomUUID(),
+        categoryId: laborCategory.id,
+        amount: "1800.00",
+        description: "Loading and unloading charges",
+        expenseDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        paymentMode: "Cash",
+        bankAccountId: null,
+        createdAt: new Date(),
+      };
+      this.expenses.set(expense2.id, expense2);
+    }
+
+    if (marketFeeCategory) {
+      const expense3: Expense = {
+        id: randomUUID(),
+        categoryId: marketFeeCategory.id,
+        amount: "750.00",
+        description: "APMC market fee and commission",
+        expenseDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        paymentMode: "Bank Transfer",
+        bankAccountId: bank1.id,
+        createdAt: new Date(),
+      };
+      this.expenses.set(expense3.id, expense3);
+    }
+
+    if (rentCategory) {
+      const expense4: Expense = {
+        id: randomUUID(),
+        categoryId: rentCategory.id,
+        amount: "12000.00",
+        description: "Monthly shop rent",
+        expenseDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        paymentMode: "Bank Transfer",
+        bankAccountId: bank1.id,
+        createdAt: new Date(),
+      };
+      this.expenses.set(expense4.id, expense4);
+    }
+
+    // Update invoice counters
+    this.invoiceCounter = 3;
+    this.salesInvoiceCounter = 3;
   }
 
   // User methods
