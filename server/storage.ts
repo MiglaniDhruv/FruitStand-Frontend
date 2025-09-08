@@ -1043,8 +1043,20 @@ export class MemStorage implements IStorage {
       this.invoiceItems.set(invoiceItem.id, invoiceItem);
       createdItems.push(invoiceItem);
 
-      // Update stock
-      await this.updateStockFromInvoiceItem(invoiceItem);
+      // Create Stock IN movement entry
+      await this.createStockMovement({
+        itemId: invoiceItem.itemId,
+        movementType: "IN",
+        quantityInCrates: invoiceItem.crates,
+        quantityInKgs: invoiceItem.weight,
+        referenceType: "PURCHASE_INVOICE",
+        referenceId: invoice.id,
+        referenceNumber: invoice.invoiceNumber,
+        vendorId: invoice.vendorId,
+        retailerId: null,
+        notes: `Stock received from vendor via purchase invoice ${invoice.invoiceNumber}`,
+        movementDate: invoice.invoiceDate,
+      });
     }
 
     // Update vendor balance
@@ -1061,27 +1073,6 @@ export class MemStorage implements IStorage {
     };
   }
 
-  private async updateStockFromInvoiceItem(invoiceItem: InvoiceItem): Promise<void> {
-    const stockEntry = Array.from(this.stock.values()).find(s => s.itemId === invoiceItem.itemId);
-    if (!stockEntry) {
-      // Create new stock entry if it doesn't exist
-      const newStock: Stock = {
-        id: randomUUID(),
-        itemId: invoiceItem.itemId,
-        quantityInCrates: parseFloat(invoiceItem.crates).toFixed(2),
-        quantityInKgs: parseFloat(invoiceItem.weight).toFixed(2),
-        lastUpdated: new Date(),
-      };
-      this.stock.set(newStock.id, newStock);
-      return;
-    }
-
-    // Update both weight and crates from purchase invoice
-    stockEntry.quantityInKgs = (parseFloat(stockEntry.quantityInKgs || "0.00") + parseFloat(invoiceItem.weight)).toFixed(2);
-    stockEntry.quantityInCrates = (parseFloat(stockEntry.quantityInCrates || "0.00") + parseFloat(invoiceItem.crates)).toFixed(2);
-    stockEntry.lastUpdated = new Date();
-    this.stock.set(stockEntry.id, stockEntry);
-  }
 
   // Payment methods
   async getPayments(): Promise<PaymentWithDetails[]> {
@@ -1507,28 +1498,33 @@ export class MemStorage implements IStorage {
       return invoiceItem;
     });
 
-    // Update stock (decrease quantities) - Using new weight and crates structure
+    // Create Stock OUT movement entries and validate stock availability
     for (const item of items) {
-      const stock = await this.getStockByItem(item.itemId);
-      if (stock) {
-        const currentCrates = parseFloat(stock.quantityInCrates);
-        const currentKgs = parseFloat(stock.quantityInKgs);
-        const saleWeight = parseFloat(item.weight.toString());
-        const saleCrates = parseFloat(item.crates.toString());
-
-        // Check if we have enough stock
-        if (currentKgs < saleWeight || currentCrates < saleCrates) {
-          throw new Error(`Insufficient stock for item ${item.itemId}. Available: ${currentKgs} Kgs, ${currentCrates} Crates. Required: ${saleWeight} Kgs, ${saleCrates} Crates`);
-        }
-
-        // Update stock by reducing both weight and crates
-        await this.updateStock(item.itemId, {
-          quantityInCrates: (currentCrates - saleCrates).toFixed(2),
-          quantityInKgs: (currentKgs - saleWeight).toFixed(2),
-        });
-      } else {
-        throw new Error(`No stock found for item ${item.itemId}`);
+      const saleWeight = parseFloat(item.weight.toString());
+      const saleCrates = parseFloat(item.crates.toString());
+      
+      // Check current stock balance from movements
+      const currentBalance = await this.calculateStockBalance(item.itemId);
+      
+      // Check if we have enough stock
+      if (currentBalance.kgs < saleWeight || currentBalance.crates < saleCrates) {
+        throw new Error(`Insufficient stock for item ${item.itemId}. Available: ${currentBalance.kgs} Kgs, ${currentBalance.crates} Crates. Required: ${saleWeight} Kgs, ${saleCrates} Crates`);
       }
+
+      // Create Stock OUT movement entry
+      await this.createStockMovement({
+        itemId: item.itemId,
+        movementType: "OUT",
+        quantityInCrates: item.crates,
+        quantityInKgs: item.weight,
+        referenceType: "SALES_INVOICE",
+        referenceId: invoice.id,
+        referenceNumber: invoice.invoiceNumber,
+        vendorId: null,
+        retailerId: invoice.retailerId,
+        notes: `Stock sold to retailer via sales invoice ${invoice.invoiceNumber}`,
+        movementDate: invoice.invoiceDate,
+      });
     }
 
     const retailer = this.retailers.get(invoice.retailerId)!;
