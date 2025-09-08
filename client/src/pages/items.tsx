@@ -149,6 +149,7 @@ export default function Items() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Quality</TableHead>
+                    <TableHead>Unit</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
@@ -157,13 +158,13 @@ export default function Items() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8">
+                      <TableCell colSpan={6} className="text-center py-8">
                         Loading items...
                       </TableCell>
                     </TableRow>
                   ) : filteredItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No items found
                       </TableCell>
                     </TableRow>
@@ -172,6 +173,11 @@ export default function Items() {
                       <TableRow key={item.id} data-testid={`item-row-${item.id}`}>
                         <TableCell className="font-medium">{item.name}</TableCell>
                         <TableCell>{item.quality}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {item.unit?.charAt(0).toUpperCase() + item.unit?.slice(1) || "N/A"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{getVendorName(item.vendorId)}</TableCell>
                         <TableCell>
                           <Badge variant={item.isActive ? "default" : "secondary"}>
