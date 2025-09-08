@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { Plus, Trash2 } from "lucide-react";
@@ -70,7 +71,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedVendorId, setSelectedVendorId] = useState("");
-  const [selectedStockOutEntry, setSelectedStockOutEntry] = useState<string>("");
+  const [selectedStockOutEntries, setSelectedStockOutEntries] = useState<string[]>([]);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -115,10 +116,10 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Add stockOutEntryId if one was selected
+      // Add stockOutEntryIds if any were selected
       const requestData = {
         ...data,
-        stockOutEntryId: selectedStockOutEntry || undefined
+        stockOutEntryIds: selectedStockOutEntries.length > 0 ? selectedStockOutEntries : undefined
       };
       const response = await authenticatedApiRequest("POST", "/api/purchase-invoices", requestData);
       return response.json();
@@ -133,7 +134,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       onOpenChange(false);
       form.reset();
       setSelectedVendorId("");
-      setSelectedStockOutEntry("");
+      setSelectedStockOutEntries([]);
     },
     onError: (error) => {
       toast({
@@ -147,24 +148,54 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   // Handle vendor selection
   const handleVendorChange = (vendorId: string) => {
     setSelectedVendorId(vendorId);
-    setSelectedStockOutEntry(""); // Reset stock out entry when vendor changes
+    setSelectedStockOutEntries([]); // Reset stock out entries when vendor changes
     form.setValue("vendorId", vendorId);
   };
 
-  // Handle stock out entry selection and prefill data
-  const handleStockOutEntrySelection = (entryId: string) => {
-    setSelectedStockOutEntry(entryId);
+  // Handle stock out entry selection toggle
+  const handleStockOutEntryToggle = (entryId: string) => {
+    const newSelectedEntries = selectedStockOutEntries.includes(entryId)
+      ? selectedStockOutEntries.filter(id => id !== entryId)
+      : [...selectedStockOutEntries, entryId];
     
-    const entry = availableStockOutEntries?.find((e: any) => e.id === entryId);
-    if (entry) {
-      // Clear existing items and add the prefilled item
-      form.setValue("items", [{
-        itemId: entry.itemId,
-        weight: entry.quantityInKgs,
-        crates: entry.quantityInCrates,
-        rate: entry.rate || "0",
-        amount: "0" // Will be calculated
-      }]);
+    setSelectedStockOutEntries(newSelectedEntries);
+    
+    // Aggregate data from all selected entries
+    if (newSelectedEntries.length > 0) {
+      const aggregatedItems: any[] = [];
+      
+      newSelectedEntries.forEach(selectedId => {
+        const entry = availableStockOutEntries?.find((e: any) => e.id === selectedId);
+        if (entry) {
+          // Check if we already have this item
+          const existingItemIndex = aggregatedItems.findIndex(item => item.itemId === entry.itemId);
+          
+          if (existingItemIndex >= 0) {
+            // Add to existing item quantities
+            const existingItem = aggregatedItems[existingItemIndex];
+            aggregatedItems[existingItemIndex] = {
+              ...existingItem,
+              weight: (parseFloat(existingItem.weight) + parseFloat(entry.quantityInKgs)).toString(),
+              crates: (parseFloat(existingItem.crates) + parseFloat(entry.quantityInCrates)).toString(),
+              amount: "0" // Will be calculated
+            };
+          } else {
+            // Add new item
+            aggregatedItems.push({
+              itemId: entry.itemId,
+              weight: entry.quantityInKgs,
+              crates: entry.quantityInCrates,
+              rate: entry.rate || "0",
+              amount: "0" // Will be calculated
+            });
+          }
+        }
+      });
+      
+      form.setValue("items", aggregatedItems);
+    } else {
+      // Reset to single empty item when no entries selected
+      form.setValue("items", [{ itemId: "", weight: "", crates: "", rate: "", amount: "0" }]);
     }
   };
 
@@ -304,23 +335,38 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                 />
 
                 {selectedVendorId && availableStockOutEntries && availableStockOutEntries.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium">Select Stock Out Entry (Optional)</label>
-                    <Select value={selectedStockOutEntry} onValueChange={handleStockOutEntrySelection}>
-                      <SelectTrigger data-testid="select-stock-out-entry">
-                        <SelectValue placeholder="Select stock out entry to prefill data" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableStockOutEntries?.map((entry: any) => (
-                          <SelectItem key={entry.id} value={entry.id}>
-                            {entry.item.name} - {entry.item.quality} | {entry.quantityInKgs} Kgs, {entry.quantityInCrates} Crates | Rate: ₹{entry.rate || 'N/A'} | Date: {new Date(entry.movementDate).toLocaleDateString()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium">Select Stock Out Entries (Optional)</label>
+                    <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
+                      {availableStockOutEntries?.map((entry: any) => (
+                        <div key={entry.id} className="flex items-start space-x-3">
+                          <Checkbox
+                            id={entry.id}
+                            checked={selectedStockOutEntries.includes(entry.id)}
+                            onCheckedChange={() => handleStockOutEntryToggle(entry.id)}
+                            data-testid={`checkbox-stock-out-entry-${entry.id}`}
+                          />
+                          <label 
+                            htmlFor={entry.id} 
+                            className="text-sm cursor-pointer flex-1 leading-relaxed"
+                          >
+                            <span className="font-medium">{entry.item.name} - {entry.item.quality}</span>
+                            <br />
+                            <span className="text-muted-foreground text-xs">
+                              {entry.quantityInKgs} Kgs, {entry.quantityInCrates} Crates | Rate: ₹{entry.rate || 'N/A'} | Date: {new Date(entry.movementDate).toLocaleDateString()}
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Select an existing stock out entry to prefill item, quantity, and rate data
+                      Select multiple stock out entries to combine their data. Items of the same type will be aggregated.
                     </p>
+                    {selectedStockOutEntries.length > 0 && (
+                      <p className="text-xs text-green-600 mt-1">
+                        {selectedStockOutEntries.length} entries selected
+                      </p>
+                    )}
                   </div>
                 )}
 
