@@ -140,7 +140,7 @@ export default function Stock() {
     return (
       item.item.name.toLowerCase().includes(searchString) ||
       item.item.quality.toLowerCase().includes(searchString) ||
-      item.item.vendor.name.toLowerCase().includes(searchString)
+      (item.item.vendor?.name || '').toLowerCase().includes(searchString)
     );
   }) || [];
 
@@ -371,7 +371,7 @@ export default function Stock() {
                       <TableRow key={item.id} data-testid={`stock-row-${item.id}`}>
                         <TableCell className="font-medium">{item.item.name}</TableCell>
                         <TableCell>{item.item.quality}</TableCell>
-                        <TableCell>{item.item.vendor.name}</TableCell>
+                        <TableCell>{item.item.vendor?.name || 'Unknown Vendor'}</TableCell>
                         <TableCell>{parseFloat(item.quantityInCrates).toFixed(2)}</TableCell>
                         <TableCell>{parseFloat(item.quantityInKgs).toFixed(2)}</TableCell>
                         <TableCell>{format(new Date(item.lastUpdated), "MMM dd, yyyy")}</TableCell>
@@ -481,7 +481,7 @@ export default function Stock() {
             <div className="space-y-4">
               <div className="border-b pb-2">
                 <h3 className="font-semibold">{selectedItem.item.name} - {selectedItem.item.quality}</h3>
-                <p className="text-sm text-muted-foreground">Vendor: {selectedItem.item.vendor.name}</p>
+                <p className="text-sm text-muted-foreground">Vendor: {selectedItem.item.vendor?.name || 'Unknown Vendor'}</p>
                 <p className="text-sm text-muted-foreground">
                   Current Stock: {parseFloat(selectedItem.quantityInCrates).toFixed(2)} Crates, {parseFloat(selectedItem.quantityInKgs).toFixed(2)} Kgs
                 </p>
@@ -709,7 +709,7 @@ export default function Stock() {
                 <SelectContent>
                   {items?.map((item: any) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} - {item.quality} ({item.vendor.name})
+                      {item.name} - {item.quality} ({item.vendor?.name || 'Unknown Vendor'})
                     </SelectItem>
                   ))}
                 </SelectContent>
