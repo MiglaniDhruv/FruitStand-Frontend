@@ -15,6 +15,8 @@ import {
   type InsertPayment,
   type Stock,
   type InsertStock,
+  type StockMovement,
+  type InsertStockMovement,
   type CashbookEntry,
   type BankbookEntry,
   type InvoiceWithItems,
@@ -88,6 +90,12 @@ export interface IStorage {
   getStockByItem(itemId: string): Promise<Stock | undefined>;
   updateStock(itemId: string, stock: Partial<InsertStock>): Promise<Stock>;
   
+  // Stock movement management
+  getStockMovements(): Promise<StockMovement[]>;
+  getStockMovementsByItem(itemId: string): Promise<StockMovement[]>;
+  createStockMovement(movement: InsertStockMovement): Promise<StockMovement>;
+  calculateStockBalance(itemId: string): Promise<{ crates: number; kgs: number }>;
+  
   // Retailer management
   getRetailers(): Promise<Retailer[]>;
   getRetailer(id: string): Promise<Retailer | undefined>;
@@ -144,6 +152,7 @@ export class MemStorage implements IStorage {
   private invoiceItems: Map<string, InvoiceItem> = new Map();
   private payments: Map<string, Payment> = new Map();
   private stock: Map<string, Stock> = new Map();
+  private stockMovements: Map<string, StockMovement> = new Map();
   private cashbook: Map<string, CashbookEntry> = new Map();
   private bankbook: Map<string, BankbookEntry> = new Map();
   private retailers: Map<string, Retailer> = new Map();
@@ -1244,6 +1253,68 @@ export class MemStorage implements IStorage {
     const updated = { ...stockEntry, ...updateData, lastUpdated: new Date() };
     this.stock.set(stockEntry.id, updated);
     return updated;
+  }
+
+  // Stock movement methods
+  async getStockMovements(): Promise<StockMovement[]> {
+    return Array.from(this.stockMovements.values()).sort((a, b) => 
+      new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime()
+    );
+  }
+
+  async getStockMovementsByItem(itemId: string): Promise<StockMovement[]> {
+    return Array.from(this.stockMovements.values())
+      .filter(m => m.itemId === itemId)
+      .sort((a, b) => new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime());
+  }
+
+  async createStockMovement(insertMovement: InsertStockMovement): Promise<StockMovement> {
+    const movement: StockMovement = {
+      id: randomUUID(),
+      ...insertMovement,
+      createdAt: new Date(),
+    };
+    this.stockMovements.set(movement.id, movement);
+    
+    // Update the calculated stock balance
+    await this.updateCalculatedStock(movement.itemId);
+    
+    return movement;
+  }
+
+  async calculateStockBalance(itemId: string): Promise<{ crates: number; kgs: number }> {
+    const movements = await this.getStockMovementsByItem(itemId);
+    
+    let totalCrates = 0;
+    let totalKgs = 0;
+    
+    for (const movement of movements) {
+      const crates = parseFloat(movement.quantityInCrates);
+      const kgs = parseFloat(movement.quantityInKgs);
+      
+      if (movement.movementType === "IN") {
+        totalCrates += crates;
+        totalKgs += kgs;
+      } else if (movement.movementType === "OUT") {
+        totalCrates -= crates;
+        totalKgs -= kgs;
+      }
+    }
+    
+    return {
+      crates: Math.max(0, totalCrates), // Ensure non-negative
+      kgs: Math.max(0, totalKgs)
+    };
+  }
+
+  private async updateCalculatedStock(itemId: string): Promise<void> {
+    const balance = await this.calculateStockBalance(itemId);
+    
+    // Update or create stock entry with calculated balance
+    await this.updateStock(itemId, {
+      quantityInCrates: balance.crates.toFixed(2),
+      quantityInKgs: balance.kgs.toFixed(2),
+    });
   }
 
   // Book methods
