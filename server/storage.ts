@@ -92,7 +92,7 @@ export interface IStorage {
   
   // Stock movement management
   getStockMovements(): Promise<StockMovement[]>;
-  getStockMovementsByItem(itemId: string): Promise<StockMovement[]>;
+  getStockMovementsByItem(itemId: string): Promise<any[]>;
   createStockMovement(movement: InsertStockMovement): Promise<StockMovement>;
   calculateStockBalance(itemId: string): Promise<{ crates: number; kgs: number }>;
   
@@ -1603,10 +1603,26 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async getStockMovementsByItem(itemId: string): Promise<StockMovement[]> {
-    return Array.from(this.stockMovements.values())
+  async getStockMovementsByItem(itemId: string): Promise<any[]> {
+    const movements = Array.from(this.stockMovements.values())
       .filter(m => m.itemId === itemId)
       .sort((a, b) => new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime());
+    
+    // Populate retailer information for stock out entries
+    return movements.map(movement => {
+      if (movement.retailerId) {
+        const retailer = this.retailers.get(movement.retailerId);
+        return {
+          ...movement,
+          retailer: retailer ? {
+            id: retailer.id,
+            name: retailer.name,
+            contactPerson: retailer.contactPerson
+          } : null
+        };
+      }
+      return movement;
+    });
   }
 
   async getAvailableStockOutEntriesByVendor(vendorId: string): Promise<StockMovementWithItem[]> {

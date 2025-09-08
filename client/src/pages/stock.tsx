@@ -19,6 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Label } from "@/components/ui/label";
 import { Search, Edit, AlertTriangle, History, Plus, Trash2, PlusCircle, AlertCircle } from "lucide-react";
 import { 
@@ -488,42 +494,103 @@ export default function Stock() {
               </div>
               
               <div>
-                <h4 className="font-medium mb-2">Movement History</h4>
+                <h4 className="font-medium mb-4">Movement History</h4>
                 {itemMovements && itemMovements.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Crates</TableHead>
-                        <TableHead>Kgs</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {itemMovements.map((movement: any) => (
-                        <TableRow key={movement.id}>
-                          <TableCell>{format(new Date(movement.movementDate), "MMM dd, yyyy")}</TableCell>
-                          <TableCell>
-                            <Badge variant={movement.movementType === "IN" ? "default" : "secondary"}>
-                              {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
-                            {movement.movementType === "IN" ? "+" : "-"}{parseFloat(movement.quantityInCrates).toFixed(2)}
-                          </TableCell>
-                          <TableCell className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
-                            {movement.movementType === "IN" ? "+" : "-"}{parseFloat(movement.quantityInKgs).toFixed(2)}
-                          </TableCell>
-                          <TableCell>{movement.referenceNumber || movement.referenceType}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{movement.notes}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <Accordion type="multiple" className="w-full">
+                    {itemMovements.map((movement: any, index: number) => (
+                      <AccordionItem key={movement.id} value={`movement-${index}`}>
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <div className="flex items-center space-x-4">
+                              <Badge variant={movement.movementType === "IN" ? "default" : "secondary"}>
+                                {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
+                              </Badge>
+                              <span className="text-sm font-medium">
+                                {format(new Date(movement.movementDate), "MMM dd, yyyy")}
+                              </span>
+                              <span className={`text-sm font-semibold ${
+                                movement.movementType === "IN" ? "text-green-600" : "text-red-600"
+                              }`}>
+                                {movement.movementType === "IN" ? "+" : "-"}
+                                {parseFloat(movement.quantityInCrates).toFixed(2)} Crates, 
+                                {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm text-muted-foreground">
+                                {movement.referenceNumber || movement.referenceType}
+                              </div>
+                              {movement.movementType === "OUT" && movement.retailer && (
+                                <div className="text-xs text-muted-foreground">
+                                  Retailer: {movement.retailer.name}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="pt-2 pb-4 space-y-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="font-medium text-muted-foreground">Date:</span>
+                                <div>{format(new Date(movement.movementDate), "PPP")}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-muted-foreground">Type:</span>
+                                <div>
+                                  <Badge variant={movement.movementType === "IN" ? "default" : "secondary"} className="text-xs">
+                                    {movement.movementType === "IN" ? "Stock In" : "Stock Out"}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-muted-foreground">Quantity:</span>
+                                <div className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
+                                  {movement.movementType === "IN" ? "+" : "-"}
+                                  {parseFloat(movement.quantityInCrates).toFixed(2)} Crates
+                                  <br />
+                                  {movement.movementType === "IN" ? "+" : "-"}
+                                  {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
+                                </div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-muted-foreground">Reference:</span>
+                                <div>{movement.referenceNumber || movement.referenceType}</div>
+                              </div>
+                            </div>
+                            
+                            {movement.movementType === "OUT" && movement.retailer && (
+                              <div className="bg-muted/50 rounded-lg p-3">
+                                <span className="font-medium text-muted-foreground text-sm">Retailer Information:</span>
+                                <div className="mt-1">
+                                  <div className="font-medium">{movement.retailer.name}</div>
+                                  {movement.retailer.contactPerson && (
+                                    <div className="text-sm text-muted-foreground">Contact: {movement.retailer.contactPerson}</div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {movement.rate && (
+                              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                                <span className="font-medium text-muted-foreground text-sm">Rate Information:</span>
+                                <div className="mt-1 font-medium">₹{parseFloat(movement.rate).toFixed(2)} per Kg</div>
+                              </div>
+                            )}
+                            
+                            {movement.notes && (
+                              <div>
+                                <span className="font-medium text-muted-foreground text-sm">Notes:</span>
+                                <div className="mt-1 text-sm bg-muted/30 rounded p-2">{movement.notes}</div>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 ) : (
-                  <p className="text-center text-muted-foreground py-4">No movement history found</p>
+                  <p className="text-center text-muted-foreground py-8">No movement history found</p>
                 )}
               </div>
             </div>
