@@ -44,14 +44,14 @@ export default function RecentPayments() {
                     <CheckCircle className="text-chart-2 h-4 w-4" />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">{payment.vendor.name}</p>
+                    <p className="font-medium text-foreground">{payment.vendor?.name || "Unknown Vendor"}</p>
                     <p className="text-sm text-muted-foreground">{payment.paymentMode}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-medium text-foreground">₹{parseFloat(payment.amount).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(payment.paymentDate), "MMM dd")}
+                    {format(new Date(payment.paymentDate || payment.createdAt), "MMM dd")}
                   </p>
                 </div>
               </div>

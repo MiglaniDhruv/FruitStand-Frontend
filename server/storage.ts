@@ -1076,22 +1076,30 @@ export class MemStorage implements IStorage {
   // Payment methods
   async getPayments(): Promise<PaymentWithDetails[]> {
     const payments = Array.from(this.payments.values());
-    return payments.map(payment => ({
-      ...payment,
-      invoice: this.purchaseInvoices.get(payment.invoiceId)!,
-      vendor: this.vendors.get(payment.vendorId)!,
-      bankAccount: payment.bankAccountId ? this.bankAccounts.get(payment.bankAccountId) : undefined,
-    }));
+    return payments.map(payment => {
+      const invoice = this.purchaseInvoices.get(payment.invoiceId);
+      const vendor = invoice ? this.vendors.get(invoice.vendorId) : undefined;
+      return {
+        ...payment,
+        invoice: invoice!,
+        vendor: vendor!,
+        bankAccount: payment.bankAccountId ? this.bankAccounts.get(payment.bankAccountId) : undefined,
+      };
+    }).filter(payment => payment.invoice && payment.vendor);
   }
 
   async getPaymentsByInvoice(invoiceId: string): Promise<PaymentWithDetails[]> {
     const payments = Array.from(this.payments.values()).filter(p => p.invoiceId === invoiceId);
-    return payments.map(payment => ({
-      ...payment,
-      invoice: this.purchaseInvoices.get(payment.invoiceId)!,
-      vendor: this.vendors.get(payment.vendorId)!,
-      bankAccount: payment.bankAccountId ? this.bankAccounts.get(payment.bankAccountId) : undefined,
-    }));
+    return payments.map(payment => {
+      const invoice = this.purchaseInvoices.get(payment.invoiceId);
+      const vendor = invoice ? this.vendors.get(invoice.vendorId) : undefined;
+      return {
+        ...payment,
+        invoice: invoice!,
+        vendor: vendor!,
+        bankAccount: payment.bankAccountId ? this.bankAccounts.get(payment.bankAccountId) : undefined,
+      };
+    }).filter(payment => payment.invoice && payment.vendor);
   }
 
   async createPayment(insertPayment: InsertPayment): Promise<PaymentWithDetails> {
