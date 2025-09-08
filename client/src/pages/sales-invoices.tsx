@@ -286,10 +286,31 @@ export default function SalesInvoiceManagement() {
     setOpen(true);
   };
 
+  // Helper function to get quantity based on item unit
+  const getQuantityForCalculation = (itemId: string, weight: number, crates: number) => {
+    const itemDetails = items.find(i => i.id === itemId);
+    if (!itemDetails) return weight;
+    
+    switch (itemDetails.unit) {
+      case "kgs":
+        return weight;
+      case "crate":
+        return crates;
+      case "box":
+        return weight; // Using weight for box unit for now
+      default:
+        return weight;
+    }
+  };
+
   const calculateItemAmount = (index: number) => {
+    const itemId = form.watch(`items.${index}.itemId`);
     const weight = form.watch(`items.${index}.weight`);
+    const crates = form.watch(`items.${index}.crates`);
     const rate = form.watch(`items.${index}.rate`);
-    const amount = weight * rate;
+    
+    const quantity = getQuantityForCalculation(itemId, weight, crates);
+    const amount = quantity * rate;
     form.setValue(`items.${index}.amount`, amount);
     calculateTotalAmount();
   };
