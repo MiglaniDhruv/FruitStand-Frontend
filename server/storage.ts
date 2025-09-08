@@ -1087,7 +1087,12 @@ export class MemStorage implements IStorage {
 
   // Item methods
   async getItems(): Promise<Item[]> {
-    return Array.from(this.items.values()).filter(c => c.isActive);
+    const items = Array.from(this.items.values()).filter(c => c.isActive);
+    // Populate vendor information for each item
+    return items.map(item => ({
+      ...item,
+      vendor: this.vendors.get(item.vendorId)
+    }));
   }
 
   async getItemsByVendor(vendorId: string): Promise<Item[]> {
