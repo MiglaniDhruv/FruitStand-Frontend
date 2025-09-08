@@ -1584,12 +1584,17 @@ export class MemStorage implements IStorage {
     // Update retailer crate balance
     const retailer = this.retailers.get(transaction.retailerId);
     if (retailer) {
-      if (transaction.transactionType === "Issue") {
+      if (transaction.transactionType === "Given") {
         retailer.crateBalance += transaction.quantity;
-      } else if (transaction.transactionType === "Return") {
+      } else if (transaction.transactionType === "Returned") {
         retailer.crateBalance -= transaction.quantity;
       }
       this.retailers.set(retailer.id, retailer);
+    }
+
+    // Update ledgers for crate deposit transactions
+    if (parseFloat(transaction.depositAmount) > 0) {
+      await this.updateLedgersForCrateTransaction(transaction);
     }
 
     return transaction;
@@ -1687,6 +1692,7 @@ export class MemStorage implements IStorage {
   async getRetailerLedger(retailerId: string): Promise<any[]> {
     const invoices = Array.from(this.salesInvoices.values()).filter(i => i.retailerId === retailerId);
     const payments = Array.from(this.salesPayments.values()).filter(p => p.retailerId === retailerId);
+    const crateTransactions = Array.from(this.crateTransactions.values()).filter(t => t.retailerId === retailerId);
 
     const ledgerEntries = [
       ...invoices.map(invoice => ({
@@ -1705,6 +1711,16 @@ export class MemStorage implements IStorage {
         type: "sales_payment",
         reference: payment.id,
       })),
+      ...crateTransactions
+        .filter(transaction => parseFloat(transaction.depositAmount) > 0)
+        .map(transaction => ({
+          date: transaction.transactionDate,
+          description: `Crate ${transaction.transactionType} - ${transaction.quantity} crates (Deposit: ₹${parseFloat(transaction.depositAmount).toLocaleString('en-IN')})`,
+          debit: transaction.transactionType === "Returned" ? transaction.depositAmount : "0.00",
+          credit: transaction.transactionType === "Given" ? transaction.depositAmount : "0.00",
+          type: "crate_deposit",
+          reference: transaction.id,
+        }))
     ];
 
     return ledgerEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1784,6 +1800,42 @@ export class MemStorage implements IStorage {
 
       this.bankbook.set(bankEntry.id, bankEntry);
     }
+  }
+
+  // Helper method to update ledgers for crate transactions with deposits
+  private async updateLedgersForCrateTransaction(transaction: CrateTransaction): Promise<void> {
+    const retailer = this.retailers.get(transaction.retailerId);
+    if (!retailer) return;
+
+    const description = `Crate ${transaction.transactionType} - ${transaction.quantity} crates (${retailer.name})`;
+    
+    // For crate deposits, we'll record them as cash transactions for simplicity
+    // "Given" = retailer pays deposit (cash inflow for business)
+    // "Returned" = retailer gets deposit back (cash outflow for business)
+    const cashEntry: CashbookEntry = {
+      id: randomUUID(),
+      date: transaction.transactionDate,
+      description,
+      inflow: transaction.transactionType === "Given" ? transaction.depositAmount : "0.00",
+      outflow: transaction.transactionType === "Returned" ? transaction.depositAmount : "0.00",
+      balance: "0.00", // Will be calculated based on previous entries
+      referenceType: "CrateTransaction",
+      referenceId: transaction.id,
+      createdAt: new Date(),
+    };
+
+    // Calculate balance (simplified)
+    const previousEntries = Array.from(this.cashbook.values())
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const lastBalance = previousEntries.length > 0 
+      ? parseFloat(previousEntries[previousEntries.length - 1].balance)
+      : 0;
+    
+    const inflowAmount = parseFloat(cashEntry.inflow);
+    const outflowAmount = parseFloat(cashEntry.outflow);
+    cashEntry.balance = (lastBalance + inflowAmount - outflowAmount).toFixed(2);
+
+    this.cashbook.set(cashEntry.id, cashEntry);
   }
 
   // Helper method to update ledgers for expenses
