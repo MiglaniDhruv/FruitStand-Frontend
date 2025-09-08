@@ -595,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const invoiceData = insertSalesInvoiceSchema.parse(invoice);
-      const itemsData = items.map((item: any) => insertSalesInvoiceItemSchema.parse(item));
+      const itemsData = items.map((item: any) => insertSalesInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
       
       const createdInvoice = await storage.createSalesInvoice(invoiceData, itemsData);
       res.status(201).json(createdInvoice);
