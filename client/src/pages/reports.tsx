@@ -249,7 +249,7 @@ export default function Reports() {
     isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() })
   ).length;
   const recentExpenses = expenses.filter((exp: any) => 
-    isWithinInterval(parseISO(exp.paymentDate), { start: sevenDaysAgo, end: new Date() })
+    isWithinInterval(parseISO(exp.expenseDate), { start: sevenDaysAgo, end: new Date() })
   ).length;
 
   if (purchasesLoading || salesLoading) {
