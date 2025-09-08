@@ -297,7 +297,7 @@ export default function SalesInvoiceManagement() {
       case "crate":
         return crates;
       case "box":
-        return weight; // Using weight for box unit for now
+        return crates; // Box uses crates, same as crate unit
       default:
         return weight;
     }

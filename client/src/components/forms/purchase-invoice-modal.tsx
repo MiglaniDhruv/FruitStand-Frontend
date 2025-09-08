@@ -241,7 +241,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       case "crate":
         return parseFloat(item.crates) || 0;
       case "box":
-        return parseFloat(item.weight) || 0; // Using weight for box unit for now
+        return parseFloat(item.crates) || 0; // Box uses crates, same as crate unit
       default:
         return parseFloat(item.weight) || 0;
     }
