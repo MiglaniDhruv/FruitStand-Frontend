@@ -733,7 +733,7 @@ export default function SalesInvoiceManagement() {
                               <SelectContent>
                                 {items.map((item: any) => (
                                   <SelectItem key={item.id} value={item.id}>
-                                    {item.name} (Stock: {getAvailableStock(item.id)})
+                                    {item.name} - {item.quality} ({item.unit?.charAt(0).toUpperCase() + item.unit?.slice(1) || 'N/A'}) (Stock: {getAvailableStock(item.id)})
                                   </SelectItem>
                                 ))}
                               </SelectContent>
