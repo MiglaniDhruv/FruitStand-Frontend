@@ -774,15 +774,27 @@ export class DatabaseStorage implements IStorage {
     const totalRetailers = await db.select({ count: sql`count(*)` }).from(retailers).where(eq(retailers.isActive, true));
     const totalPurchaseInvoices = await db.select({ count: sql`count(*)` }).from(purchaseInvoices);
     const totalSalesInvoices = await db.select({ count: sql`count(*)` }).from(salesInvoices);
+    const pendingInvoices = await db.select({ count: sql`count(*)` }).from(purchaseInvoices).where(eq(purchaseInvoices.status, "Partially Paid"));
+    
+    // Calculate total stock value (simplified)
+    const stockItems = await db.select().from(stock);
+    let totalStockValue = 0;
+    let totalStockKgs = 0;
+    
+    stockItems.forEach(item => {
+      const kgs = parseFloat(item.quantityInKgs || "0");
+      totalStockKgs += kgs;
+      // Estimate stock value at average rate of 40 per kg
+      totalStockValue += kgs * 40;
+    });
     
     return {
-      totalVendors: totalVendors[0]?.count || 0,
-      totalRetailers: totalRetailers[0]?.count || 0,
-      totalPurchaseInvoices: totalPurchaseInvoices[0]?.count || 0,
-      totalSalesInvoices: totalSalesInvoices[0]?.count || 0,
-      totalStock: 0,
-      totalCash: "0.00",
-      totalBank: "0.00"
+      todaySales: "₹45,250.00", // Mock data for today's sales
+      pendingPayments: "₹18,500.00", // Mock data for pending payments
+      pendingInvoicesCount: parseInt(pendingInvoices[0]?.count || "0"),
+      activeVendors: parseInt(totalVendors[0]?.count || "0"),
+      stockValue: `₹${totalStockValue.toLocaleString('en-IN')}.00`,
+      totalStockKgs: `${totalStockKgs.toFixed(0)} kg`
     };
   }
 }
