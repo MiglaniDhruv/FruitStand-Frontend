@@ -35,22 +35,11 @@ import { Plus, Trash2 } from "lucide-react";
 
 const invoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
-  unit: z.enum(["kgs", "crate", "box"], { required_error: "Unit is required" }),
-  weight: z.string().optional(),
-  crates: z.string().optional(),
+  weight: z.string().min(1, "Weight is required"),
+  crates: z.string().min(1, "Crates is required"),
+  boxes: z.string().min(1, "Boxes is required"),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
-}).refine((data) => {
-  if (data.unit === "kgs") {
-    return data.weight && parseFloat(data.weight) > 0;
-  }
-  if (data.unit === "crate" || data.unit === "box") {
-    return data.crates && parseFloat(data.crates) > 0;
-  }
-  return true;
-}, {
-  message: "Quantity is required based on selected unit",
-  path: ["weight"], // This will show error on weight field, but it's fine
 });
 
 const invoiceSchema = z.object({
@@ -90,7 +79,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
-      items: [{ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" }],
+      items: [{ itemId: "", weight: "", crates: "", boxes: "", rate: "", amount: "0" }],
       commission: "0",
       labour: "0",
       truckFreight: "0",
@@ -217,9 +206,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
         
         return {
           itemId: item.itemId,
-          unit: "kgs" as const,
           weight: item.totalWeight.toString(),
           crates: item.totalCrates.toString(),
+          boxes: "0", // Default to 0 for boxes
           rate: averageRate.toFixed(2),
           amount: "0" // Will be calculated
         };
@@ -228,7 +217,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       form.setValue("items", aggregatedItems);
     } else {
       // Reset to single empty item when no entries selected
-      form.setValue("items", [{ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" }]);
+      form.setValue("items", [{ itemId: "", weight: "", crates: "", boxes: "", rate: "", amount: "0" }]);
     }
   };
 
@@ -254,7 +243,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       case "crate":
         return parseFloat(item.crates) || 0;
       case "box":
-        return parseFloat(item.crates) || 0; // Box uses crates, same as crate unit
+        return parseFloat(item.boxes) || 0; // Box uses boxes field
       default:
         return parseFloat(item.weight) || 0;
     }
@@ -328,6 +317,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       itemId: item.itemId,
       weight: parseFloat(item.weight || "0").toFixed(2),
       crates: parseFloat(item.crates || "0").toFixed(2),
+      boxes: parseFloat(item.boxes || "0").toFixed(2),
       rate: parseFloat(item.rate).toFixed(2),
       amount: parseFloat(item.amount).toFixed(2),
     }));
@@ -336,7 +326,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   };
 
   const addItem = () => {
-    append({ itemId: "", unit: "kgs", weight: "", crates: "", rate: "", amount: "0" });
+    append({ itemId: "", weight: "", crates: "", boxes: "", rate: "", amount: "0" });
   };
 
   const removeItem = (index: number) => {
@@ -457,7 +447,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-7 gap-4 p-4 border rounded-lg">
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
                     <FormField
                       control={form.control}
                       name={`items.${index}.itemId`}
@@ -485,70 +475,63 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
                     <FormField
                       control={form.control}
-                      name={`items.${index}.unit`}
+                      name={`items.${index}.weight`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Unit *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid={`select-unit-${index}`}>
-                                <SelectValue placeholder="Select unit" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="kgs">Kgs</SelectItem>
-                              <SelectItem value="crate">Crate</SelectItem>
-                              <SelectItem value="box">Box</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <FormLabel>Weight (Kgs) *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-weight-${index}`}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    {form.watch(`items.${index}.unit`) === "kgs" && (
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.weight`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Weight (Kgs) *</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00" 
-                                {...field} 
-                                data-testid={`input-weight-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.crates`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Crates *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-crates-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                    {(form.watch(`items.${index}.unit`) === "crate" || form.watch(`items.${index}.unit`) === "box") && (
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.crates`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{form.watch(`items.${index}.unit`) === "box" ? "Boxes" : "Crates"} *</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00" 
-                                {...field} 
-                                data-testid={`input-crates-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.boxes`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Boxes *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              {...field} 
+                              data-testid={`input-boxes-${index}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <FormField
                       control={form.control}
