@@ -212,7 +212,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id));
-    return result.rowCount > 0;
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 
   // Vendor management
@@ -313,46 +313,40 @@ export class DatabaseStorage implements IStorage {
 
   // Purchase invoice management
   async getPurchaseInvoices(): Promise<InvoiceWithItems[]> {
-    const invoicesWithVendors = await db.select({
-      ...purchaseInvoices,
-      vendor: vendors
-    })
-    .from(purchaseInvoices)
-    .leftJoin(vendors, eq(purchaseInvoices.vendorId, vendors.id))
-    .orderBy(desc(purchaseInvoices.createdAt));
+    const invoices = await db.select().from(purchaseInvoices)
+      .orderBy(desc(purchaseInvoices.createdAt));
 
     const result = [];
-    for (const invoiceData of invoicesWithVendors) {
-      const { vendor, ...invoice } = invoiceData;
+    for (const invoice of invoices) {
+      const [vendor] = await db.select().from(vendors)
+        .where(eq(vendors.id, invoice.vendorId));
       const invoiceItemsList = await db.select().from(invoiceItems)
         .where(eq(invoiceItems.invoiceId, invoice.id));
-      result.push({ ...invoice, vendor, items: invoiceItemsList });
+      result.push({ ...invoice, vendor: vendor || null, items: invoiceItemsList });
     }
     return result;
   }
 
   async getPurchaseInvoice(id: string): Promise<InvoiceWithItems | undefined> {
-    const [invoiceData] = await db.select({
-      ...purchaseInvoices,
-      vendor: vendors
-    })
-    .from(purchaseInvoices)
-    .leftJoin(vendors, eq(purchaseInvoices.vendorId, vendors.id))
-    .where(eq(purchaseInvoices.id, id));
+    const [invoice] = await db.select().from(purchaseInvoices)
+      .where(eq(purchaseInvoices.id, id));
 
-    if (!invoiceData) return undefined;
+    if (!invoice) return undefined;
 
-    const { vendor, ...invoice } = invoiceData;
+    const [vendor] = await db.select().from(vendors)
+      .where(eq(vendors.id, invoice.vendorId));
     const itemsList = await db.select().from(invoiceItems)
       .where(eq(invoiceItems.invoiceId, invoice.id));
-    return { ...invoice, vendor, items: itemsList };
+    return { ...invoice, vendor: vendor || null, items: itemsList };
   }
 
   async createPurchaseInvoice(insertInvoice: InsertPurchaseInvoice, itemsList: InsertInvoiceItem[]): Promise<InvoiceWithItems> {
     const invoiceNumber = `PI${String(Date.now()).slice(-6)}`;
     const [invoice] = await db.insert(purchaseInvoices).values({
       ...insertInvoice,
-      invoiceNumber
+      invoiceNumber,
+      status: "Unpaid",
+      balanceAmount: insertInvoice.netAmount,
     }).returning();
 
     const insertedItems = await db.insert(invoiceItems).values(
@@ -360,70 +354,93 @@ export class DatabaseStorage implements IStorage {
     ).returning();
 
     const [vendor] = await db.select().from(vendors).where(eq(vendors.id, invoice.vendorId));
-    return { ...invoice, vendor, items: insertedItems };
+    return { ...invoice, vendor: vendor || null, items: insertedItems };
   }
 
   // Payment management
   async getPayments(): Promise<PaymentWithDetails[]> {
-    return await db.select({
-      ...payments,
-      invoice: purchaseInvoices,
-      vendor: vendors,
-      bankAccount: bankAccounts
-    })
-    .from(payments)
-    .leftJoin(purchaseInvoices, eq(payments.invoiceId, purchaseInvoices.id))
-    .leftJoin(vendors, eq(payments.vendorId, vendors.id))
-    .leftJoin(bankAccounts, eq(payments.bankAccountId, bankAccounts.id))
-    .orderBy(desc(payments.createdAt));
+    const paymentsList = await db.select().from(payments)
+      .orderBy(desc(payments.createdAt));
+    
+    const result = [];
+    for (const payment of paymentsList) {
+      const [invoice] = await db.select().from(purchaseInvoices)
+        .where(eq(purchaseInvoices.id, payment.invoiceId));
+      const [vendor] = await db.select().from(vendors)
+        .where(eq(vendors.id, payment.vendorId));
+      const [bankAccount] = payment.bankAccountId ? 
+        await db.select().from(bankAccounts).where(eq(bankAccounts.id, payment.bankAccountId)) : [null];
+      
+      result.push({ 
+        ...payment, 
+        invoice: invoice || null, 
+        vendor: vendor || null, 
+        bankAccount: bankAccount || null 
+      });
+    }
+    return result as PaymentWithDetails[];
   }
 
   async getPaymentsByInvoice(invoiceId: string): Promise<PaymentWithDetails[]> {
-    return await db.select({
-      ...payments,
-      invoice: purchaseInvoices,
-      vendor: vendors,
-      bankAccount: bankAccounts
-    })
-    .from(payments)
-    .leftJoin(purchaseInvoices, eq(payments.invoiceId, purchaseInvoices.id))
-    .leftJoin(vendors, eq(payments.vendorId, vendors.id))
-    .leftJoin(bankAccounts, eq(payments.bankAccountId, bankAccounts.id))
-    .where(eq(payments.invoiceId, invoiceId))
-    .orderBy(desc(payments.createdAt));
+    const paymentsList = await db.select().from(payments)
+      .where(eq(payments.invoiceId, invoiceId))
+      .orderBy(desc(payments.createdAt));
+    
+    const result = [];
+    for (const payment of paymentsList) {
+      const [invoice] = await db.select().from(purchaseInvoices)
+        .where(eq(purchaseInvoices.id, payment.invoiceId));
+      const [vendor] = await db.select().from(vendors)
+        .where(eq(vendors.id, payment.vendorId));
+      const [bankAccount] = payment.bankAccountId ? 
+        await db.select().from(bankAccounts).where(eq(bankAccounts.id, payment.bankAccountId)) : [null];
+      
+      result.push({ 
+        ...payment, 
+        invoice: invoice || null, 
+        vendor: vendor || null, 
+        bankAccount: bankAccount || null 
+      });
+    }
+    return result as PaymentWithDetails[];
   }
 
   async createPayment(insertPayment: InsertPayment): Promise<PaymentWithDetails> {
     const [payment] = await db.insert(payments).values(insertPayment).returning();
     
-    const [result] = await db.select({
-      ...payments,
-      invoice: purchaseInvoices,
-      vendor: vendors,
-      bankAccount: bankAccounts
-    })
-    .from(payments)
-    .leftJoin(purchaseInvoices, eq(payments.invoiceId, purchaseInvoices.id))
-    .leftJoin(vendors, eq(payments.vendorId, vendors.id))
-    .leftJoin(bankAccounts, eq(payments.bankAccountId, bankAccounts.id))
-    .where(eq(payments.id, payment.id));
+    const [invoice] = await db.select().from(purchaseInvoices)
+      .where(eq(purchaseInvoices.id, payment.invoiceId));
+    const [vendor] = await db.select().from(vendors)
+      .where(eq(vendors.id, payment.vendorId));
+    const [bankAccount] = payment.bankAccountId ? 
+      await db.select().from(bankAccounts).where(eq(bankAccounts.id, payment.bankAccountId)) : [null];
     
-    return result;
+    return { 
+      ...payment, 
+      invoice: invoice || null, 
+      vendor: vendor || null, 
+      bankAccount: bankAccount || null 
+    } as PaymentWithDetails;
   }
 
   // Stock management
   async getStock(): Promise<StockWithItem[]> {
-    return await db.select({
-      ...stock,
-      item: {
-        ...items,
-        vendor: vendors
+    const stockList = await db.select().from(stock);
+    
+    const result = [];
+    for (const stockItem of stockList) {
+      const [item] = await db.select().from(items)
+        .where(eq(items.id, stockItem.itemId));
+      if (item) {
+        const [vendor] = await db.select().from(vendors)
+          .where(eq(vendors.id, item.vendorId!));
+        result.push({
+          ...stockItem,
+          item: { ...item, vendor: vendor || null }
+        });
       }
-    })
-    .from(stock)
-    .leftJoin(items, eq(stock.itemId, items.id))
-    .leftJoin(vendors, eq(items.vendorId, vendors.id))
-    .orderBy(asc(items.name));
+    }
+    return result as StockWithItem[];
   }
 
   async getStockByItem(itemId: string): Promise<Stock | undefined> {
@@ -452,18 +469,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStockMovementsByItem(itemId: string): Promise<any[]> {
-    return await db.select({
-      ...stockMovements,
-      item: {
-        ...items,
-        vendor: vendors
+    const movements = await db.select().from(stockMovements)
+      .where(eq(stockMovements.itemId, itemId))
+      .orderBy(desc(stockMovements.createdAt));
+    
+    const result = [];
+    for (const movement of movements) {
+      const [item] = await db.select().from(items)
+        .where(eq(items.id, movement.itemId));
+      if (item) {
+        const [vendor] = await db.select().from(vendors)
+          .where(eq(vendors.id, item.vendorId!));
+        result.push({
+          ...movement,
+          item: { ...item, vendor: vendor || null }
+        });
       }
-    })
-    .from(stockMovements)
-    .leftJoin(items, eq(stockMovements.itemId, items.id))
-    .leftJoin(vendors, eq(items.vendorId, vendors.id))
-    .where(eq(stockMovements.itemId, itemId))
-    .orderBy(desc(stockMovements.createdAt));
+    }
+    return result;
   }
 
   async createStockMovement(insertMovement: InsertStockMovement): Promise<StockMovement> {
@@ -545,50 +568,44 @@ export class DatabaseStorage implements IStorage {
 
   // Sales invoice management
   async getSalesInvoices(): Promise<SalesInvoiceWithDetails[]> {
-    const invoicesData = await db.select({
-      ...salesInvoices,
-      retailer: retailers
-    })
-    .from(salesInvoices)
-    .leftJoin(retailers, eq(salesInvoices.retailerId, retailers.id))
-    .orderBy(desc(salesInvoices.createdAt));
+    const invoices = await db.select().from(salesInvoices)
+      .orderBy(desc(salesInvoices.createdAt));
 
     const result = [];
-    for (const invoiceData of invoicesData) {
-      const { retailer, ...invoice } = invoiceData;
+    for (const invoice of invoices) {
+      const [retailer] = await db.select().from(retailers)
+        .where(eq(retailers.id, invoice.retailerId));
       const itemsList = await db.select().from(salesInvoiceItems)
         .where(eq(salesInvoiceItems.invoiceId, invoice.id));
       const paymentsList = await db.select().from(salesPayments)
         .where(eq(salesPayments.invoiceId, invoice.id));
-      result.push({ ...invoice, retailer, items: itemsList, payments: paymentsList });
+      result.push({ ...invoice, retailer: retailer || null, items: itemsList, payments: paymentsList });
     }
     return result;
   }
 
   async getSalesInvoice(id: string): Promise<SalesInvoiceWithDetails | undefined> {
-    const [invoiceData] = await db.select({
-      ...salesInvoices,
-      retailer: retailers
-    })
-    .from(salesInvoices)
-    .leftJoin(retailers, eq(salesInvoices.retailerId, retailers.id))
-    .where(eq(salesInvoices.id, id));
+    const [invoice] = await db.select().from(salesInvoices)
+      .where(eq(salesInvoices.id, id));
 
-    if (!invoiceData) return undefined;
+    if (!invoice) return undefined;
 
-    const { retailer, ...invoice } = invoiceData;
+    const [retailer] = await db.select().from(retailers)
+      .where(eq(retailers.id, invoice.retailerId));
     const itemsList = await db.select().from(salesInvoiceItems)
       .where(eq(salesInvoiceItems.invoiceId, invoice.id));
     const paymentsList = await db.select().from(salesPayments)
       .where(eq(salesPayments.invoiceId, invoice.id));
-    return { ...invoice, retailer, items: itemsList, payments: paymentsList };
+    return { ...invoice, retailer: retailer || null, items: itemsList, payments: paymentsList };
   }
 
   async createSalesInvoice(insertInvoice: InsertSalesInvoice, itemsList: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails> {
     const invoiceNumber = `SI${String(Date.now()).slice(-6)}`;
     const [invoice] = await db.insert(salesInvoices).values({
       ...insertInvoice,
-      invoiceNumber
+      invoiceNumber,
+      status: "Unpaid",
+      balanceAmount: insertInvoice.totalAmount,
     }).returning();
 
     const insertedItems = await db.insert(salesInvoiceItems).values(
@@ -596,7 +613,7 @@ export class DatabaseStorage implements IStorage {
     ).returning();
 
     const [retailer] = await db.select().from(retailers).where(eq(retailers.id, invoice.retailerId));
-    return { ...invoice, retailer, items: insertedItems, payments: [] };
+    return { ...invoice, retailer: retailer || null, items: insertedItems, payments: [] };
   }
 
   async markSalesInvoiceAsPaid(invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallAdded: string; retailer: Retailer }> {
@@ -616,7 +633,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     const [retailer] = await db.select().from(retailers).where(eq(retailers.id, invoice.retailerId));
-    const newShortfallBalance = parseFloat(retailer.shortfallBalance) + shortfallAmount;
+    const newShortfallBalance = parseFloat(retailer.shortfallBalance || "0") + shortfallAmount;
     await db
       .update(retailers)
       .set({ shortfallBalance: newShortfallBalance.toString() })
@@ -644,13 +661,16 @@ export class DatabaseStorage implements IStorage {
 
   // Crate management
   async getCrateTransactions(): Promise<CrateTransactionWithRetailer[]> {
-    return await db.select({
-      ...crateTransactions,
-      retailer: retailers
-    })
-    .from(crateTransactions)
-    .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id))
-    .orderBy(desc(crateTransactions.createdAt));
+    const transactions = await db.select().from(crateTransactions)
+      .orderBy(desc(crateTransactions.createdAt));
+    
+    const result = [];
+    for (const transaction of transactions) {
+      const [retailer] = await db.select().from(retailers)
+        .where(eq(retailers.id, transaction.retailerId));
+      result.push({ ...transaction, retailer: retailer || null });
+    }
+    return result as CrateTransactionWithRetailer[];
   }
 
   async getCrateTransactionsByRetailer(retailerId: string): Promise<CrateTransaction[]> {
@@ -699,44 +719,56 @@ export class DatabaseStorage implements IStorage {
 
   // Expense management
   async getExpenses(): Promise<ExpenseWithCategory[]> {
-    return await db.select({
-      ...expenses,
-      category: expenseCategories,
-      bankAccount: bankAccounts
-    })
-    .from(expenses)
-    .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-    .leftJoin(bankAccounts, eq(expenses.bankAccountId, bankAccounts.id))
-    .orderBy(desc(expenses.createdAt));
+    const expensesList = await db.select().from(expenses)
+      .orderBy(desc(expenses.createdAt));
+    
+    const result = [];
+    for (const expense of expensesList) {
+      const [category] = await db.select().from(expenseCategories)
+        .where(eq(expenseCategories.id, expense.categoryId));
+      const [bankAccount] = expense.bankAccountId ? 
+        await db.select().from(bankAccounts).where(eq(bankAccounts.id, expense.bankAccountId)) : [null];
+      
+      result.push({ 
+        ...expense, 
+        category: category || null, 
+        bankAccount: bankAccount || null 
+      });
+    }
+    return result as ExpenseWithCategory[];
   }
 
   async getExpense(id: string): Promise<ExpenseWithCategory | undefined> {
-    const [expense] = await db.select({
-      ...expenses,
-      category: expenseCategories,
-      bankAccount: bankAccounts
-    })
-    .from(expenses)
-    .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-    .leftJoin(bankAccounts, eq(expenses.bankAccountId, bankAccounts.id))
-    .where(eq(expenses.id, id));
-    return expense || undefined;
+    const [expense] = await db.select().from(expenses)
+      .where(eq(expenses.id, id));
+    
+    if (!expense) return undefined;
+    
+    const [category] = await db.select().from(expenseCategories)
+      .where(eq(expenseCategories.id, expense.categoryId));
+    const [bankAccount] = expense.bankAccountId ? 
+      await db.select().from(bankAccounts).where(eq(bankAccounts.id, expense.bankAccountId)) : [null];
+    
+    return { 
+      ...expense, 
+      category: category || null, 
+      bankAccount: bankAccount || null 
+    } as ExpenseWithCategory;
   }
 
   async createExpense(insertExpense: InsertExpense): Promise<ExpenseWithCategory> {
     const [expense] = await db.insert(expenses).values(insertExpense).returning();
     
-    const [result] = await db.select({
-      ...expenses,
-      category: expenseCategories,
-      bankAccount: bankAccounts
-    })
-    .from(expenses)
-    .leftJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
-    .leftJoin(bankAccounts, eq(expenses.bankAccountId, bankAccounts.id))
-    .where(eq(expenses.id, expense.id));
+    const [category] = await db.select().from(expenseCategories)
+      .where(eq(expenseCategories.id, expense.categoryId));
+    const [bankAccount] = expense.bankAccountId ? 
+      await db.select().from(bankAccounts).where(eq(bankAccounts.id, expense.bankAccountId)) : [null];
     
-    return result;
+    return { 
+      ...expense, 
+      category: category || null, 
+      bankAccount: bankAccount || null 
+    } as ExpenseWithCategory;
   }
 
   // Ledger and book management (simplified implementations)
@@ -770,11 +802,11 @@ export class DatabaseStorage implements IStorage {
 
   // Dashboard KPIs (simplified implementation)
   async getDashboardKPIs(): Promise<any> {
-    const totalVendors = await db.select({ count: sql`count(*)` }).from(vendors).where(eq(vendors.isActive, true));
-    const totalRetailers = await db.select({ count: sql`count(*)` }).from(retailers).where(eq(retailers.isActive, true));
-    const totalPurchaseInvoices = await db.select({ count: sql`count(*)` }).from(purchaseInvoices);
-    const totalSalesInvoices = await db.select({ count: sql`count(*)` }).from(salesInvoices);
-    const pendingInvoices = await db.select({ count: sql`count(*)` }).from(purchaseInvoices).where(eq(purchaseInvoices.status, "Partially Paid"));
+    const vendorsList = await db.select().from(vendors).where(eq(vendors.isActive, true));
+    const retailersList = await db.select().from(retailers).where(eq(retailers.isActive, true));
+    const purchaseInvoicesList = await db.select().from(purchaseInvoices);
+    const salesInvoicesList = await db.select().from(salesInvoices);
+    const pendingInvoicesList = await db.select().from(purchaseInvoices).where(eq(purchaseInvoices.status, "Partially Paid"));
     
     // Calculate total stock value (simplified)
     const stockItems = await db.select().from(stock);
@@ -791,8 +823,8 @@ export class DatabaseStorage implements IStorage {
     return {
       todaySales: "₹45,250.00", // Mock data for today's sales
       pendingPayments: "₹18,500.00", // Mock data for pending payments
-      pendingInvoicesCount: parseInt(pendingInvoices[0]?.count || "0"),
-      activeVendors: parseInt(totalVendors[0]?.count || "0"),
+      pendingInvoicesCount: pendingInvoicesList.length,
+      activeVendors: vendorsList.length,
       stockValue: `₹${totalStockValue.toLocaleString('en-IN')}.00`,
       totalStockKgs: `${totalStockKgs.toFixed(0)} kg`
     };
