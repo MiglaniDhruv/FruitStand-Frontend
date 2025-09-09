@@ -77,6 +77,7 @@ export const invoiceItems = pgTable("invoice_items", {
   itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
   crates: decimal("crates", { precision: 8, scale: 2 }).notNull(),
+  boxes: decimal("boxes", { precision: 8, scale: 2 }).default("0.00"),
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -100,6 +101,7 @@ export const stock = pgTable("stock", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).default("0.00"),
+  quantityInBoxes: decimal("quantity_in_boxes", { precision: 8, scale: 2 }).default("0.00"),
   quantityInKgs: decimal("quantity_in_kgs", { precision: 8, scale: 2 }).default("0.00"),
   lastUpdated: timestamp("last_updated").defaultNow(),
 });
@@ -109,6 +111,7 @@ export const stockMovements = pgTable("stock_movements", {
   itemId: uuid("item_id").references(() => items.id).notNull(),
   movementType: text("movement_type").notNull(), // "IN" or "OUT"
   quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).notNull(),
+  quantityInBoxes: decimal("quantity_in_boxes", { precision: 8, scale: 2 }).default("0.00"),
   quantityInKgs: decimal("quantity_in_kgs", { precision: 8, scale: 2 }).notNull(),
   referenceType: text("reference_type").notNull(), // "PURCHASE_INVOICE", "SALES_INVOICE", "ADJUSTMENT"
   referenceId: uuid("reference_id"), // Links to purchase invoice, sales invoice, etc.
@@ -184,6 +187,7 @@ export const salesInvoiceItems = pgTable("sales_invoice_items", {
   itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
   crates: decimal("crates", { precision: 8, scale: 2 }).notNull(),
+  boxes: decimal("boxes", { precision: 8, scale: 2 }).default("0.00"),
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
