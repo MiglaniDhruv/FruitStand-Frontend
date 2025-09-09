@@ -49,16 +49,17 @@ export default function Stock() {
   });
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showWastageEntry, setShowWastageEntry] = useState(false);
-  const [quantities, setQuantities] = useState({ crates: "", kgs: "" });
+  const [quantities, setQuantities] = useState({ crates: "", kgs: "", boxes: "" });
   const [manualEntry, setManualEntry] = useState({
     vendorId: "",
     notes: "",
-    lineItems: [{ itemId: "", crates: "", kgs: "" }] as Array<{itemId: string, crates: string, kgs: string}>,
+    lineItems: [{ itemId: "", crates: "", kgs: "", boxes: "" }] as Array<{itemId: string, crates: string, kgs: string, boxes: string}>,
   });
   const [wastageEntry, setWastageEntry] = useState({
     itemId: "",
     crates: "",
     kgs: "",
+    boxes: "",
     reason: "",
     notes: "",
   });
@@ -98,7 +99,7 @@ export default function Stock() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
       setEditingStock(null);
-      setQuantities({ crates: "", kgs: "" });
+      setQuantities({ crates: "", kgs: "", boxes: "" });
     },
     onError: (error) => {
       toast({
@@ -124,7 +125,7 @@ export default function Stock() {
         queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
         queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
         setShowWastageEntry(false);
-        setWastageEntry({ itemId: "", crates: "", kgs: "", reason: "", notes: "" });
+        setWastageEntry({ itemId: "", crates: "", kgs: "", boxes: "", reason: "", notes: "" });
       } else {
         toast({
           title: "Stock entry added",
@@ -133,7 +134,7 @@ export default function Stock() {
         queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
         queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
         setShowManualEntry(false);
-        setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+        setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "", boxes: "" }] });
       }
     },
     onError: (error) => {
@@ -155,7 +156,7 @@ export default function Stock() {
   }) || [];
 
   const isLowStock = (item: any) => {
-    const totalQty = parseFloat(item.quantityInKgs) + parseFloat(item.quantityInCrates);
+    const totalQty = parseFloat(item.quantityInKgs) + parseFloat(item.quantityInCrates) + parseFloat(item.quantityInBoxes || 0);
     return totalQty < 20 && totalQty > 0;
   };
 
@@ -164,6 +165,7 @@ export default function Stock() {
     setQuantities({
       crates: item.quantityInCrates,
       kgs: item.quantityInKgs,
+      boxes: item.quantityInBoxes || "0",
     });
   };
 
@@ -209,6 +211,7 @@ export default function Stock() {
           itemId: lineItem.itemId,
           movementType: "IN",
           quantityInCrates: lineItem.crates || "0",
+          quantityInBoxes: lineItem.boxes || "0",
           quantityInKgs: lineItem.kgs || "0",
           referenceType: "MANUAL_ENTRY",
           referenceId: null,
@@ -227,7 +230,7 @@ export default function Stock() {
       queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-movements"] });
       setShowManualEntry(false);
-      setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+      setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "", boxes: "" }] });
     } catch (error) {
       toast({
         title: "Error",
@@ -240,7 +243,7 @@ export default function Stock() {
   const addLineItem = () => {
     setManualEntry({
       ...manualEntry,
-      lineItems: [...manualEntry.lineItems, { itemId: "", crates: "", kgs: "" }]
+      lineItems: [...manualEntry.lineItems, { itemId: "", crates: "", kgs: "", boxes: "" }]
     });
   };
 
@@ -264,7 +267,7 @@ export default function Stock() {
   ) || [];
 
   const handleWastageEntry = () => {
-    if (!wastageEntry.itemId || (!wastageEntry.crates && !wastageEntry.kgs)) {
+    if (!wastageEntry.itemId || (!wastageEntry.crates && !wastageEntry.boxes && !wastageEntry.kgs)) {
       toast({
         title: "Missing information",
         description: "Please select an item and enter wastage quantities",
@@ -286,6 +289,7 @@ export default function Stock() {
       itemId: wastageEntry.itemId,
       movementType: "OUT",
       quantityInCrates: wastageEntry.crates || "0",
+      quantityInBoxes: wastageEntry.boxes || "0",
       quantityInKgs: wastageEntry.kgs || "0",
       referenceType: "WASTAGE",
       referenceId: null,
@@ -357,6 +361,7 @@ export default function Stock() {
                     <TableHead>Quality</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Quantity (Crates)</TableHead>
+                    <TableHead>Quantity (Boxes)</TableHead>
                     <TableHead>Quantity (Kgs)</TableHead>
                     <TableHead>Last Updated</TableHead>
                     <TableHead>Status</TableHead>
@@ -366,13 +371,13 @@ export default function Stock() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         Loading stock...
                       </TableCell>
                     </TableRow>
                   ) : filteredStock.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         No stock items found
                       </TableCell>
                     </TableRow>
@@ -383,6 +388,7 @@ export default function Stock() {
                         <TableCell>{item.item.quality}</TableCell>
                         <TableCell>{item.item.vendor?.name || 'Unknown Vendor'}</TableCell>
                         <TableCell>{parseFloat(item.quantityInCrates).toFixed(2)}</TableCell>
+                        <TableCell>{parseFloat(item.quantityInBoxes || 0).toFixed(2)}</TableCell>
                         <TableCell>{parseFloat(item.quantityInKgs).toFixed(2)}</TableCell>
                         <TableCell>{format(new Date(item.lastUpdated), "MMM dd, yyyy")}</TableCell>
                         <TableCell>
@@ -668,7 +674,7 @@ export default function Stock() {
       {/* Manual Stock Entry Modal */}
       <Dialog open={showManualEntry} onOpenChange={(open) => {
         if (!open) {
-          setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "" }] });
+          setManualEntry({ vendorId: "", notes: "", lineItems: [{ itemId: "", crates: "", kgs: "", boxes: "" }] });
         }
         setShowManualEntry(open);
       }}>
@@ -685,7 +691,7 @@ export default function Stock() {
                 onValueChange={(value) => setManualEntry({ 
                   ...manualEntry, 
                   vendorId: value,
-                  lineItems: [{ itemId: "", crates: "", kgs: "" }] // Reset line items when vendor changes
+                  lineItems: [{ itemId: "", crates: "", kgs: "", boxes: "" }] // Reset line items when vendor changes
                 })}
               >
                 <SelectTrigger data-testid="select-vendor">
@@ -736,7 +742,7 @@ export default function Stock() {
                         )}
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                           <Label htmlFor={`item-select-${index}`}>Item</Label>
                           <Select 
@@ -765,6 +771,18 @@ export default function Stock() {
                             value={lineItem.crates}
                             onChange={(e) => updateLineItem(index, "crates", e.target.value)}
                             data-testid={`input-crates-${index}`}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`boxes-${index}`}>Boxes</Label>
+                          <Input
+                            id={`boxes-${index}`}
+                            type="number"
+                            step="0.01"
+                            value={lineItem.boxes}
+                            onChange={(e) => updateLineItem(index, "boxes", e.target.value)}
+                            data-testid={`input-boxes-${index}`}
                           />
                         </div>
                         
@@ -822,7 +840,7 @@ export default function Stock() {
       {/* Wastage Entry Modal */}
       <Dialog open={showWastageEntry} onOpenChange={(open) => {
         if (!open) {
-          setWastageEntry({ itemId: "", crates: "", kgs: "", reason: "", notes: "" });
+          setWastageEntry({ itemId: "", crates: "", kgs: "", boxes: "", reason: "", notes: "" });
         }
         setShowWastageEntry(open);
       }}>
@@ -850,7 +868,7 @@ export default function Stock() {
               </Select>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="wastage-crates">Wastage in Crates</Label>
                 <Input
@@ -860,6 +878,17 @@ export default function Stock() {
                   value={wastageEntry.crates}
                   onChange={(e) => setWastageEntry({ ...wastageEntry, crates: e.target.value })}
                   data-testid="input-wastage-crates"
+                />
+              </div>
+              <div>
+                <Label htmlFor="wastage-boxes">Wastage in Boxes</Label>
+                <Input
+                  id="wastage-boxes"
+                  type="number"
+                  step="0.01"
+                  value={wastageEntry.boxes}
+                  onChange={(e) => setWastageEntry({ ...wastageEntry, boxes: e.target.value })}
+                  data-testid="input-wastage-boxes"
                 />
               </div>
               <div>
