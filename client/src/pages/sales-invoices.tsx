@@ -56,22 +56,11 @@ const salesInvoiceSchema = z.object({
 
 const salesInvoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
-  unit: z.enum(["kgs", "crate", "box"], { required_error: "Unit is required" }),
-  weight: z.number().optional(),
-  crates: z.number().optional(),
+  weight: z.number().min(0.1, "Weight must be positive"),
+  crates: z.number().min(0.1, "Crates must be positive"),
+  boxes: z.number().min(0.1, "Boxes must be positive"),
   rate: z.number().min(0.01, "Rate must be positive"),
   amount: z.number().min(0, "Amount must be positive"),
-}).refine((data) => {
-  if (data.unit === "kgs") {
-    return data.weight && data.weight > 0;
-  }
-  if (data.unit === "crate" || data.unit === "box") {
-    return data.crates && data.crates > 0;
-  }
-  return true;
-}, {
-  message: "Quantity is required based on selected unit",
-  path: ["weight"], // This will show error on weight field, but it's fine
 });
 
 const invoiceFormSchema = z.object({
@@ -120,9 +109,9 @@ export default function SalesInvoiceManagement() {
       items: [
         {
           itemId: "",
-          unit: "kgs",
           weight: 0,
           crates: 0,
+          boxes: 0,
           rate: 0,
           amount: 0,
         },
@@ -300,7 +289,7 @@ export default function SalesInvoiceManagement() {
   };
 
   // Helper function to get quantity based on item unit
-  const getQuantityForCalculation = (itemId: string, weight: number, crates: number) => {
+  const getQuantityForCalculation = (itemId: string, weight: number, crates: number, boxes: number) => {
     const itemDetails = items.find((i: any) => i.id === itemId);
     if (!itemDetails) return weight;
     
@@ -310,7 +299,7 @@ export default function SalesInvoiceManagement() {
       case "crate":
         return crates;
       case "box":
-        return crates; // Box uses crates, same as crate unit
+        return boxes; // Box uses boxes field
       default:
         return weight;
     }
@@ -320,9 +309,10 @@ export default function SalesInvoiceManagement() {
     const itemId = form.watch(`items.${index}.itemId`);
     const weight = form.watch(`items.${index}.weight`);
     const crates = form.watch(`items.${index}.crates`);
+    const boxes = form.watch(`items.${index}.boxes`);
     const rate = form.watch(`items.${index}.rate`);
     
-    const quantity = getQuantityForCalculation(itemId, weight || 0, crates || 0);
+    const quantity = getQuantityForCalculation(itemId, weight || 0, crates || 0, boxes || 0);
     const amount = quantity * rate;
     form.setValue(`items.${index}.amount`, amount);
     calculateTotalAmount();
@@ -375,6 +365,7 @@ export default function SalesInvoiceManagement() {
         ...item,
         weight: (item.weight || 0).toFixed(2),
         crates: (item.crates || 0).toFixed(2),
+        boxes: (item.boxes || 0).toFixed(2),
         rate: item.rate.toFixed(2),
         amount: item.amount.toFixed(2),
       })),
@@ -716,9 +707,9 @@ export default function SalesInvoiceManagement() {
                     size="sm"
                     onClick={() => append({
                       itemId: "",
-                      unit: "kgs",
                       weight: 0,
                       crates: 0,
+                      boxes: 0,
                       rate: 0,
                       amount: 0,
                     })}
@@ -731,7 +722,7 @@ export default function SalesInvoiceManagement() {
 
                 <div className="space-y-3">
                   {fields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-7 gap-4 items-end p-4 border rounded-lg">
+                    <div key={field.id} className="grid grid-cols-6 gap-4 items-end p-4 border rounded-lg">
                       <FormField
                         control={form.control}
                         name={`items.${index}.itemId`}
@@ -759,77 +750,74 @@ export default function SalesInvoiceManagement() {
 
                       <FormField
                         control={form.control}
-                        name={`items.${index}.unit`}
+                        name={`items.${index}.weight`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Unit *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid={`select-unit-${index}`}>
-                                  <SelectValue placeholder="Select unit" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="kgs">Kgs</SelectItem>
-                                <SelectItem value="crate">Crate</SelectItem>
-                                <SelectItem value="box">Box</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormLabel>Weight (Kgs) *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                {...field}
+                                onChange={(e) => {
+                                  field.onChange(parseFloat(e.target.value) || 0);
+                                  calculateItemAmount(index);
+                                }}
+                                data-testid={`input-weight-${index}`}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
 
-                      {form.watch(`items.${index}.unit`) === "kgs" && (
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.weight`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Weight (Kgs) *</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  {...field}
-                                  onChange={(e) => {
-                                    field.onChange(parseFloat(e.target.value) || 0);
-                                    calculateItemAmount(index);
-                                  }}
-                                  data-testid={`input-weight-${index}`}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.crates`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Crates *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => {
+                                  field.onChange(parseFloat(e.target.value) || 0);
+                                  calculateItemAmount(index);
+                                }}
+                                data-testid={`input-crates-${index}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      {(form.watch(`items.${index}.unit`) === "crate" || form.watch(`items.${index}.unit`) === "box") && (
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.crates`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{form.watch(`items.${index}.unit`) === "box" ? "Boxes" : "Crates"} *</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  {...field}
-                                  onChange={(e) => {
-                                    field.onChange(parseFloat(e.target.value) || 0);
-                                    calculateItemAmount(index);
-                                  }}
-                                  data-testid={`input-crates-${index}`}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.boxes`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Boxes *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => {
+                                  field.onChange(parseFloat(e.target.value) || 0);
+                                  calculateItemAmount(index);
+                                }}
+                                data-testid={`input-boxes-${index}`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
                       <FormField
                         control={form.control}
