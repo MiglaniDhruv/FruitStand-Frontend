@@ -159,7 +159,7 @@ export default function Reports() {
 
   const filteredPurchases = filterByDate(purchaseInvoices, "invoiceDate");
   const filteredSales = filterByDate(salesInvoices, "invoiceDate");
-  const filteredExpenses = filterByDate(expenses, "expenseDate");
+  const filteredExpenses = filterByDate(expenses, "paymentDate");
   const filteredPayments = filterByDate(payments, "paymentDate");
   const filteredSalesPayments = filterByDate(salesPayments, "paymentDate");
 
@@ -242,15 +242,31 @@ export default function Reports() {
 
   // Recent activity (last 7 days)
   const sevenDaysAgo = subDays(new Date(), 7);
-  const recentPurchases = purchaseInvoices.filter((inv: any) => 
-    isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() })
-  ).length;
-  const recentSales = salesInvoices.filter((inv: any) => 
-    isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() })
-  ).length;
-  const recentExpenses = expenses.filter((exp: any) => 
-    isWithinInterval(parseISO(exp.expenseDate), { start: sevenDaysAgo, end: new Date() })
-  ).length;
+  const recentPurchases = purchaseInvoices.filter((inv: any) => {
+    try {
+      if (!inv.invoiceDate) return false;
+      return isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() });
+    } catch (error) {
+      return false;
+    }
+  }).length;
+  const recentSales = salesInvoices.filter((inv: any) => {
+    try {
+      if (!inv.invoiceDate) return false;
+      return isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() });
+    } catch (error) {
+      return false;
+    }
+  }).length;
+  const recentExpenses = expenses.filter((exp: any) => {
+    try {
+      const dateField = exp.expenseDate || exp.paymentDate;
+      if (!dateField) return false;
+      return isWithinInterval(parseISO(dateField), { start: sevenDaysAgo, end: new Date() });
+    } catch (error) {
+      return false;
+    }
+  }).length;
 
   if (purchasesLoading || salesLoading) {
     return (
