@@ -113,6 +113,7 @@ export interface IStorage {
   // Stock movement management
   getStockMovements(): Promise<StockMovement[]>;
   getStockMovementsByItem(itemId: string): Promise<any[]>;
+  getAvailableStockOutEntriesByVendor(vendorId: string): Promise<any[]>;
   createStockMovement(movement: InsertStockMovement): Promise<StockMovement>;
   calculateStockBalance(itemId: string): Promise<{ crates: number; kgs: number; boxes: number }>;
   
@@ -483,6 +484,32 @@ export class DatabaseStorage implements IStorage {
         result.push({
           ...movement,
           item: { ...item, vendor: vendor || null }
+        });
+      }
+    }
+    return result;
+  }
+
+  async getAvailableStockOutEntriesByVendor(vendorId: string): Promise<any[]> {
+    // Get stock movements of type "OUT" for items owned by the vendor
+    const movements = await db.select().from(stockMovements)
+      .innerJoin(items, eq(stockMovements.itemId, items.id))
+      .where(
+        and(
+          eq(items.vendorId, vendorId),
+          eq(stockMovements.type, "OUT")
+        )
+      )
+      .orderBy(desc(stockMovements.createdAt));
+    
+    const result = [];
+    for (const movement of movements) {
+      const [item] = await db.select().from(items)
+        .where(eq(items.id, movement.stock_movements.itemId));
+      if (item) {
+        result.push({
+          ...movement.stock_movements,
+          item: item
         });
       }
     }
