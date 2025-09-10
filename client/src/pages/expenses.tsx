@@ -309,9 +309,18 @@ export default function ExpenseManagement() {
     sum + parseFloat(expense.amount || "0"), 0
   );
   const todaysExpenses = expenses.filter((expense: any) => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const expenseDate = format(new Date(expense.expenseDate), "yyyy-MM-dd");
-    return expenseDate === today;
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      // Handle both expenseDate and paymentDate fields
+      const dateField = expense.expenseDate || expense.paymentDate;
+      if (!dateField) return false;
+      
+      const expenseDate = format(new Date(dateField), "yyyy-MM-dd");
+      return expenseDate === today;
+    } catch (error) {
+      // Skip expenses with invalid dates
+      return false;
+    }
   });
   const todaysAmount = todaysExpenses.reduce((sum: number, expense: any) => 
     sum + parseFloat(expense.amount || "0"), 0
@@ -482,7 +491,16 @@ export default function ExpenseManagement() {
                     <TableBody>
                       {filteredExpenses.map((expense: any) => (
                         <TableRow key={expense.id}>
-                          <TableCell>{format(new Date(expense.expenseDate), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              try {
+                                const dateField = expense.expenseDate || expense.paymentDate;
+                                return dateField ? format(new Date(dateField), "dd/MM/yyyy") : "Invalid Date";
+                              } catch (error) {
+                                return "Invalid Date";
+                              }
+                            })()}
+                          </TableCell>
                           <TableCell className="font-medium">{expense.description}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{getCategoryName(expense.categoryId)}</Badge>
