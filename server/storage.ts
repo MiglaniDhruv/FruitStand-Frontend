@@ -497,21 +497,17 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(items.vendorId, vendorId),
-          eq(stockMovements.type, "OUT")
+          eq(stockMovements.movementType, "OUT")
         )
       )
       .orderBy(desc(stockMovements.createdAt));
     
     const result = [];
     for (const movement of movements) {
-      const [item] = await db.select().from(items)
-        .where(eq(items.id, movement.stock_movements.itemId));
-      if (item) {
-        result.push({
-          ...movement.stock_movements,
-          item: item
-        });
-      }
+      result.push({
+        ...movement.stock_movements,
+        item: movement.items
+      });
     }
     return result;
   }
