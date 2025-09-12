@@ -52,6 +52,15 @@ const requireRole = (roles: string[]) => (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint to stop continuous HEAD calls
+  app.head("/api", (req, res) => {
+    res.status(200).end();
+  });
+
+  app.get("/api", (req, res) => {
+    res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+  });
+
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -289,7 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoiceData = insertPurchaseInvoiceSchema.parse(invoice);
       const itemsData = items.map((item: any) => insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
       
-      const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData, stockOutEntryIds);
+      const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData);
       res.status(201).json(createdInvoice);
     } catch (error) {
       if (error instanceof z.ZodError) {
