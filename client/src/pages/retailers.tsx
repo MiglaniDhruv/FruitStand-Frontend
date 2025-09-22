@@ -3,16 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -190,6 +183,82 @@ export default function RetailerManagement() {
     sum + (retailer.crateBalance || 0), 0
   );
 
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "contactPerson",
+      header: "Contact Person",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "phone",
+      header: "Phone",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "udhaaarBalance",
+      header: "Udhaar Balance",
+      cell: (value: string) => (
+        <span className={parseFloat(value || "0") > 0 ? "text-orange-600 font-medium" : ""}>
+          ₹{parseFloat(value || "0").toLocaleString("en-IN")}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "shortfallBalance",
+      header: "Shortfall Balance",
+      cell: (value: string) => (
+        <span className={parseFloat(value || "0") > 0 ? "text-red-600 font-medium" : ""}>
+          ₹{parseFloat(value || "0").toLocaleString("en-IN")}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "crateBalance",
+      header: "Crates",
+      cell: (value: number) => (
+        <Badge variant="secondary">{value || 0}</Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, row: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEdit(row)}
+            data-testid={`button-edit-${value}`}
+            title="Edit Retailer"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(value)}
+            data-testid={`button-delete-${value}`}
+            title="Delete Retailer"
+            disabled={deleteRetailerMutation.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   if (isLoading) {
     return (
       <div className="flex h-screen">
@@ -301,68 +370,15 @@ export default function RetailerManagement() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Udhaar Balance</TableHead>
-                    <TableHead>Shortfall Balance</TableHead>
-                    <TableHead>Crates</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRetailers.map((retailer: any) => (
-                    <TableRow key={retailer.id}>
-                      <TableCell className="font-medium">{retailer.name}</TableCell>
-                      <TableCell>{retailer.contactPerson || "-"}</TableCell>
-                      <TableCell>{retailer.phone || "-"}</TableCell>
-                      <TableCell>
-                        <Badge variant={parseFloat(retailer.udhaaarBalance) > 0 ? "default" : "outline"}>
-                          ₹{parseFloat(retailer.udhaaarBalance || "0").toLocaleString("en-IN")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={parseFloat(retailer.shortfallBalance) > 0 ? "destructive" : "outline"}>
-                          ₹{parseFloat(retailer.shortfallBalance || "0").toLocaleString("en-IN")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{retailer.crateBalance || 0}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEdit(retailer)}
-                            data-testid={`button-edit-${retailer.id}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDelete(retailer.id)}
-                            data-testid={`button-delete-${retailer.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredRetailers.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        {searchTerm ? "No retailers found matching your search." : "No retailers found. Create your first retailer!"}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredRetailers}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["name", "contactPerson", "phone"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
           </div>
