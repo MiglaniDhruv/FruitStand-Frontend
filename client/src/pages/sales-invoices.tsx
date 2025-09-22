@@ -664,7 +664,7 @@ export default function SalesInvoiceManagement() {
                 columns={columns}
                 searchTerm={searchTerm}
                 searchFields={["invoiceNumber", "retailerId"]}
-                isLoading={salesInvoicesQuery.isLoading}
+                isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"
               />

@@ -3,17 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -202,6 +195,74 @@ export default function UserManagement() {
     }
   };
 
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "username",
+      header: "Username",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (value: string) => value,
+    },
+    {
+      accessorKey: "role",
+      header: "Role",
+      cell: (value: string) => (
+        <Badge variant={getRoleBadgeVariant(value)}>
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "active",
+      header: "Status",
+      cell: (value: boolean) => (
+        <Badge variant={value ? "default" : "secondary"}>
+          {value ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, row: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEdit(row)}
+            data-testid={`button-edit-${value}`}
+            title="Edit User"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setManagingPermissions(row)}
+            data-testid={`button-permissions-${value}`}
+            title="Manage Permissions"
+          >
+            <Shield className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(value)}
+            data-testid={`button-delete-${value}`}
+            title="Delete User"
+            disabled={deleteUserMutation.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   const updatePermissionsMutation = useMutation({
     mutationFn: async ({ id, permissions }: { id: string; permissions: string[] }) => {
       const response = await authenticatedApiRequest("PUT", `/api/users/${id}/permissions`, { permissions });
@@ -387,78 +448,15 @@ export default function UserManagement() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Full Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Permissions</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8">
-                        Loading users...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No users found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredUsers.map((user: any) => (
-                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                        <TableCell className="font-medium">{user.username}</TableCell>
-                        <TableCell>{user.name}</TableCell>
-                        <TableCell>
-                          <Badge variant={getRoleBadgeVariant(user.role)}>
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-muted-foreground">
-                            {user.permissions?.length || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS]?.length || 0} permissions
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleManagePermissions(user)}
-                              data-testid={`button-manage-permissions-${user.id}`}
-                              title="Manage Permissions"
-                            >
-                              <Shield className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleEdit(user)}
-                              data-testid={`button-edit-user-${user.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleDelete(user.id)}
-                              data-testid={`button-delete-user-${user.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredUsers}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["username", "name", "role"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
         </main>
