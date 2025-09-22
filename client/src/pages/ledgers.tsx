@@ -17,14 +17,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { 
@@ -577,6 +570,248 @@ export default function Ledgers() {
   const retailerLedgerEntries = getRetailerLedgerEntries();
   const udhaarBookEntries = getUdhaarBookEntries();
   const crateLedgerEntries = getCrateLedgerEntries();
+
+  // Define column configurations for all tables
+  // 1. Cashbook columns
+  const cashbookColumns = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+    },
+    {
+      accessorKey: "paymentMode",
+      header: "Payment Mode",
+      cell: (value: string, row: any) => {
+        if (row.isBalanceEntry) {
+          return <Badge variant="secondary">{value}</Badge>;
+        }
+        return <Badge variant="outline">{value}</Badge>;
+      },
+    },
+    {
+      accessorKey: "bankAccount",
+      header: "Account",
+    },
+    {
+      accessorKey: "inflow",
+      header: "Inflow",
+      cell: (value: number) => (
+        <div className="text-green-600">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "outflow",
+      header: "Outflow",
+      cell: (value: number) => (
+        <div className="text-red-600">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: (value: number) => (
+        <div className={`font-medium ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {formatCurrency(value)}
+        </div>
+      ),
+    },
+  ];
+
+  // 2. Vendor ledger columns
+  const vendorLedgerColumns = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: (value: string) => (
+        <Badge variant={value === "Purchase" ? "destructive" : "default"}>
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "debit",
+      header: "Debit",
+      cell: (value: number) => (
+        <div className="text-red-600 font-medium">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "credit",
+      header: "Credit",
+      cell: (value: number) => (
+        <div className="text-green-600 font-medium">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: (value: number) => (
+        <div className={`font-medium ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {formatCurrency(value)}
+        </div>
+      ),
+    },
+  ];
+
+  // 3. Retailer ledger columns
+  const retailerLedgerColumns = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: (value: string) => (
+        <Badge variant={value === "Sale" ? "default" : "secondary"}>
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "debit",
+      header: "Debit",
+      cell: (value: number) => (
+        <div className="text-red-600 font-medium">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "credit",
+      header: "Credit",
+      cell: (value: number) => (
+        <div className="text-green-600 font-medium">
+          {value > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: (value: number) => (
+        <div className={`font-medium ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {formatCurrency(value)}
+        </div>
+      ),
+    },
+  ];
+
+  // 4. Udhaar book columns
+  const udhaarBookColumns = [
+    {
+      accessorKey: "retailer.name",
+      header: "Retailer",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "totalSales",
+      header: "Total Sales",
+      cell: (value: number) => formatCurrency(value),
+    },
+    {
+      accessorKey: "totalPayments",
+      header: "Total Payments",
+      cell: (value: number) => <div className="text-green-600">{formatCurrency(value)}</div>,
+    },
+    {
+      accessorKey: "outstandingBalance",
+      header: "Outstanding Balance",
+      cell: (value: number) => <div className="text-amber-600 font-bold">{formatCurrency(value)}</div>,
+    },
+    {
+      accessorKey: "retailer.shortfallBalance",
+      header: "Shortfall Amount",
+      cell: (value: string) => (
+        <div className="text-red-600 font-medium">
+          {parseFloat(value || "0") > 0 ? formatCurrency(value) : "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "invoiceCount",
+      header: "Invoices",
+      cell: (value: number) => <Badge variant="outline">{value}</Badge>,
+    },
+    {
+      accessorKey: "lastSaleDate",
+      header: "Last Sale Date",
+      cell: (value: Date) => value ? format(value, "dd/MM/yyyy") : "-",
+    },
+  ];
+
+  // 5. Crate ledger summary columns
+  const crateLedgerSummaryColumns = [
+    {
+      accessorKey: "retailer.name",
+      header: "Retailer",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "cratesGiven",
+      header: "Crates Given",
+      cell: (value: number) => <Badge variant="outline" className="text-blue-600">{value}</Badge>,
+    },
+    {
+      accessorKey: "cratesReturned",
+      header: "Crates Returned",
+      cell: (value: number) => <Badge variant="outline" className="text-green-600">{value}</Badge>,
+    },
+    {
+      accessorKey: "balance",
+      header: "Current Balance",
+      cell: (value: number) => (
+        <div className={`font-bold ${value > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+          {value}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "totalTransactions",
+      header: "Total Transactions",
+      cell: (value: number) => <Badge variant="secondary">{value}</Badge>,
+    },
+    {
+      accessorKey: "balance",
+      header: "Status",
+      cell: (value: number) => {
+        if (value > 0) {
+          return <Badge variant="destructive">Outstanding</Badge>;
+        } else if (value === 0) {
+          return <Badge className="bg-green-500">Settled</Badge>;
+        } else {
+          return <Badge variant="secondary">No Activity</Badge>;
+        }
+      },
+    },
+  ];
 
   return (
     <div className="flex h-screen">
