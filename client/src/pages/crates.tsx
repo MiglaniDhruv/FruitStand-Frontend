@@ -3,14 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -219,6 +212,103 @@ export default function CrateManagement() {
     };
   });
 
+  // Define transactions table columns
+  const transactionColumns = [
+    {
+      accessorKey: "transactionDate",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+    },
+    {
+      accessorKey: "retailerId",
+      header: "Retailer",
+      cell: (value: string) => getRetailerName(value),
+    },
+    {
+      accessorKey: "transactionType",
+      header: "Type",
+      cell: (value: string) => (
+        <div className="flex items-center space-x-2">
+          {getTransactionTypeIcon(value)}
+          <Badge className={getTransactionTypeColor(value)}>
+            {value}
+          </Badge>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "quantity",
+      header: "Quantity",
+      cell: (value: string) => <div className="font-medium">{value} crates</div>,
+    },
+    {
+      accessorKey: "withDeposit",
+      header: "Deposit",
+      cell: (value: boolean, row: any) => {
+        if (value && row.depositAmount) {
+          return <Badge variant="outline">₹{parseFloat(row.depositAmount).toLocaleString("en-IN")}</Badge>;
+        }
+        return <span className="text-muted-foreground">No deposit</span>;
+      },
+    },
+    {
+      accessorKey: "salesInvoiceId",
+      header: "Related Invoice",
+      cell: (value: string) => value ? getSalesInvoiceNumber(value) : "-",
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: (value: string) => value || "-",
+    },
+  ];
+
+  // Define retailer balances table columns
+  const balanceColumns = [
+    {
+      accessorKey: "name",
+      header: "Retailer",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "given",
+      header: "Crates Given",
+      cell: (value: number) => <div className="text-blue-600">{value}</div>,
+    },
+    {
+      accessorKey: "returned",
+      header: "Crates Returned",
+      cell: (value: number) => <div className="text-green-600">{value}</div>,
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: (value: number) => (
+        <div className={`font-medium ${value > 0 ? 'text-orange-600' : value < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+          {value} crates
+        </div>
+      ),
+    },
+    {
+      accessorKey: "balance",
+      header: "Status",
+      cell: (value: number) => {
+        if (value > 0) {
+          return (
+            <div className="flex items-center space-x-1">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <Badge variant="destructive">Outstanding</Badge>
+            </div>
+          );
+        } else if (value < 0) {
+          return <Badge variant="secondary">Excess Return</Badge>;
+        } else {
+          return <Badge variant="default">Settled</Badge>;
+        }
+      },
+    },
+  ];
+
   // Calculate summary stats
   const totalTransactions = crateTransactions.length;
   const totalCratesGiven = crateTransactions
@@ -367,72 +457,15 @@ export default function CrateManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Retailer</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Deposit</TableHead>
-                        <TableHead>Sales Invoice</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTransactions.map((transaction: any) => (
-                        <TableRow key={transaction.id}>
-                          <TableCell>{format(new Date(transaction.transactionDate), "dd/MM/yyyy")}</TableCell>
-                          <TableCell className="font-medium">{getRetailerName(transaction.retailerId)}</TableCell>
-                          <TableCell>
-                            <Badge className={getTransactionTypeColor(transaction.transactionType)}>
-                              <div className="flex items-center space-x-1">
-                                {getTransactionTypeIcon(transaction.transactionType)}
-                                <span>{transaction.transactionType}</span>
-                              </div>
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">{transaction.quantity}</TableCell>
-                          <TableCell>
-                            {transaction.depositAmount && parseFloat(transaction.depositAmount) > 0 ? (
-                              <div className="flex items-center space-x-1">
-                                <span className="font-medium">₹{parseFloat(transaction.depositAmount).toLocaleString("en-IN")}</span>
-                                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                                  transaction.transactionType === "Given" 
-                                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" 
-                                    : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                                }`}>
-                                  {transaction.transactionType === "Given" ? "Received" : "Paid"}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">No deposit</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {transaction.salesInvoiceId ? (
-                              <Badge variant="outline">
-                                {getSalesInvoiceNumber(transaction.salesInvoiceId)}
-                              </Badge>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell>{transaction.notes || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredTransactions.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            {searchTerm || selectedRetailer !== "all" || selectedTransactionType !== "all"
-                              ? "No transactions found matching your filters."
-                              : "No crate transactions found. Record your first transaction!"
-                            }
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                  <DataTable
+                    data={filteredTransactions}
+                    columns={transactionColumns}
+                    searchTerm={searchTerm}
+                    searchFields={["retailerId", "notes"]}
+                    isLoading={transactionsLoading}
+                    enableRowSelection={true}
+                    rowKey="id"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -448,64 +481,15 @@ export default function CrateManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Retailer</TableHead>
-                        <TableHead>Crates Given</TableHead>
-                        <TableHead>Crates Returned</TableHead>
-                        <TableHead>Current Balance</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {retailerCrateBalances.map((retailer: any) => (
-                        <TableRow key={retailer.id}>
-                          <TableCell className="font-medium">{retailer.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-blue-600">
-                              <ArrowUpCircle className="h-3 w-3 mr-1" />
-                              {retailer.given}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-green-600">
-                              <ArrowDownCircle className="h-3 w-3 mr-1" />
-                              {retailer.returned}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <span className={retailer.balance > 0 ? "text-amber-600" : "text-gray-500"}>
-                              {retailer.balance}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {retailer.balance > 0 ? (
-                              <Badge variant="destructive">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Outstanding
-                              </Badge>
-                            ) : retailer.balance === 0 && (retailer.given > 0 || retailer.returned > 0) ? (
-                              <Badge className="bg-green-500">
-                                Settled
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">
-                                No Activity
-                              </Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {retailerCrateBalances.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8">
-                            No retailers found. Add retailers to track crate balances.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                  <DataTable
+                    data={retailerCrateBalances}
+                    columns={balanceColumns}
+                    searchTerm=""
+                    searchFields={["name"]}
+                    isLoading={false}
+                    enableRowSelection={true}
+                    rowKey="id"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
