@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import { useToast } from "@/hooks/use-toast";
@@ -51,10 +44,67 @@ export default function Vendors() {
     },
   });
 
-  const filteredVendors = vendors?.filter((vendor: any) =>
-    vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    vendor.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "contactPerson",
+      header: "Contact Person",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "phone",
+      header: "Phone",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "gstNumber",
+      header: "GST Number",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+    },
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: (value: boolean) => (
+        <Badge variant={value ? "default" : "secondary"}>
+          {value ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, vendor: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEdit(vendor)}
+            data-testid={`button-edit-vendor-${vendor.id}`}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(vendor.id)}
+            data-testid={`button-delete-vendor-${vendor.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const handleEdit = (vendor: any) => {
     setEditingVendor(vendor);
@@ -112,69 +162,15 @@ export default function Vendors() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact Person</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>GST Number</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        Loading vendors...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredVendors.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        No vendors found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredVendors.map((vendor: any) => (
-                      <TableRow key={vendor.id} data-testid={`vendor-row-${vendor.id}`}>
-                        <TableCell className="font-medium">{vendor.name}</TableCell>
-                        <TableCell>{vendor.contactPerson || "-"}</TableCell>
-                        <TableCell>{vendor.phone || "-"}</TableCell>
-                        <TableCell>{vendor.gstNumber || "-"}</TableCell>
-                        <TableCell>₹{parseFloat(vendor.balance).toLocaleString('en-IN')}</TableCell>
-                        <TableCell>
-                          <Badge variant={vendor.isActive ? "default" : "secondary"}>
-                            {vendor.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(vendor)}
-                              data-testid={`button-edit-vendor-${vendor.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(vendor.id)}
-                              data-testid={`button-delete-vendor-${vendor.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={vendors || []}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["name", "contactPerson", "phone", "gstNumber"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
         </main>
