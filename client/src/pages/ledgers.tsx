@@ -18,6 +18,14 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { 
