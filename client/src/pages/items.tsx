@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Select,
   SelectContent,
@@ -89,6 +82,70 @@ export default function Items() {
     return vendor?.name || "Unknown";
   };
 
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "quality",
+      header: "Quality",
+      cell: (value: string) => value,
+    },
+    {
+      accessorKey: "unit",
+      header: "Unit",
+      cell: (value: string) => (
+        <Badge variant="outline">
+          {value?.charAt(0).toUpperCase() + value?.slice(1) || "N/A"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "vendorId",
+      header: "Vendor",
+      cell: (value: string) => getVendorName(value),
+    },
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: (value: boolean) => (
+        <Badge variant={value ? "default" : "secondary"}>
+          {value ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, row: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEdit(row)}
+            data-testid={`button-edit-${value}`}
+            title="Edit Item"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(value)}
+            data-testid={`button-delete-${value}`}
+            title="Delete Item"
+            disabled={deleteItemMutation.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -144,71 +201,15 @@ export default function Items() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Quality</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        Loading items...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No items found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredItems.map((item: any) => (
-                      <TableRow key={item.id} data-testid={`item-row-${item.id}`}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{item.quality}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {item.unit?.charAt(0).toUpperCase() + item.unit?.slice(1) || "N/A"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{getVendorName(item.vendorId)}</TableCell>
-                        <TableCell>
-                          <Badge variant={item.isActive ? "default" : "secondary"}>
-                            {item.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(item)}
-                              data-testid={`button-edit-item-${item.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(item.id)}
-                              data-testid={`button-delete-item-${item.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredItems}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["name", "quality"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
         </main>
