@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -159,6 +152,85 @@ export default function Stock() {
     const totalQty = parseFloat(item.quantityInKgs) + parseFloat(item.quantityInCrates) + parseFloat(item.quantityInBoxes || 0);
     return totalQty < 20 && totalQty > 0;
   };
+
+  // Define stock table columns
+  const stockColumns = [
+    {
+      accessorKey: "item.name",
+      header: "Item",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "item.quality",
+      header: "Quality",
+    },
+    {
+      accessorKey: "item.vendor.name",
+      header: "Vendor",
+      cell: (value: string) => value || "Unknown Vendor",
+    },
+    {
+      accessorKey: "quantityInCrates",
+      header: "Quantity (Crates)",
+      cell: (value: string) => parseFloat(value).toFixed(2),
+    },
+    {
+      accessorKey: "quantityInBoxes",
+      header: "Quantity (Boxes)",
+      cell: (value: string) => parseFloat(value || "0").toFixed(2),
+    },
+    {
+      accessorKey: "quantityInKgs",
+      header: "Quantity (Kgs)",
+      cell: (value: string) => parseFloat(value).toFixed(2),
+    },
+    {
+      accessorKey: "lastUpdated",
+      header: "Last Updated",
+      cell: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+    },
+    {
+      accessorKey: "id",
+      header: "Status",
+      cell: (value: string, row: any) => {
+        if (isLowStock(row)) {
+          return (
+            <div className="flex items-center space-x-1">
+              <AlertTriangle className="h-4 w-4 text-chart-1" />
+              <Badge variant="destructive">Low Stock</Badge>
+            </div>
+          );
+        }
+        return <Badge variant="default">Available</Badge>;
+      },
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, row: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEditStock(row)}
+            data-testid={`button-edit-stock-${value}`}
+            title="Edit Stock"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSelectedItem(row)}
+            data-testid={`button-history-${value}`}
+            title="View History"
+          >
+            <History className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const handleEditStock = (item: any) => {
     setEditingStock(item);
@@ -354,78 +426,15 @@ export default function Stock() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Quality</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Quantity (Crates)</TableHead>
-                    <TableHead>Quantity (Boxes)</TableHead>
-                    <TableHead>Quantity (Kgs)</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
-                        Loading stock...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredStock.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        No stock items found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredStock.map((item: any) => (
-                      <TableRow key={item.id} data-testid={`stock-row-${item.id}`}>
-                        <TableCell className="font-medium">{item.item.name}</TableCell>
-                        <TableCell>{item.item.quality}</TableCell>
-                        <TableCell>{item.item.vendor?.name || 'Unknown Vendor'}</TableCell>
-                        <TableCell>{parseFloat(item.quantityInCrates).toFixed(2)}</TableCell>
-                        <TableCell>{parseFloat(item.quantityInBoxes || 0).toFixed(2)}</TableCell>
-                        <TableCell>{parseFloat(item.quantityInKgs).toFixed(2)}</TableCell>
-                        <TableCell>{format(new Date(item.lastUpdated), "MMM dd, yyyy")}</TableCell>
-                        <TableCell>
-                          {isLowStock(item) ? (
-                            <div className="flex items-center space-x-1">
-                              <AlertTriangle className="h-4 w-4 text-chart-1" />
-                              <Badge variant="destructive">Low Stock</Badge>
-                            </div>
-                          ) : (
-                            <Badge variant="default">Available</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditStock(item)}
-                              data-testid={`button-edit-stock-${item.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setSelectedItem(item)}
-                              data-testid={`button-view-history-${item.id}`}
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredStock}
+                columns={stockColumns}
+                searchTerm={searchTerm}
+                searchFields={["item.name", "item.quality", "item.vendor.name"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
         </main>
