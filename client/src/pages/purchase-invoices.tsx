@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Select,
   SelectContent,
@@ -175,12 +176,96 @@ export default function PurchaseInvoices() {
     createPaymentMutation.mutate(data);
   };
 
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "invoiceNumber",
+      header: "Invoice Number",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "vendor.name",
+      header: "Vendor",
+      cell: (value: string) => value,
+    },
+    {
+      accessorKey: "invoiceDate",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "MMM dd, yyyy"),
+    },
+    {
+      accessorKey: "items",
+      header: "Items",
+      cell: (value: any[]) => `${value?.length || 0} items`,
+    },
+    {
+      accessorKey: "netAmount",
+      header: "Net Amount",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+    },
+    {
+      accessorKey: "paidAmount",
+      header: "Paid Amount",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+    },
+    {
+      accessorKey: "balanceAmount",
+      header: "Balance",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: (value: string) => (
+        <Badge className={getStatusColor(value)} variant="secondary">
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, invoice: any) => (
+        <div className="flex items-center space-x-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleViewInvoice(invoice)}
+            data-testid={`button-view-invoice-${invoice.id}`}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          
+          {invoice.status !== "Paid" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleRecordPayment(invoice)}
+              data-testid={`button-record-payment-${invoice.id}`}
+              title="Record Payment"
+            >
+              <CreditCard className="h-4 w-4" />
+            </Button>
+          )}
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleViewPaymentHistory(invoice)}
+            data-testid={`button-payment-history-${invoice.id}`}
+            title="View Payment History"
+          >
+            <History className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  // Filter invoices with custom logic for status
   const filteredInvoices = invoices?.filter((invoice: any) => {
-    const matchesSearch = 
-      invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.vendor.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesStatus;
   }) || [];
 
   const getStatusColor = (status: string) => {
@@ -254,87 +339,15 @@ export default function PurchaseInvoices() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice Number</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Net Amount</TableHead>
-                    <TableHead>Paid Amount</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
-                        Loading invoices...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredInvoices.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        No invoices found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredInvoices.map((invoice: any) => (
-                      <TableRow key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
-                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                        <TableCell>{invoice.vendor.name}</TableCell>
-                        <TableCell>{format(new Date(invoice.invoiceDate), "MMM dd, yyyy")}</TableCell>
-                        <TableCell>{invoice.items?.length || 0} items</TableCell>
-                        <TableCell>₹{parseFloat(invoice.netAmount).toLocaleString('en-IN')}</TableCell>
-                        <TableCell>₹{parseFloat(invoice.paidAmount).toLocaleString('en-IN')}</TableCell>
-                        <TableCell>₹{parseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(invoice.status)} variant="secondary">
-                            {invoice.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewInvoice(invoice)}
-                              data-testid={`button-view-invoice-${invoice.id}`}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            
-                            {invoice.status !== "Paid" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRecordPayment(invoice)}
-                                data-testid={`button-record-payment-${invoice.id}`}
-                                title="Record Payment"
-                              >
-                                <CreditCard className="h-4 w-4" />
-                              </Button>
-                            )}
-                            
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewPaymentHistory(invoice)}
-                              data-testid={`button-payment-history-${invoice.id}`}
-                              title="View Payment History"
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredInvoices}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["invoiceNumber", "vendor.name"]}
+                isLoading={isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
         </main>
