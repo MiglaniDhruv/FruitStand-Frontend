@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -405,6 +406,114 @@ export default function SalesInvoiceManagement() {
     return salesPayments.filter((payment: any) => payment.invoiceId === invoiceId);
   };
 
+  // Define table columns
+  const columns = [
+    {
+      accessorKey: "invoiceNumber",
+      header: "Invoice #",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "invoiceDate",
+      header: "Date",
+      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+    },
+    {
+      accessorKey: "retailerId",
+      header: "Retailer",
+      cell: (value: string) => getRetailerName(value),
+    },
+    {
+      accessorKey: "totalAmount",
+      header: "Total Amount",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+    },
+    {
+      accessorKey: "paidAmount",
+      header: "Paid Amount",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+    },
+    {
+      accessorKey: "balanceAmount",
+      header: "Due Amount",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+    },
+    {
+      accessorKey: "shortfallAmount",
+      header: "Shortfall Amount",
+      cell: (value: string) => (
+        <span className="text-amber-600 font-medium">
+          {parseFloat(value || "0") > 0 
+            ? `₹${parseFloat(value).toLocaleString("en-IN")}` 
+            : "-"
+          }
+        </span>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: (value: string) => (
+        <Badge className={getPaymentStatusColor(value)}>
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, invoice: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleViewInvoice(invoice)}
+            data-testid={`button-view-${invoice.id}`}
+            title="View Details"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleRecordPayment(invoice)}
+            data-testid={`button-payment-${invoice.id}`}
+            title="Record Payment"
+          >
+            <DollarSign className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleViewPaymentHistory(invoice)}
+            data-testid={`button-history-${invoice.id}`}
+            title="Payment History"
+          >
+            <History className="h-4 w-4" />
+          </Button>
+          {(invoice.status === "Pending" || invoice.status === "Partial") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => markAsPaidMutation.mutate(invoice.id)}
+              data-testid={`button-mark-paid-${invoice.id}`}
+              title="Mark as Paid"
+              disabled={markAsPaidMutation.isPending}
+            >
+              <CheckCircle className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  // Add missing handler functions (handleViewInvoice was missing)
+  const handleViewInvoice = (invoice: any) => {
+    setSelectedInvoice(invoice);
+  };
+
+  // Filter invoices based on search term
   const filteredInvoices = invoices.filter((invoice: any) =>
     invoice.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     getRetailerName(invoice.retailerId).toLowerCase().includes(searchTerm.toLowerCase())
@@ -550,82 +659,15 @@ export default function SalesInvoiceManagement() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Retailer</TableHead>
-                    <TableHead>Total Amount</TableHead>
-                    <TableHead>Paid Amount</TableHead>
-                    <TableHead>Due Amount</TableHead>
-                    <TableHead>Shortfall Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice: any) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                      <TableCell>{format(new Date(invoice.invoiceDate), "dd/MM/yyyy")}</TableCell>
-                      <TableCell>{getRetailerName(invoice.retailerId)}</TableCell>
-                      <TableCell>₹{parseFloat(invoice.totalAmount).toLocaleString("en-IN")}</TableCell>
-                      <TableCell>₹{parseFloat(invoice.paidAmount).toLocaleString("en-IN")}</TableCell>
-                      <TableCell>₹{parseFloat(invoice.balanceAmount).toLocaleString("en-IN")}</TableCell>
-                      <TableCell className="text-amber-600 font-medium">
-                        {parseFloat(invoice.shortfallAmount || "0") > 0 
-                          ? `₹${parseFloat(invoice.shortfallAmount).toLocaleString("en-IN")}` 
-                          : "-"
-                        }
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getPaymentStatusColor(invoice.status)}>
-                          {invoice.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRecordPayment(invoice)}
-                            data-testid={`button-record-payment-${invoice.id}`}
-                          >
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleViewPaymentHistory(invoice)}
-                            data-testid={`button-payment-history-${invoice.id}`}
-                          >
-                            <History className="h-4 w-4" />
-                          </Button>
-                          {invoice.status !== "Paid" && parseFloat(invoice.balanceAmount) > 0 && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleMarkAsPaid(invoice)}
-                              data-testid={`button-mark-paid-${invoice.id}`}
-                              disabled={markAsPaidMutation.isPending}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredInvoices.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        {searchTerm ? "No invoices found matching your search." : "No sales invoices found. Create your first invoice!"}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+              <DataTable
+                data={filteredInvoices}
+                columns={columns}
+                searchTerm={searchTerm}
+                searchFields={["invoiceNumber", "retailerId"]}
+                isLoading={salesInvoicesQuery.isLoading}
+                enableRowSelection={true}
+                rowKey="id"
+              />
             </CardContent>
           </Card>
           </div>
