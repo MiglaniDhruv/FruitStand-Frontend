@@ -3,16 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -303,6 +296,117 @@ export default function ExpenseManagement() {
     return matchesSearch && matchesCategory && matchesPaymentMode;
   });
 
+  // Define expense table columns
+  const expenseColumns = [
+    {
+      accessorKey: "paymentDate",
+      header: "Date",
+      cell: (value: string, row: any) => {
+        try {
+          const dateField = row.expenseDate || row.paymentDate;
+          return format(new Date(dateField), "dd/MM/yyyy");
+        } catch {
+          return "Invalid Date";
+        }
+      },
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "categoryId",
+      header: "Category",
+      cell: (value: string) => (
+        <Badge variant="outline">{getCategoryName(value)}</Badge>
+      ),
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: (value: string) => (
+        <div className="font-medium text-red-600">
+          ₹{parseFloat(value).toLocaleString("en-IN")}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "paymentMode",
+      header: "Payment Mode",
+      cell: (value: string) => (
+        <Badge className={getPaymentModeColor(value)}>
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: (value: string) => value || "-",
+    },
+  ];
+
+  // Define category table columns  
+  const categoryColumns = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "id",
+      header: "Expenses Count",
+      cell: (value: string) => {
+        const categoryExpenses = expenses.filter((e: any) => e.categoryId === value);
+        return <Badge variant="secondary">{categoryExpenses.length}</Badge>;
+      },
+    },
+    {
+      accessorKey: "id",
+      header: "Total Amount",
+      cell: (value: string) => {
+        const categoryExpenses = expenses.filter((e: any) => e.categoryId === value);
+        const categoryTotal = categoryExpenses.reduce((sum: number, exp: any) => 
+          sum + parseFloat(exp.amount || "0"), 0
+        );
+        return <div className="font-medium">₹{categoryTotal.toLocaleString("en-IN")}</div>;
+      },
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (value: string, row: any) => (
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEditCategory(row)}
+            data-testid={`button-edit-category-${value}`}
+            title="Edit Category"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDeleteCategory(value)}
+            data-testid={`button-delete-category-${value}`}
+            title="Delete Category"
+            disabled={deleteCategoryMutation.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   // Calculate summary stats
   const totalExpenses = expenses.length;
   const totalAmount = expenses.reduce((sum: number, expense: any) => 
@@ -477,57 +581,15 @@ export default function ExpenseManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Payment Mode</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredExpenses.map((expense: any) => (
-                        <TableRow key={expense.id}>
-                          <TableCell>
-                            {(() => {
-                              try {
-                                const dateField = expense.expenseDate || expense.paymentDate;
-                                return dateField ? format(new Date(dateField), "dd/MM/yyyy") : "Invalid Date";
-                              } catch (error) {
-                                return "Invalid Date";
-                              }
-                            })()}
-                          </TableCell>
-                          <TableCell className="font-medium">{expense.description}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{getCategoryName(expense.categoryId)}</Badge>
-                          </TableCell>
-                          <TableCell className="font-medium text-red-600">
-                            ₹{parseFloat(expense.amount).toLocaleString("en-IN")}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={getPaymentModeColor(expense.paymentMode)}>
-                              {expense.paymentMode}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{expense.notes || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredExpenses.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
-                            {searchTerm || selectedCategory !== "all" || selectedPaymentMode !== "all"
-                              ? "No expenses found matching your filters."
-                              : "No expenses found. Add your first expense!"
-                            }
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                  <DataTable
+                    data={filteredExpenses}
+                    columns={expenseColumns}
+                    searchTerm={searchTerm}
+                    searchFields={["description"]}
+                    isLoading={expensesLoading}
+                    enableRowSelection={true}
+                    rowKey="id"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -540,65 +602,15 @@ export default function ExpenseManagement() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Expenses Count</TableHead>
-                        <TableHead>Total Amount</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categories.map((category: any) => {
-                        const categoryExpenses = expenses.filter((e: any) => e.categoryId === category.id);
-                        const categoryTotal = categoryExpenses.reduce((sum: number, exp: any) => 
-                          sum + parseFloat(exp.amount || "0"), 0
-                        );
-                        
-                        return (
-                          <TableRow key={category.id}>
-                            <TableCell className="font-medium">{category.name}</TableCell>
-                            <TableCell>{category.description || "-"}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">{categoryExpenses.length}</Badge>
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              ₹{categoryTotal.toLocaleString("en-IN")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEditCategory(category)}
-                                  data-testid={`button-edit-category-${category.id}`}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleDeleteCategory(category.id)}
-                                  data-testid={`button-delete-category-${category.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      {categories.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8">
-                            No expense categories found. Create your first category!
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                  <DataTable
+                    data={categories}
+                    columns={categoryColumns}
+                    searchTerm=""
+                    searchFields={["name", "description"]}
+                    isLoading={categoriesLoading}
+                    enableRowSelection={true}
+                    rowKey="id"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
