@@ -2,6 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { fileURLToPath } from "url";
+
+// Polyfill for import.meta.dirname
+if (!import.meta.dirname) {
+  Object.defineProperty(import.meta, "dirname", {
+    value: path.dirname(fileURLToPath(import.meta.url)),
+  });
+}
 
 export default defineConfig({
   plugins: [

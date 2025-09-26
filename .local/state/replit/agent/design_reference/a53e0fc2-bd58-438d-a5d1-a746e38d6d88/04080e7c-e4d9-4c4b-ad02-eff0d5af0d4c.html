@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APMC Commission Merchant System - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                borderRadius: {
+                    lg: "var(--radius)",
+                    md: "calc(var(--radius) - 2px)",
+                    sm: "calc(var(--radius) - 4px)",
+                },
+                colors: {
+                    background: "var(--background)",
+                    foreground: "var(--foreground)",
+                    card: {
+                        DEFAULT: "var(--card)",
+                        foreground: "var(--card-foreground)",
+                    },
+                    popover: {
+                        DEFAULT: "var(--popover)",
+                        foreground: "var(--popover-foreground)",
+                    },
+                    primary: {
+                        DEFAULT: "var(--primary)",
+                        foreground: "var(--primary-foreground)",
+                    },
+                    secondary: {
+                        DEFAULT: "var(--secondary)",
+                        foreground: "var(--secondary-foreground)",
+                    },
+                    muted: {
+                        DEFAULT: "var(--muted)",
+                        foreground: "var(--muted-foreground)",
+                    },
+                    accent: {
+                        DEFAULT: "var(--accent)",
+                        foreground: "var(--accent-foreground)",
+                    },
+                    destructive: {
+                        DEFAULT: "var(--destructive)",
+                        foreground: "var(--destructive-foreground)",
+                    },
+                    border: "var(--border)",
+                    input: "var(--input)",
+                    ring: "var(--ring)",
+                    chart: {
+                        "1": "var(--chart-1)",
+                        "2": "var(--chart-2)",
+                        "3": "var(--chart-3)",
+                        "4": "var(--chart-4)",
+                        "5": "var(--chart-5)",
+                    }
+                },
+                fontFamily: {
+                    sans: ["var(--font-sans)"],
+                }
+            },
+        }
+    };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --background: hsl(210 40% 98%);
+            --foreground: hsl(222.2 84% 4.9%);
+            --card: hsl(0 0% 100%);
+            --card-foreground: hsl(222.2 84% 4.9%);
+            --popover: hsl(0 0% 100%);
+            --popover-foreground: hsl(222.2 84% 4.9%);
+            --primary: hsl(221.2 83.2% 53.3%);
+            --primary-foreground: hsl(210 40% 98%);
+            --secondary: hsl(210 40% 96%);
+            --secondary-foreground: hsl(222.2 84% 4.9%);
+            --muted: hsl(210 40% 96%);
+            --muted-foreground: hsl(215.4 16.3% 46.9%);
+            --accent: hsl(210 40% 96%);
+            --accent-foreground: hsl(222.2 84% 4.9%);
+            --destructive: hsl(0 84.2% 60.2%);
+            --destructive-foreground: hsl(210 40% 98%);
+            --border: hsl(214.3 31.8% 91.4%);
+            --input: hsl(214.3 31.8% 91.4%);
+            --ring: hsl(221.2 83.2% 53.3%);
+            --radius: 8px;
+            --font-sans: 'Inter', system-ui, sans-serif;
+            --chart-1: hsl(12 76% 61%);
+            --chart-2: hsl(173 58% 39%);
+            --chart-3: hsl(197 37% 24%);
+            --chart-4: hsl(43 74% 66%);
+            --chart-5: hsl(27 87% 67%);
+        }
+        
+        body {
+            font-family: var(--font-sans);
+        }
+    </style>
+</head>
+<body class="bg-background text-foreground">
+    <!-- @COMPONENT: MainApplication [full application shell] -->
+    <div class="flex h-screen">
+        <!-- Sidebar Navigation -->
+        <!-- @COMPONENT: Sidebar [navigation and user menu] -->
+        <div class="w-64 bg-card border-r border-border flex flex-col">
+            <!-- Logo and Brand -->
+            <div class="p-6 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-apple-alt text-primary-foreground text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-semibold text-foreground">APMC System</h1>
+                        <p class="text-sm text-muted-foreground">Commission Merchant</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Info -->
+            <div class="p-4 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
+                        <i class="fas fa-user text-secondary-foreground text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium" data-bind="user.name" data-mock="true">Rajesh Kumar</p>
+                        <p class="text-xs text-muted-foreground" data-bind="user.role" data-mock="true">Admin</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Menu -->
+            <nav class="flex-1 p-4">
+                <div class="space-y-2">
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-md" data-implementation="Active route highlighting">
+                        <i class="fas fa-tachometer-alt w-5 mr-3"></i>
+                        Dashboard
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-truck w-5 mr-3"></i>
+                        Vendors
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-seedling w-5 mr-3"></i>
+                        Commodities
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-file-invoice-dollar w-5 mr-3"></i>
+                        Purchase Invoices
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-credit-card w-5 mr-3"></i>
+                        Payments
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-boxes w-5 mr-3"></i>
+                        Stock
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-book w-5 mr-3"></i>
+                        Ledgers
+                    </a>
+                    <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                        <i class="fas fa-chart-bar w-5 mr-3"></i>
+                        Reports
+                    </a>
+                </div>
+
+                <div class="mt-8 pt-4 border-t border-border">
+                    <div class="space-y-2">
+                        <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                            <i class="fas fa-users w-5 mr-3"></i>
+                            User Management
+                        </a>
+                        <a href="#" class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md">
+                            <i class="fas fa-cog w-5 mr-3"></i>
+                            Settings
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Logout -->
+            <div class="p-4 border-t border-border">
+                <button class="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-destructive w-full rounded-md" data-event="click:handleLogout">
+                    <i class="fas fa-sign-out-alt w-5 mr-3"></i>
+                    Logout
+                </button>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: Sidebar -->
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <!-- @COMPONENT: Header [top navigation and actions] -->
+            <header class="bg-card border-b border-border px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-foreground">Dashboard</h2>
+                        <p class="text-sm text-muted-foreground">Overview of your commission merchant operations</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"></i>
+                            <input type="text" placeholder="Search..." class="pl-10 pr-4 py-2 border border-border rounded-md bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring w-64" data-implementation="Global search functionality">
+                        </div>
+                        <button class="p-2 text-muted-foreground hover:text-foreground rounded-md" data-implementation="Notifications system">
+                            <i class="fas fa-bell text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <!-- @END_COMPONENT: Header -->
+
+            <!-- Dashboard Content -->
+            <!-- @COMPONENT: Dashboard [main dashboard content] -->
+            <main class="flex-1 overflow-auto p-6">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- @MAP: kpiCards.map(card => ( -->
+                    <div class="bg-card p-6 rounded-lg border border-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-muted-foreground" data-mock="true">Total Sales Today</p>
+                                <p class="text-2xl font-semibold text-foreground" data-bind="kpi.todaySales" data-mock="true">₹2,45,680</p>
+                                <p class="text-sm text-chart-2 mt-1" data-mock="true">+12.5% from yesterday</p>
+                            </div>
+                            <div class="w-12 h-12 bg-chart-2/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-rupee-sign text-chart-2 text-lg"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card p-6 rounded-lg border border-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-muted-foreground" data-mock="true">Pending Payments</p>
+                                <p class="text-2xl font-semibold text-foreground" data-bind="kpi.pendingPayments" data-mock="true">₹89,350</p>
+                                <p class="text-sm text-chart-1 mt-1" data-mock="true">15 invoices due</p>
+                            </div>
+                            <div class="w-12 h-12 bg-chart-1/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-clock text-chart-1 text-lg"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card p-6 rounded-lg border border-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-muted-foreground" data-mock="true">Active Vendors</p>
+                                <p class="text-2xl font-semibold text-foreground" data-bind="kpi.activeVendors" data-mock="true">47</p>
+                                <p class="text-sm text-chart-3 mt-1" data-mock="true">3 new this week</p>
+                            </div>
+                            <div class="w-12 h-12 bg-chart-3/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-truck text-chart-3 text-lg"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card p-6 rounded-lg border border-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-muted-foreground" data-mock="true">Stock Value</p>
+                                <p class="text-2xl font-semibold text-foreground" data-bind="kpi.stockValue" data-mock="true">₹1,56,890</p>
+                                <p class="text-sm text-chart-4 mt-1" data-mock="true">2,340 kg total</p>
+                            </div>
+                            <div class="w-12 h-12 bg-chart-4/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-boxes text-chart-4 text-lg"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP )) -->
+                </div>
+
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    <!-- Recent Transactions -->
+                    <!-- @COMPONENT: RecentTransactions [transaction list widget] -->
+                    <div class="xl:col-span-2">
+                        <div class="bg-card rounded-lg border border-border">
+                            <div class="p-6 border-b border-border">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-lg font-semibold text-foreground">Recent Purchase Invoices</h3>
+                                    <button class="text-sm text-primary hover:text-primary/80" data-implementation="Navigate to full invoices list">
+                                        View All
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-4">
+                                    <!-- @MAP: recentInvoices.map(invoice => ( -->
+                                    <div class="flex items-center justify-between py-3 border-b border-border last:border-b-0">
+                                        <div class="flex items-center space-x-4">
+                                            <div class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
+                                                <i class="fas fa-file-invoice text-secondary-foreground"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-bind="invoice.number" data-mock="true">INV-2024-001</p>
+                                                <p class="text-sm text-muted-foreground" data-bind="invoice.vendor" data-mock="true">Ramesh Fruit Supplier</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-bind="invoice.amount" data-mock="true">₹15,680</p>
+                                            <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-chart-2/10 text-chart-2" data-bind="invoice.status" data-mock="true">Paid</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-3 border-b border-border last:border-b-0">
+                                        <div class="flex items-center space-x-4">
+                                            <div class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
+                                                <i class="fas fa-file-invoice text-secondary-foreground"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">INV-2024-002</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">Suresh Mango Wholesale</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-mock="true">₹23,450</p>
+                                            <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-chart-1/10 text-chart-1" data-mock="true">Pending</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-3 border-b border-border last:border-b-0">
+                                        <div class="flex items-center space-x-4">
+                                            <div class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
+                                                <i class="fas fa-file-invoice text-secondary-foreground"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">INV-2024-003</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">Krishna Apple Farm</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-mock="true">₹8,920</p>
+                                            <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-chart-4/10 text-chart-4" data-mock="true">Partial</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-3">
+                                        <div class="flex items-center space-x-4">
+                                            <div class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
+                                                <i class="fas fa-file-invoice text-secondary-foreground"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">INV-2024-004</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">Lakshmi Citrus Ltd</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-mock="true">₹31,200</p>
+                                            <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-chart-2/10 text-chart-2" data-mock="true">Paid</span>
+                                        </div>
+                                    </div>
+                                    <!-- @END_MAP )) -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: RecentTransactions -->
+
+                    <!-- Right Sidebar Content -->
+                    <div class="space-y-6">
+                        <!-- Quick Actions -->
+                        <!-- @COMPONENT: QuickActions [action buttons panel] -->
+                        <div class="bg-card rounded-lg border border-border p-6">
+                            <h3 class="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
+                            <div class="space-y-3">
+                                <button class="w-full flex items-center justify-center px-4 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium" data-event="click:createPurchaseInvoice">
+                                    <i class="fas fa-plus mr-2"></i>
+                                    New Purchase Invoice
+                                </button>
+                                <button class="w-full flex items-center justify-center px-4 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 font-medium" data-event="click:recordPayment">
+                                    <i class="fas fa-credit-card mr-2"></i>
+                                    Record Payment
+                                </button>
+                                <button class="w-full flex items-center justify-center px-4 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 font-medium" data-event="click:addVendor">
+                                    <i class="fas fa-user-plus mr-2"></i>
+                                    Add Vendor
+                                </button>
+                                <button class="w-full flex items-center justify-center px-4 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 font-medium" data-event="click:updateStock">
+                                    <i class="fas fa-boxes mr-2"></i>
+                                    Update Stock
+                                </button>
+                            </div>
+                        </div>
+                        <!-- @END_COMPONENT: QuickActions -->
+
+                        <!-- Low Stock Alert -->
+                        <!-- @COMPONENT: LowStockAlert [stock monitoring widget] -->
+                        <div class="bg-card rounded-lg border border-border">
+                            <div class="p-6 border-b border-border">
+                                <h3 class="text-lg font-semibold text-foreground">Low Stock Alert</h3>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-4">
+                                    <!-- @MAP: lowStockItems.map(item => ( -->
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-1/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-exclamation text-chart-1 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-bind="item.name" data-mock="true">Mangoes A-Grade</p>
+                                                <p class="text-sm text-muted-foreground" data-bind="item.remaining" data-mock="true">12 kg remaining</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-1/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-exclamation text-chart-1 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">Apples Premium</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">8 kg remaining</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-1/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-exclamation text-chart-1 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">Oranges Fresh</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">15 kg remaining</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- @END_MAP )) -->
+                                </div>
+                            </div>
+                        </div>
+                        <!-- @END_COMPONENT: LowStockAlert -->
+
+                        <!-- Recent Payments -->
+                        <!-- @COMPONENT: RecentPayments [payment history widget] -->
+                        <div class="bg-card rounded-lg border border-border">
+                            <div class="p-6 border-b border-border">
+                                <h3 class="text-lg font-semibold text-foreground">Recent Payments</h3>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-4">
+                                    <!-- @MAP: recentPayments.map(payment => ( -->
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-2/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-check text-chart-2 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-bind="payment.vendor" data-mock="true">Ramesh Supplier</p>
+                                                <p class="text-sm text-muted-foreground" data-bind="payment.method" data-mock="true">Bank Transfer</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-bind="payment.amount" data-mock="true">₹15,000</p>
+                                            <p class="text-xs text-muted-foreground" data-bind="payment.date" data-mock="true">Today</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-2/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-check text-chart-2 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">Suresh Wholesale</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">Cash</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-mock="true">₹8,500</p>
+                                            <p class="text-xs text-muted-foreground" data-mock="true">Yesterday</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-chart-2/10 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-check text-chart-2 text-xs"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-foreground" data-mock="true">Krishna Farm</p>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">UPI</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-foreground" data-mock="true">₹12,300</p>
+                                            <p class="text-xs text-muted-foreground" data-mock="true">2 days ago</p>
+                                        </div>
+                                    </div>
+                                    <!-- @END_MAP )) -->
+                                </div>
+                            </div>
+                        </div>
+                        <!-- @END_COMPONENT: RecentPayments -->
+                    </div>
+                </div>
+
+                <!-- Modals and Form Examples -->
+                <!-- @COMPONENT: CreatePurchaseInvoiceModal [invoice creation form] -->
+                <div id="createInvoiceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50" data-implementation="Modal visibility controlled by JavaScript">
+                    <div class="flex items-center justify-center min-h-screen p-4">
+                        <div class="bg-card rounded-lg border border-border w-full max-w-4xl max-h-screen overflow-y-auto">
+                            <div class="p-6 border-b border-border">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-lg font-semibold text-foreground">Create Purchase Invoice</h3>
+                                    <button class="text-muted-foreground hover:text-foreground" data-event="click:closeModal">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <form class="p-6 space-y-6" data-implementation="Form validation and submission logic">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Vendor</label>
+                                        <select class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-bind="selectedVendor">
+                                            <option data-mock="true">Select Vendor</option>
+                                            <option data-mock="true">Ramesh Fruit Supplier</option>
+                                            <option data-mock="true">Suresh Mango Wholesale</option>
+                                            <option data-mock="true">Krishna Apple Farm</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Invoice Date</label>
+                                        <input type="date" class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" data-bind="invoiceDate">
+                                    </div>
+                                </div>
+
+                                <!-- Invoice Items -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h4 class="text-md font-medium text-foreground">Invoice Items</h4>
+                                        <button type="button" class="px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80" data-event="click:addInvoiceItem">
+                                            <i class="fas fa-plus mr-1"></i>
+                                            Add Item
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Item Rows -->
+                                    <div class="space-y-4">
+                                        <!-- @MAP: invoiceItems.map((item, index) => ( -->
+                                        <div class="grid grid-cols-5 gap-4 p-4 border border-border rounded-md">
+                                            <div>
+                                                <label class="block text-sm text-muted-foreground mb-1">Commodity</label>
+                                                <select class="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring" data-bind="item.commodity">
+                                                    <option data-mock="true">Mangoes A-Grade</option>
+                                                    <option data-mock="true">Apples Premium</option>
+                                                    <option data-mock="true">Oranges Fresh</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm text-muted-foreground mb-1">Quantity</label>
+                                                <input type="number" class="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring" placeholder="0" data-bind="item.quantity">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm text-muted-foreground mb-1">Rate/kg</label>
+                                                <input type="number" class="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring" placeholder="0.00" data-bind="item.rate">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm text-muted-foreground mb-1">Amount</label>
+                                                <input type="number" class="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring" placeholder="0.00" readonly data-bind="item.amount">
+                                            </div>
+                                            <div class="flex items-end">
+                                                <button type="button" class="p-2 text-destructive hover:bg-destructive/10 rounded" data-event="click:removeInvoiceItem">
+                                                    <i class="fas fa-trash text-sm"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <!-- @END_MAP )) -->
+                                    </div>
+                                </div>
+
+                                <!-- Calculation Summary -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-foreground mb-2">Commission %</label>
+                                            <input type="number" class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" placeholder="5.00" data-bind="commissionRate">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-foreground mb-2">Freight Charges</label>
+                                            <input type="number" class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" placeholder="0.00" data-bind="freightCharges">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-foreground mb-2">Labor Charges</label>
+                                            <input type="number" class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" placeholder="0.00" data-bind="laborCharges">
+                                        </div>
+                                    </div>
+                                    <div class="bg-muted p-4 rounded-md">
+                                        <h5 class="font-medium text-foreground mb-3">Invoice Summary</h5>
+                                        <div class="space-y-2 text-sm">
+                                            <div class="flex justify-between">
+                                                <span class="text-muted-foreground">Gross Amount:</span>
+                                                <span class="text-foreground" data-bind="grossAmount" data-mock="true">₹25,000.00</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-muted-foreground">Commission (5%):</span>
+                                                <span class="text-foreground" data-bind="commissionAmount" data-mock="true">₹1,250.00</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-muted-foreground">Freight:</span>
+                                                <span class="text-foreground" data-bind="freightAmount" data-mock="true">₹500.00</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-muted-foreground">Labor:</span>
+                                                <span class="text-foreground" data-bind="laborAmount" data-mock="true">₹300.00</span>
+                                            </div>
+                                            <hr class="border-border">
+                                            <div class="flex justify-between font-medium text-base">
+                                                <span class="text-foreground">Net Payable:</span>
+                                                <span class="text-foreground" data-bind="netPayable" data-mock="true">₹22,950.00</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-end space-x-3 pt-4 border-t border-border">
+                                    <button type="button" class="px-4 py-2 text-sm border border-border text-foreground rounded-md hover:bg-accent" data-event="click:closeModal">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" class="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90" data-event="submit:createInvoice" data-implementation="Validate and create invoice">
+                                        Create Invoice
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: CreatePurchaseInvoiceModal -->
+
+            </main>
+            <!-- @END_COMPONENT: Dashboard -->
+        </div>
+    </div>
+    <!-- @END_COMPONENT: MainApplication -->
+
+    <script>
+    (function() {
+        // TODO: Implement business logic, API calls, and state management
+        
+        // Modal functionality
+        const createInvoiceModal = document.getElementById('createInvoiceModal');
+        
+        // Event listeners for quick actions
+        document.querySelector('[data-event="click:createPurchaseInvoice"]')?.addEventListener('click', function() {
+            createInvoiceModal?.classList.remove('hidden');
+        });
+        
+        document.querySelector('[data-event="click:closeModal"]')?.addEventListener('click', function() {
+            createInvoiceModal?.classList.add('hidden');
+        });
+        
+        // Close modal on backdrop click
+        createInvoiceModal?.addEventListener('click', function(e) {
+            if (e.target === createInvoiceModal) {
+                createInvoiceModal.classList.add('hidden');
+            }
+        });
+        
+        // Auto-calculate invoice amounts
+        function calculateInvoiceAmount() {
+            // TODO: Implement real-time calculation logic
+            console.log('Calculate invoice amounts');
+        }
+        
+        // Add invoice item
+        document.querySelector('[data-event="click:addInvoiceItem"]')?.addEventListener('click', function() {
+            // TODO: Add new invoice item row
+            console.log('Add invoice item');
+        });
+        
+        // Sample data for demonstration
+        const sampleData = {
+            kpiCards: [
+                { title: 'Total Sales Today', value: '₹2,45,680', change: '+12.5%', icon: 'rupee-sign' },
+                { title: 'Pending Payments', value: '₹89,350', change: '15 invoices', icon: 'clock' },
+                { title: 'Active Vendors', value: '47', change: '3 new this week', icon: 'truck' },
+                { title: 'Stock Value', value: '₹1,56,890', change: '2,340 kg total', icon: 'boxes' }
+            ],
+            recentInvoices: [
+                { number: 'INV-2024-001', vendor: 'Ramesh Fruit Supplier', amount: '₹15,680', status: 'Paid' },
+                { number: 'INV-2024-002', vendor: 'Suresh Mango Wholesale', amount: '₹23,450', status: 'Pending' }
+            ]
+        };
+        
+        // Initialize page
+        console.log('APMC Commission Merchant System initialized', sampleData);
+    })();
+    </script>
+</body>
+</html>

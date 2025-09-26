@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -71,7 +72,13 @@ export default function ExpenseManagement() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "paymentDate",
+    sortOrder: "desc",
+  });
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedPaymentMode, setSelectedPaymentMode] = useState("all");
   const { toast } = useToast();
@@ -99,15 +106,25 @@ export default function ExpenseManagement() {
   });
 
   // Fetch data
-  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
-    queryKey: ["/api/expenses"],
+  const { data: expensesResult, isLoading: expensesLoading, isError, error } = useQuery<PaginatedResult<ExpenseWithCategory>>({
+    queryKey: ["/api/expenses", paginationOptions, selectedCategory, selectedPaymentMode],
+    placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/expenses");
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (selectedCategory !== "all") params.append('categoryId', selectedCategory);
+      if (selectedPaymentMode !== "all") params.append('paymentMode', selectedPaymentMode);
+      
+      const response = await authenticatedApiRequest("GET", `/api/expenses?${params.toString()}`);
       return response.json();
     },
   });
 
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+  const { data: categories = [], isLoading: categoriesLoading, isError: categoriesError, error: categoriesErrorMessage } = useQuery({
     queryKey: ["/api/expense-categories"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expense-categories");
@@ -122,6 +139,33 @@ export default function ExpenseManagement() {
       return response.json();
     },
   });
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleCategoryFilterChange = (category: string) => {
+    setSelectedCategory(category);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handlePaymentModeFilterChange = (paymentMode: string) => {
+    setSelectedPaymentMode(paymentMode);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
 
   // Expense mutations
   const createExpenseMutation = useMutation({
@@ -287,14 +331,9 @@ export default function ExpenseManagement() {
     }
   };
 
-  // Filter expenses
-  const filteredExpenses = expenses.filter((expense: any) => {
-    const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         getCategoryName(expense.categoryId).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || expense.categoryId === selectedCategory;
-    const matchesPaymentMode = selectedPaymentMode === "all" || expense.paymentMode === selectedPaymentMode;
-    return matchesSearch && matchesCategory && matchesPaymentMode;
-  });
+  // Extract expenses and metadata from paginated result
+  const expenses = expensesResult?.data || [];
+  const paginationMetadata = expensesResult?.pagination;
 
   // Define expense table columns
   const expenseColumns = [
@@ -407,28 +446,10 @@ export default function ExpenseManagement() {
     },
   ];
 
-  // Calculate summary stats
-  const totalExpenses = expenses.length;
-  const totalAmount = expenses.reduce((sum: number, expense: any) => 
-    sum + parseFloat(expense.amount || "0"), 0
-  );
-  const todaysExpenses = expenses.filter((expense: any) => {
-    try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      // Handle both expenseDate and paymentDate fields
-      const dateField = expense.expenseDate || expense.paymentDate;
-      if (!dateField) return false;
-      
-      const expenseDate = format(new Date(dateField), "yyyy-MM-dd");
-      return expenseDate === today;
-    } catch (error) {
-      // Skip expenses with invalid dates
-      return false;
-    }
-  });
-  const todaysAmount = todaysExpenses.reduce((sum: number, expense: any) => 
-    sum + parseFloat(expense.amount || "0"), 0
-  );
+  // Calculate summary stats using server totals
+  const totalExpenses = paginationMetadata?.total || 0;
+  // Note: totalAmount and todaysAmount removed as they would be misleading from current page only
+  // Consider adding /api/expenses/stats endpoint for accurate aggregates with same filters
   const totalCategories = categories.length;
 
   if (expensesLoading || categoriesLoading) {
@@ -444,6 +465,27 @@ export default function ExpenseManagement() {
               ))}
             </div>
             <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || categoriesError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Expenses</h2>
+            <p className="text-gray-600 mb-6">
+              {isError && error instanceof Error ? error.message : 
+               categoriesError && categoriesErrorMessage instanceof Error ? categoriesErrorMessage.message :
+               "Failed to load expenses. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
           </div>
         </div>
       </div>
@@ -494,31 +536,8 @@ export default function ExpenseManagement() {
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  ₹{totalAmount.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Total spent</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Today's Expenses</CardTitle>
-                <Calendar className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  ₹{todaysAmount.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">{todaysExpenses.length} expenses</p>
-              </CardContent>
-            </Card>
+            {/* Amount aggregates removed - would be misleading from current page only */}
+            {/* Consider adding /api/expenses/stats endpoint for accurate totals with same filters */}
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -545,7 +564,7 @@ export default function ExpenseManagement() {
                   <div className="flex justify-between items-center">
                     <CardTitle>Expenses</CardTitle>
                     <div className="flex items-center space-x-2">
-                      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <Select value={selectedCategory} onValueChange={handleCategoryFilterChange}>
                         <SelectTrigger className="w-40" data-testid="select-category-filter">
                           <SelectValue placeholder="All Categories" />
                         </SelectTrigger>
@@ -558,7 +577,7 @@ export default function ExpenseManagement() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Select value={selectedPaymentMode} onValueChange={setSelectedPaymentMode}>
+                      <Select value={selectedPaymentMode} onValueChange={handlePaymentModeFilterChange}>
                         <SelectTrigger className="w-40" data-testid="select-payment-mode-filter">
                           <SelectValue placeholder="All Payment Modes" />
                         </SelectTrigger>
@@ -570,22 +589,19 @@ export default function ExpenseManagement() {
                           <SelectItem value="Card">Card</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Input
-                        placeholder="Search expenses..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-64"
-                        data-testid="input-search"
-                      />
+
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <DataTable
-                    data={filteredExpenses}
+                    data={expenses}
                     columns={expenseColumns}
-                    searchTerm={searchTerm}
-                    searchFields={["description"]}
+                    paginationMetadata={paginationMetadata}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    onSearchChange={handleSearchChange}
+                    onSortChange={handleSortChange}
                     isLoading={expensesLoading}
                     enableRowSelection={true}
                     rowKey="id"
@@ -605,8 +621,6 @@ export default function ExpenseManagement() {
                   <DataTable
                     data={categories}
                     columns={categoryColumns}
-                    searchTerm=""
-                    searchFields={["name", "description"]}
                     isLoading={categoriesLoading}
                     enableRowSelection={true}
                     rowKey="id"

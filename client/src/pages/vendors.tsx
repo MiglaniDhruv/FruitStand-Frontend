@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,16 +12,35 @@ import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
+import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
 
 export default function Vendors() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "name",
+    sortOrder: "asc"
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: vendors, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/vendors"],
+  const { data: vendorsResult, isLoading } = useQuery<PaginatedResult<Vendor>>({
+    queryKey: ["/api/vendors", paginationOptions],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      
+      const response = await authenticatedApiRequest("GET", `/api/vendors?${params.toString()}`);
+      return response.json();
+    },
+    placeholderData: keepPreviousData,
   });
 
   const deleteVendorMutation = useMutation({
@@ -43,6 +62,22 @@ export default function Vendors() {
       });
     },
   });
+
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
 
   // Define table columns
   const columns = [
@@ -136,10 +171,12 @@ export default function Vendors() {
                 Manage your vendor information and contacts
               </p>
             </div>
-            <Button onClick={() => setShowForm(true)} data-testid="button-add-vendor">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Vendor
-            </Button>
+            <PermissionGuard permission={PERMISSIONS.MANAGE_VENDORS}>
+              <Button onClick={() => setShowForm(true)} data-testid="button-add-vendor">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Vendor
+              </Button>
+            </PermissionGuard>
           </div>
         </header>
 
@@ -149,24 +186,17 @@ export default function Vendors() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>All Vendors</CardTitle>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search vendors..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-64"
-                    data-testid="input-search-vendors"
-                  />
-                </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={vendors || []}
+                data={vendorsResult?.data || []}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["name", "contactPerson", "phone", "gstNumber"]}
+                paginationMetadata={vendorsResult?.pagination}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

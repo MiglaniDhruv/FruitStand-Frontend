@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { PaginationMetadata } from "@shared/schema";
 
 interface DataTableColumn<T> {
   accessorKey: string;
@@ -20,52 +21,53 @@ interface DataTableColumn<T> {
 interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
-  searchTerm?: string;
-  searchFields?: string[];
-  pageSize?: number;
-  pageSizeOptions?: number[];
   enableRowSelection?: boolean;
-  onRowSelect?: (selectedRows: T[]) => void;
+  /** 
+   * Called with selected items from current page only. 
+   * Use onRowSelectIds for global selection tracking.
+   */
+  onRowSelect?: (selectedItems: T[]) => void;
+  /**
+   * Called with all selected row IDs across all pages.
+   * Provides global selection state management.
+   */
+  onRowSelectIds?: (ids: any[]) => void;
+  /**
+   * Selection behavior mode:
+   * - 'page': Selection is cleared when changing pages (default)
+   * - 'global': Selection persists across page changes
+   */
+  selectionMode?: 'page' | 'global';
+  /**
+   * Key to use for row identification (default: "id")
+   */
   rowKey?: string;
   isLoading?: boolean;
+  paginationMetadata?: PaginationMetadata;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  onSearchChange?: (search: string) => void;
+  onSortChange?: (sortBy: string, sortOrder: string) => void;
+  pageSizeOptions?: number[];
 }
 
 export function DataTable<T>({
   data,
   columns,
-  searchTerm = "",
-  searchFields = [],
-  pageSize: initialPageSize = 10,
-  pageSizeOptions = [10, 20, 50, 100],
+  paginationMetadata,
+  onPageChange,
+  onPageSizeChange,
+  onSearchChange,
+  onSortChange,
   enableRowSelection = false,
   onRowSelect,
+  onRowSelectIds,
+  selectionMode = 'page',
   rowKey = "id",
   isLoading = false,
+  pageSizeOptions,
 }: DataTableProps<T>) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(initialPageSize);
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
-
-  // Filter data based on search term
-  const filteredData = useMemo(() => {
-    if (!searchTerm || searchFields.length === 0) return data;
-    
-    return data.filter((item) =>
-      searchFields.some((field) => {
-        const value = getNestedValue(item, field);
-        return value?.toString().toLowerCase().includes(searchTerm.toLowerCase());
-      })
-    );
-  }, [data, searchTerm, searchFields]);
-
-  // Paginate filtered data
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredData.slice(startIndex, endIndex);
-  }, [filteredData, currentPage, pageSize]);
-
-  const totalPages = Math.ceil(filteredData.length / pageSize);
 
   // Helper function to get nested object values
   function getNestedValue(obj: any, path: string) {
@@ -74,13 +76,24 @@ export function DataTable<T>({
 
   // Handle page size change
   const handlePageSizeChange = (newPageSize: number) => {
-    setPageSize(newPageSize);
-    setCurrentPage(1); // Reset to first page when changing page size
+    // Clear selections when changing page size in 'page' mode
+    if (selectionMode === 'page') {
+      setSelectedRows(new Set());
+      onRowSelect?.([]);
+      onRowSelectIds?.([]);
+    }
+    onPageSizeChange?.(newPageSize);
   };
 
   // Handle page change
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    // Clear selections when changing pages in 'page' mode
+    if (selectionMode === 'page') {
+      setSelectedRows(new Set());
+      onRowSelect?.([]);
+      onRowSelectIds?.([]);
+    }
+    onPageChange?.(page);
   };
 
   // Handle row selection
@@ -93,39 +106,77 @@ export function DataTable<T>({
     }
     setSelectedRows(newSelectedRows);
     
+    // Call onRowSelect with current page items only
     if (onRowSelect) {
       const selectedItems = data.filter(item => 
         newSelectedRows.has(getNestedValue(item, rowKey))
       );
       onRowSelect(selectedItems);
     }
-  };
 
-  // Handle select all
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allRowIds = new Set(
-        paginatedData.map(item => getNestedValue(item, rowKey))
-      );
-      setSelectedRows(allRowIds);
-      if (onRowSelect) {
-        onRowSelect(paginatedData);
-      }
-    } else {
-      setSelectedRows(new Set());
-      if (onRowSelect) {
-        onRowSelect([]);
-      }
+    // Call onRowSelectIds with all selected IDs (global scope)
+    if (onRowSelectIds) {
+      onRowSelectIds(Array.from(newSelectedRows));
     }
   };
 
-  const isAllSelected = paginatedData.length > 0 && 
-    paginatedData.every(item => selectedRows.has(getNestedValue(item, rowKey)));
-  const isIndeterminate = paginatedData.some(item => 
+  // Handle select all
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    // Normalize indeterminate to false
+    const isChecked = checked === true;
+    
+    let newSelectedRows: Set<any>;
+    
+    if (isChecked) {
+      if (selectionMode === 'page') {
+        // In page mode, select only current page items
+        newSelectedRows = new Set(
+          data.map(item => getNestedValue(item, rowKey))
+        );
+      } else {
+        // In global mode, add current page items to existing selection
+        newSelectedRows = new Set(selectedRows);
+        data.forEach(item => {
+          newSelectedRows.add(getNestedValue(item, rowKey));
+        });
+      }
+    } else {
+      if (selectionMode === 'page') {
+        // In page mode, deselect only current page items
+        newSelectedRows = new Set(selectedRows);
+        data.forEach(item => {
+          newSelectedRows.delete(getNestedValue(item, rowKey));
+        });
+      } else {
+        // In global mode, clear all selections
+        newSelectedRows = new Set();
+      }
+    }
+    
+    setSelectedRows(newSelectedRows);
+    
+    // Call onRowSelect with current page selected items
+    if (onRowSelect) {
+      const selectedItems = data.filter(item => 
+        newSelectedRows.has(getNestedValue(item, rowKey))
+      );
+      onRowSelect(selectedItems);
+    }
+
+    // Call onRowSelectIds with all selected IDs
+    if (onRowSelectIds) {
+      onRowSelectIds(Array.from(newSelectedRows));
+    }
+  };
+
+  const isAllSelected = data.length > 0 && 
+    data.every(item => selectedRows.has(getNestedValue(item, rowKey)));
+  const isIndeterminate = data.some(item => 
     selectedRows.has(getNestedValue(item, rowKey))
   ) && !isAllSelected;
 
   if (isLoading) {
+    const loadingPageSize = paginationMetadata?.limit || 10;
     return (
       <div className="space-y-4">
         <div className="rounded-md border">
@@ -141,7 +192,7 @@ export function DataTable<T>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Array.from({ length: pageSize }).map((_, index) => (
+              {Array.from({ length: loadingPageSize }).map((_, index) => (
                 <TableRow key={index}>
                   {enableRowSelection && (
                     <TableCell>
@@ -159,14 +210,12 @@ export function DataTable<T>({
           </Table>
         </div>
         <DataTablePagination
-          currentPage={1}
-          totalPages={1}
-          pageSize={pageSize}
-          totalItems={0}
+          paginationMetadata={paginationMetadata}
           onPageChange={() => {}}
           onPageSizeChange={() => {}}
-          pageSizeOptions={pageSizeOptions}
           selectedRowCount={0}
+          isLoading={true}
+          pageSizeOptions={pageSizeOptions}
         />
       </div>
     );
@@ -197,7 +246,7 @@ export function DataTable<T>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.length === 0 ? (
+            {data.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length + (enableRowSelection ? 1 : 0)}
@@ -207,7 +256,7 @@ export function DataTable<T>({
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedData.map((item, index) => {
+              data.map((item, index) => {
                 const rowId = getNestedValue(item, rowKey);
                 const isSelected = selectedRows.has(rowId);
                 
@@ -242,14 +291,11 @@ export function DataTable<T>({
         </Table>
       </div>
       <DataTablePagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        totalItems={filteredData.length}
+        paginationMetadata={paginationMetadata}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
-        pageSizeOptions={pageSizeOptions}
         selectedRowCount={selectedRows.size}
+        pageSizeOptions={pageSizeOptions}
       />
     </div>
   );

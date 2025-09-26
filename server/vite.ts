@@ -5,6 +5,14 @@ import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { fileURLToPath } from "url";
+
+// Polyfill for import.meta.dirname
+if (!import.meta.dirname) {
+  Object.defineProperty(import.meta, "dirname", {
+    value: path.dirname(fileURLToPath(import.meta.url)),
+  });
+}
 
 const viteLogger = createLogger();
 

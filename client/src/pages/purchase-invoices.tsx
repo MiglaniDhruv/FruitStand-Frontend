@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PaginationOptions, PaginatedResult, InvoiceWithItems } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -63,7 +64,13 @@ const paymentSchema = z.object({
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
 export default function PurchaseInvoices() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "invoiceDate",
+    sortOrder: "desc"
+  });
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -92,8 +99,21 @@ export default function PurchaseInvoices() {
   });
 
   // Fetch data
-  const { data: invoices, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/purchase-invoices"],
+  const { data: invoicesResult, isLoading, isError, error } = useQuery<PaginatedResult<InvoiceWithItems>>({
+    queryKey: ["/api/purchase-invoices", paginationOptions, statusFilter],
+    placeholderData: (prevData) => prevData,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (statusFilter !== "all") params.append('status', statusFilter);
+      
+      const response = await authenticatedApiRequest("GET", `/api/purchase-invoices?${params.toString()}`);
+      return response.json();
+    },
   });
 
   const { data: payments = [] } = useQuery({
@@ -111,6 +131,28 @@ export default function PurchaseInvoices() {
       return response.json();
     },
   });
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
 
   // Payment creation mutation
   const createPaymentMutation = useMutation({
@@ -262,11 +304,9 @@ export default function PurchaseInvoices() {
     },
   ];
 
-  // Filter invoices with custom logic for status
-  const filteredInvoices = invoices?.filter((invoice: any) => {
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
-    return matchesStatus;
-  }) || [];
+  // Extract invoices and metadata from paginated result
+  const invoices = invoicesResult?.data || [];
+  const paginationMetadata = invoicesResult?.pagination;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -285,6 +325,44 @@ export default function PurchaseInvoices() {
   const handleViewInvoice = (invoice: any) => {
     setSelectedInvoice(invoice);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+            <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Purchase Invoices</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load purchase invoices. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">
@@ -314,7 +392,7 @@ export default function PurchaseInvoices() {
               <div className="flex items-center justify-between">
                 <CardTitle>All Invoices</CardTitle>
                 <div className="flex items-center space-x-4">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
                     <SelectTrigger className="w-48" data-testid="select-status-filter">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
@@ -325,25 +403,19 @@ export default function PurchaseInvoices() {
                       <SelectItem value="Unpaid">Unpaid</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      placeholder="Search invoices..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-64"
-                      data-testid="input-search-invoices"
-                    />
-                  </div>
+
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredInvoices}
+                data={invoices}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["invoiceNumber", "vendor.name"]}
+                paginationMetadata={paginationMetadata}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

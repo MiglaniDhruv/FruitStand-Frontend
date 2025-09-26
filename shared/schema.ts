@@ -466,3 +466,28 @@ export type ExpenseWithCategory = Expense & {
 export type CrateTransactionWithRetailer = CrateTransaction & {
   retailer: Retailer;
 };
+
+// Pagination types
+export type SortOrder = 'asc' | 'desc';
+
+export interface PaginationOptions {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+}
+
+export interface PaginationMetadata {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  pagination: PaginationMetadata;
+}

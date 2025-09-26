@@ -38,17 +38,22 @@ import {
   type InsertExpense,
   type SalesInvoiceWithDetails,
   type ExpenseWithCategory,
-  type CrateTransactionWithRetailer
+  type CrateTransactionWithRetailer,
+  type PaginationOptions,
+  type PaginationMetadata,
+  type PaginatedResult,
+  type SortOrder
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 import { db } from "./db";
-import { eq, desc, and, asc, sum, sql } from "drizzle-orm";
+import { eq, desc, and, asc, sum, sql, ilike, or, count, gte, lte, lt, inArray } from "drizzle-orm";
 import { 
   users, 
   vendors, 
   items, 
   bankAccounts, 
   purchaseInvoices, 
+
   invoiceItems, 
   payments, 
   stock, 
@@ -64,9 +69,118 @@ import {
   expenses
 } from "@shared/schema";
 
+// Pagination constants
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
+
+// Pagination utility functions
+function calculateOffset(page: number, limit: number): number {
+  const safePage = Math.max(1, page);
+  const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_SIZE);
+  return (safePage - 1) * safeLimit;
+}
+
+function buildPaginationMetadata(page: number, limit: number, total: number): PaginationMetadata {
+  const safePage = Math.max(1, page);
+  const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_SIZE);
+  // Convention: totalPages is normalized to 1 when total is 0 to ensure consistent
+  // pagination UI behavior (always shows at least 1 page even for empty results)
+  const totalPages = total === 0 ? 1 : Math.ceil(total / safeLimit);
+  
+  return {
+    page: safePage,
+    limit: safeLimit,
+    total,
+    totalPages,
+    hasNext: safePage < totalPages,
+    hasPrevious: safePage > 1
+  };
+}
+
+function applySorting(query: any, sortBy: string, sortOrder: SortOrder, tableColumns: any): any {
+  if (!sortBy || !tableColumns[sortBy]) {
+    return query;
+  }
+  
+  const column = tableColumns[sortBy];
+  return sortOrder === 'desc' ? query.orderBy(desc(column)) : query.orderBy(asc(column));
+}
+
+function applySearchFilter(query: any, search: string, searchableColumns: any[], existingPredicate?: any): any {
+  if (!search || !searchableColumns.length) {
+    return query;
+  }
+  
+  const searchConditions = searchableColumns.map(column => 
+    ilike(column, `%${search}%`)
+  );
+  
+  const searchPredicate = or(...searchConditions);
+  
+  // Compose with existing predicate if provided
+  if (existingPredicate) {
+    return query.where(and(existingPredicate, searchPredicate));
+  }
+  
+  return query.where(searchPredicate);
+}
+
+// Helper function to normalize pagination options
+function normalizePaginationOptions(options: PaginationOptions): {
+  page: number;
+  limit: number;
+  offset: number;
+} {
+  const page = Math.max(1, options.page || 1);
+  const limit = Math.min(Math.max(1, options.limit || DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+  const offset = calculateOffset(page, limit);
+  
+  return { page, limit, offset };
+}
+
+// Helper function to build count query with search
+async function getCountWithSearch(
+  table: any, 
+  searchableColumns?: any[], 
+  search?: string, 
+  additionalConditions?: any
+): Promise<number> {
+  const countQuery = db.select({ count: count() }).from(table);
+  
+  let conditions = [];
+  
+  if (additionalConditions) {
+    conditions.push(additionalConditions);
+  }
+  
+  if (search && searchableColumns?.length) {
+    const searchConditions = searchableColumns.map(column => 
+      ilike(column, `%${search}%`)
+    );
+    conditions.push(or(...searchConditions));
+  }
+  
+  if (conditions.length > 0) {
+    countQuery.where(conditions.length === 1 ? conditions[0] : and(...conditions));
+  }
+  
+  const result = await countQuery;
+  return result[0]?.count || 0;
+}
+
+async function getTotalCount(table: any, whereConditions?: any): Promise<number> {
+  const countQuery = db.select({ count: count() }).from(table);
+  if (whereConditions) {
+    countQuery.where(whereConditions);
+  }
+  const result = await countQuery;
+  return result[0]?.count || 0;
+}
+
 export interface IStorage {
   // User management
   getUsers(): Promise<User[]>;
+  getUsersPaginated(options: PaginationOptions): Promise<PaginatedResult<User>>;
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -76,6 +190,7 @@ export interface IStorage {
   
   // Vendor management
   getVendors(): Promise<Vendor[]>;
+  getVendorsPaginated(options: PaginationOptions): Promise<PaginatedResult<Vendor>>;
   getVendor(id: string): Promise<Vendor | undefined>;
   createVendor(vendor: InsertVendor): Promise<Vendor>;
   updateVendor(id: string, vendor: Partial<InsertVendor>): Promise<Vendor | undefined>;
@@ -83,6 +198,7 @@ export interface IStorage {
   
   // Item management
   getItems(): Promise<Item[]>;
+  getItemsPaginated(options: PaginationOptions): Promise<PaginatedResult<Item>>;
   getItemsByVendor(vendorId: string): Promise<Item[]>;
   getItem(id: string): Promise<Item | undefined>;
   createItem(item: InsertItem): Promise<Item>;
@@ -99,6 +215,7 @@ export interface IStorage {
   getPurchaseInvoices(): Promise<InvoiceWithItems[]>;
   getPurchaseInvoice(id: string): Promise<InvoiceWithItems | undefined>;
   createPurchaseInvoice(invoice: InsertPurchaseInvoice, items: InsertInvoiceItem[]): Promise<InvoiceWithItems>;
+  getPurchaseInvoicesPaginated(options: PaginationOptions): Promise<PaginatedResult<InvoiceWithItems>>;
   
   // Payment management
   getPayments(): Promise<PaymentWithDetails[]>;
@@ -109,6 +226,7 @@ export interface IStorage {
   getStock(): Promise<StockWithItem[]>;
   getStockByItem(itemId: string): Promise<Stock | undefined>;
   updateStock(itemId: string, stock: Partial<InsertStock>): Promise<Stock>;
+  getStockPaginated(options: PaginationOptions): Promise<PaginatedResult<StockWithItem>>;
   
   // Stock movement management
   getStockMovements(): Promise<StockMovement[]>;
@@ -123,12 +241,23 @@ export interface IStorage {
   createRetailer(retailer: InsertRetailer): Promise<Retailer>;
   updateRetailer(id: string, retailer: Partial<InsertRetailer>): Promise<Retailer | undefined>;
   deleteRetailer(id: string): Promise<boolean>;
+  getRetailersPaginated(options: PaginationOptions): Promise<PaginatedResult<Retailer>>;
   
   // Sales invoice management
   getSalesInvoices(): Promise<SalesInvoiceWithDetails[]>;
   getSalesInvoice(id: string): Promise<SalesInvoiceWithDetails | undefined>;
   createSalesInvoice(invoice: InsertSalesInvoice, items: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails>;
   markSalesInvoiceAsPaid(invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallAdded: string; retailer: Retailer }>;
+  
+  // Paginated method for sales invoices
+  getSalesInvoicesPaginated(
+    options?: PaginationOptions & {
+      search?: string;
+      status?: 'paid' | 'unpaid';
+      retailerId?: string;
+      dateRange?: { from?: string; to?: string };
+    }
+  ): Promise<PaginatedResult<SalesInvoiceWithDetails>>;
   
   // Sales payment management
   getSalesPayments(): Promise<SalesPayment[]>;
@@ -139,6 +268,16 @@ export interface IStorage {
   getCrateTransactions(): Promise<CrateTransactionWithRetailer[]>;
   getCrateTransactionsByRetailer(retailerId: string): Promise<CrateTransaction[]>;
   createCrateTransaction(transaction: InsertCrateTransaction): Promise<CrateTransaction>;
+  
+  // Paginated method for crate transactions  
+  getCrateTransactionsPaginated(
+    options?: PaginationOptions & {
+      search?: string;
+      type?: 'given' | 'returned';
+      retailerId?: string;
+      dateRange?: { from?: string; to?: string };
+    }
+  ): Promise<PaginatedResult<CrateTransactionWithRetailer>>;
   
   // Expense category management
   getExpenseCategories(): Promise<ExpenseCategory[]>;
@@ -216,6 +355,45 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
+  async getUsersPaginated(options: PaginationOptions): Promise<PaginatedResult<User>> {
+    const { page, limit, offset } = normalizePaginationOptions(options);
+    
+    // Define table columns for sorting and searching
+    const tableColumns = {
+      username: users.username,
+      name: users.name,
+      role: users.role,
+      createdAt: users.createdAt
+    };
+    
+    const searchableColumns = [users.username, users.name];
+    
+    // Build base query
+    let query = db.select().from(users);
+    
+    // Apply search filter using helper
+    if (options.search) {
+      query = applySearchFilter(query, options.search, searchableColumns);
+    }
+    
+    // Apply sorting using helper
+    query = applySorting(query, options.sortBy || 'createdAt', options.sortOrder || 'asc', tableColumns);
+    
+    // Apply pagination and execute
+    const data = await query.limit(limit).offset(offset);
+    
+    // Get total count
+    const total = await getCountWithSearch(
+      users, 
+      options.search ? searchableColumns : undefined, 
+      options.search
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
   // Vendor management
   async getVendors(): Promise<Vendor[]> {
     return await db.select().from(vendors).where(eq(vendors.isActive, true)).orderBy(asc(vendors.name));
@@ -247,6 +425,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vendors.id, id))
       .returning();
     return !!vendor;
+  }
+
+  async getVendorsPaginated(options: PaginationOptions): Promise<PaginatedResult<Vendor>> {
+    const { page, limit, offset } = normalizePaginationOptions(options);
+    
+    // Define table columns for sorting and searching
+    const tableColumns = {
+      name: vendors.name,
+      contactPerson: vendors.contactPerson,
+      createdAt: vendors.createdAt
+    };
+    
+    const searchableColumns = [vendors.name, vendors.contactPerson];
+    
+    // Build base query with isActive filter
+    let query = db.select().from(vendors).where(eq(vendors.isActive, true));
+    
+    // Apply search filter using helper
+    if (options.search) {
+      query = applySearchFilter(query, options.search, searchableColumns, eq(vendors.isActive, true));
+    }
+    
+    // Apply sorting using helper
+    query = applySorting(query, options.sortBy || 'name', options.sortOrder || 'asc', tableColumns);
+    
+    // Apply pagination and execute
+    const data = await query.limit(limit).offset(offset);
+    
+    // Get total count
+    const total = await getCountWithSearch(
+      vendors, 
+      options.search ? searchableColumns : undefined, 
+      options.search,
+      eq(vendors.isActive, true)
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
   }
 
   // Item management
@@ -286,6 +503,623 @@ export class DatabaseStorage implements IStorage {
       .where(eq(items.id, id))
       .returning();
     return !!item;
+  }
+
+  async getItemsPaginated(options: PaginationOptions): Promise<PaginatedResult<Item>> {
+    const { page, limit, offset } = normalizePaginationOptions(options);
+    
+    // Define table columns for sorting and searching
+    const tableColumns = {
+      name: items.name,
+      quality: items.quality,
+      unit: items.unit,
+      createdAt: items.createdAt
+    };
+    
+    const searchableColumns = [items.name];
+    
+    // Build base query with isActive filter
+    let query = db.select().from(items).where(eq(items.isActive, true));
+    
+    // Apply search filter using helper
+    if (options.search) {
+      query = applySearchFilter(query, options.search, searchableColumns, eq(items.isActive, true));
+    }
+    
+    // Apply sorting using helper
+    query = applySorting(query, options.sortBy || 'name', options.sortOrder || 'asc', tableColumns);
+    
+    // Apply pagination and execute
+    const data = await query.limit(limit).offset(offset);
+    
+    // Get total count
+    const total = await getCountWithSearch(
+      items, 
+      options.search ? searchableColumns : undefined, 
+      options.search,
+      eq(items.isActive, true)
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
+  async getRetailersPaginated(options?: PaginationOptions & {
+    search?: string;
+    status?: 'active' | 'inactive';
+    dateRange?: { from?: string; to?: string };
+  }): Promise<PaginatedResult<Retailer>> {
+    const { page, limit, offset } = normalizePaginationOptions(options || {});
+    
+    // Define table columns for sorting and searching
+    const tableColumns = {
+      name: retailers.name,
+      phone: retailers.phone,
+      createdAt: retailers.createdAt
+    };
+    
+    const searchableColumns = [retailers.name, retailers.phone];
+    
+    // Build base query with isActive filter
+    let query = db.select().from(retailers).where(eq(retailers.isActive, true));
+    
+    // Apply search filter
+    if (options?.search) {
+      query = applySearchFilter(query, options.search, searchableColumns, eq(retailers.isActive, true));
+    }
+    
+    // Apply sorting
+    query = applySorting(query, options?.sortBy || 'createdAt', options?.sortOrder || 'desc', tableColumns);
+    
+    // Apply pagination and execute
+    const data = await query.limit(limit).offset(offset);
+    
+    // Get total count
+    const total = await getCountWithSearch(
+      retailers, 
+      options?.search ? searchableColumns : undefined, 
+      options?.search,
+      eq(retailers.isActive, true)
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
+  async getStockPaginated(options?: PaginationOptions & {
+    search?: string;
+    lowStock?: boolean;
+  }): Promise<PaginatedResult<StockWithItem>> {
+    const { page, limit, offset } = normalizePaginationOptions(options || {});
+    
+    // Build WHERE conditions array
+    const whereConditions = [];
+    
+    // Filter by active items only
+    whereConditions.push(eq(items.isActive, true));
+    
+    // Apply low stock filter
+    if (options?.lowStock) {
+      whereConditions.push(or(
+        lte(stock.quantityInCrates, '5'),
+        lte(stock.quantityInBoxes, '10'),
+        lte(stock.quantityInKgs, '50')
+      ));
+    }
+    
+
+    
+    // Handle search by getting matching item/vendor IDs
+    if (options?.search) {
+      // Get item IDs that match search
+      const matchingItems = await db.select({ id: items.id })
+        .from(items)
+        .where(ilike(items.name, `%${options.search}%`));
+      const itemIds = matchingItems.map(i => i.id);
+      
+      // Get vendor IDs that match search
+      const matchingVendors = await db.select({ id: vendors.id })
+        .from(vendors)
+        .where(ilike(vendors.name, `%${options.search}%`));
+      const vendorIds = matchingVendors.map(v => v.id);
+      
+      // Build search conditions
+      const searchConditions = [];
+      
+      if (itemIds.length > 0) {
+        searchConditions.push(inArray(items.id, itemIds));
+      }
+      
+      if (vendorIds.length > 0) {
+        searchConditions.push(inArray(items.vendorId, vendorIds));
+      }
+      
+      if (searchConditions.length > 0) {
+        whereConditions.push(or(...searchConditions));
+      }
+    }
+    
+    // Combine all conditions
+    const finalWhereCondition = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    
+    // Apply sorting
+    const sortBy = options?.sortBy || 'lastUpdated';
+    const sortOrder = options?.sortOrder || 'desc';
+    
+    // Build sorting order
+    let orderByClause;
+    if (sortBy === 'itemName') {
+      orderByClause = sortOrder === 'asc' ? asc(items.name) : desc(items.name);
+    } else if (sortBy === 'vendorName') {
+      orderByClause = sortOrder === 'asc' ? asc(vendors.name) : desc(vendors.name);
+    } else if (sortBy === 'quantityInCrates') {
+      orderByClause = sortOrder === 'asc' ? asc(stock.quantityInCrates) : desc(stock.quantityInCrates);
+    } else if (sortBy === 'quantityInBoxes') {
+      orderByClause = sortOrder === 'asc' ? asc(stock.quantityInBoxes) : desc(stock.quantityInBoxes);
+    } else if (sortBy === 'quantityInKgs') {
+      orderByClause = sortOrder === 'asc' ? asc(stock.quantityInKgs) : desc(stock.quantityInKgs);
+    } else { // default to lastUpdated
+      orderByClause = sortOrder === 'asc' ? asc(stock.lastUpdated) : desc(stock.lastUpdated);
+    }
+    
+    // Build and execute paginated query with JOINs
+    const stockData = await (
+      finalWhereCondition
+        ? db.select({
+            stock: stock,
+            item: items,
+            vendor: vendors
+          })
+          .from(stock)
+          .leftJoin(items, eq(stock.itemId, items.id))
+          .leftJoin(vendors, eq(items.vendorId, vendors.id))
+          .where(finalWhereCondition)
+          .orderBy(orderByClause)
+          .limit(limit)
+          .offset(offset)
+        : db.select({
+            stock: stock,
+            item: items,
+            vendor: vendors
+          })
+          .from(stock)
+          .leftJoin(items, eq(stock.itemId, items.id))
+          .leftJoin(vendors, eq(items.vendorId, vendors.id))
+          .orderBy(orderByClause)
+          .limit(limit)
+          .offset(offset)
+    );
+    
+    // Assemble final data
+    const data = stockData
+      .filter(record => record.item && record.vendor) // Filter out records without valid item/vendor
+      .map(record => ({
+        ...record.stock,
+        item: { ...record.item!, vendor: record.vendor! }
+      })) as StockWithItem[];
+    
+    // Get total count with same conditions
+    const [{ count: total }] = await (
+      finalWhereCondition
+        ? db.select({ count: count() })
+          .from(stock)
+          .leftJoin(items, eq(stock.itemId, items.id))
+          .leftJoin(vendors, eq(items.vendorId, vendors.id))
+          .where(finalWhereCondition)
+        : db.select({ count: count() })
+          .from(stock)
+          .leftJoin(items, eq(stock.itemId, items.id))
+          .leftJoin(vendors, eq(items.vendorId, vendors.id))
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
+  async getPurchaseInvoicesPaginated(options?: PaginationOptions & {
+    search?: string;
+    status?: 'paid' | 'unpaid';
+    vendorId?: string;
+    dateRange?: { from?: string; to?: string };
+  }): Promise<PaginatedResult<InvoiceWithItems>> {
+    const { page, limit, offset } = normalizePaginationOptions(options || {});
+    
+    // Build WHERE conditions array
+    const whereConditions = [];
+    
+    // Apply status filter 
+    if (options?.status === 'paid') {
+      whereConditions.push(eq(purchaseInvoices.status, 'Paid'));
+    } else if (options?.status === 'unpaid') {
+      whereConditions.push(or(
+        eq(purchaseInvoices.status, 'Unpaid'),
+        eq(purchaseInvoices.status, 'Partially Paid')
+      ));
+    }
+    
+    // Apply vendor filter
+    if (options?.vendorId) {
+      whereConditions.push(eq(purchaseInvoices.vendorId, options.vendorId));
+    }
+    
+    // Apply date range filter
+    if (options?.dateRange?.from) {
+      whereConditions.push(gte(purchaseInvoices.invoiceDate, new Date(options.dateRange.from)));
+    }
+    if (options?.dateRange?.to) {
+      whereConditions.push(lte(purchaseInvoices.invoiceDate, new Date(options.dateRange.to)));
+    }
+    
+    // Handle search by getting vendor IDs if searching by vendor name
+    if (options?.search) {
+      // Get vendor IDs that match search
+      const matchingVendors = await db.select({ id: vendors.id })
+        .from(vendors)
+        .where(ilike(vendors.name, `%${options.search}%`));
+      const vendorIds = matchingVendors.map(v => v.id);
+      
+      // Build search conditions
+      const searchConditions = [
+        ilike(purchaseInvoices.invoiceNumber, `%${options.search}%`),
+        ilike(purchaseInvoices.status, `%${options.search}%`)
+      ];
+      
+      if (vendorIds.length > 0) {
+        searchConditions.push(inArray(purchaseInvoices.vendorId, vendorIds));
+      }
+      
+      whereConditions.push(or(...searchConditions));
+    }
+    
+    // Combine all conditions
+    const finalWhereCondition = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    
+    // Apply sorting
+    const sortBy = options?.sortBy || 'createdAt';
+    const sortOrder = options?.sortOrder || 'desc';
+    
+    // Build sorting order
+    let orderByClause;
+    if (sortBy === 'invoiceDate') {
+      orderByClause = sortOrder === 'asc' ? asc(purchaseInvoices.invoiceDate) : desc(purchaseInvoices.invoiceDate);
+    } else if (sortBy === 'invoiceNumber') {
+      orderByClause = sortOrder === 'asc' ? asc(purchaseInvoices.invoiceNumber) : desc(purchaseInvoices.invoiceNumber);
+    } else if (sortBy === 'totalAmount') {
+      orderByClause = sortOrder === 'asc' ? asc(purchaseInvoices.netAmount) : desc(purchaseInvoices.netAmount);
+    } else if (sortBy === 'status') {
+      orderByClause = sortOrder === 'asc' ? asc(purchaseInvoices.status) : desc(purchaseInvoices.status);
+    } else { // default to createdAt
+      orderByClause = sortOrder === 'asc' ? asc(purchaseInvoices.createdAt) : desc(purchaseInvoices.createdAt);
+    }
+    
+    // Build and execute paginated query in one chain
+    const invoices = await (
+      finalWhereCondition
+        ? db.select().from(purchaseInvoices).where(finalWhereCondition).orderBy(orderByClause).limit(limit).offset(offset)
+        : db.select().from(purchaseInvoices).orderBy(orderByClause).limit(limit).offset(offset)
+    );
+    
+    // Get unique vendor IDs from results
+    const uniqueVendorIds = Array.from(new Set(invoices.map(inv => inv.vendorId)));
+    
+    // Batch fetch vendors
+    const vendorData = uniqueVendorIds.length > 0 ? 
+      await db.select()
+        .from(vendors)
+        .where(inArray(vendors.id, uniqueVendorIds)) : [];
+    
+    const vendorMap = vendorData.reduce((acc, vendor) => {
+      acc[vendor.id] = vendor;
+      return acc;
+    }, {} as Record<string, typeof vendorData[0]>);
+    
+    // Get invoice IDs for batched item fetching
+    const invoiceIds = invoices.map(inv => inv.id);
+    
+    // Batch fetch invoice items
+    const invoiceItemsData = invoiceIds.length > 0 ? 
+      await db.select()
+        .from(invoiceItems)
+        .where(inArray(invoiceItems.invoiceId, invoiceIds)) : [];
+    
+    // Group items by invoice ID
+    const itemsByInvoice = invoiceItemsData.reduce((acc, item) => {
+      if (!acc[item.invoiceId]) acc[item.invoiceId] = [];
+      acc[item.invoiceId].push(item);
+      return acc;
+    }, {} as Record<string, typeof invoiceItemsData>);
+    
+    // Assemble final data
+    const data = invoices
+      .filter(invoice => vendorMap[invoice.vendorId]) // Filter out invoices without valid vendors
+      .map(invoice => ({
+        ...invoice,
+        vendor: vendorMap[invoice.vendorId],
+        items: itemsByInvoice[invoice.id] || []
+      })) as InvoiceWithItems[];
+    
+    // Get total count with same conditions
+    const [{ count: total }] = await (
+      finalWhereCondition
+        ? db.select({ count: count() }).from(purchaseInvoices).where(finalWhereCondition)
+        : db.select({ count: count() }).from(purchaseInvoices)
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
+  async getSalesInvoicesPaginated(options?: PaginationOptions & {
+    search?: string;
+    status?: 'paid' | 'unpaid';
+    retailerId?: string;
+    dateRange?: { from?: string; to?: string };
+  }): Promise<PaginatedResult<SalesInvoiceWithDetails>> {
+    const { page, limit, offset } = normalizePaginationOptions(options || {});
+    
+    // Build WHERE conditions array
+    const whereConditions = [];
+    
+    // Apply status filter 
+    if (options?.status === 'paid') {
+      whereConditions.push(eq(salesInvoices.status, 'Paid'));
+    } else if (options?.status === 'unpaid') {
+      whereConditions.push(or(
+        eq(salesInvoices.status, 'Unpaid'),
+        eq(salesInvoices.status, 'Partially Paid')
+      ));
+    }
+    
+    // Apply retailer filter
+    if (options?.retailerId) {
+      whereConditions.push(eq(salesInvoices.retailerId, options.retailerId));
+    }
+    
+    // Apply date range filter
+    if (options?.dateRange?.from) {
+      whereConditions.push(gte(salesInvoices.invoiceDate, new Date(options.dateRange.from)));
+    }
+    if (options?.dateRange?.to) {
+      whereConditions.push(lte(salesInvoices.invoiceDate, new Date(options.dateRange.to)));
+    }
+    
+    // Handle search by getting retailer IDs if searching by retailer name
+    if (options?.search) {
+      // Get retailer IDs that match search
+      const matchingRetailers = await db.select({ id: retailers.id })
+        .from(retailers)
+        .where(ilike(retailers.name, `%${options.search}%`));
+      const retailerIds = matchingRetailers.map(r => r.id);
+      
+      // Build search conditions
+      const searchConditions = [
+        ilike(salesInvoices.invoiceNumber, `%${options.search}%`),
+        ilike(salesInvoices.status, `%${options.search}%`)
+      ];
+      
+      if (retailerIds.length > 0) {
+        searchConditions.push(inArray(salesInvoices.retailerId, retailerIds));
+      }
+      
+      whereConditions.push(or(...searchConditions));
+    }
+    
+    // Combine all conditions
+    const finalWhereCondition = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    
+    // Apply sorting
+    const sortBy = options?.sortBy || 'createdAt';
+    const sortOrder = options?.sortOrder || 'desc';
+    
+    // Build sorting order
+    let orderByClause;
+    if (sortBy === 'invoiceDate') {
+      orderByClause = sortOrder === 'asc' ? asc(salesInvoices.invoiceDate) : desc(salesInvoices.invoiceDate);
+    } else if (sortBy === 'invoiceNumber') {
+      orderByClause = sortOrder === 'asc' ? asc(salesInvoices.invoiceNumber) : desc(salesInvoices.invoiceNumber);
+    } else if (sortBy === 'totalAmount') {
+      orderByClause = sortOrder === 'asc' ? asc(salesInvoices.totalAmount) : desc(salesInvoices.totalAmount);
+    } else if (sortBy === 'status') {
+      orderByClause = sortOrder === 'asc' ? asc(salesInvoices.status) : desc(salesInvoices.status);
+    } else { // default to createdAt
+      orderByClause = sortOrder === 'asc' ? asc(salesInvoices.createdAt) : desc(salesInvoices.createdAt);
+    }
+    
+    // Build and execute paginated query in one chain
+    const invoices = await (
+      finalWhereCondition
+        ? db.select().from(salesInvoices).where(finalWhereCondition).orderBy(orderByClause).limit(limit).offset(offset)
+        : db.select().from(salesInvoices).orderBy(orderByClause).limit(limit).offset(offset)
+    );
+    
+    // Get unique retailer IDs from results
+    const uniqueRetailerIds = Array.from(new Set(invoices.map(inv => inv.retailerId)));
+    
+    // Batch fetch retailers
+    const retailerData = uniqueRetailerIds.length > 0 ? 
+      await db.select()
+        .from(retailers)
+        .where(inArray(retailers.id, uniqueRetailerIds)) : [];
+    
+    const retailerMap = retailerData.reduce((acc, retailer) => {
+      acc[retailer.id] = retailer;
+      return acc;
+    }, {} as Record<string, typeof retailerData[0]>);
+    
+    // Get invoice IDs for batched item fetching
+    const invoiceIds = invoices.map(inv => inv.id);
+    
+    // Batch fetch sales items
+    const salesItemsData = invoiceIds.length > 0 ? 
+      await db.select()
+        .from(salesInvoiceItems)
+        .where(inArray(salesInvoiceItems.invoiceId, invoiceIds)) : [];
+    
+    // Group items by invoice ID
+    const itemsByInvoice = salesItemsData.reduce((acc, item) => {
+      if (!acc[item.invoiceId]) acc[item.invoiceId] = [];
+      acc[item.invoiceId].push(item);
+      return acc;
+    }, {} as Record<string, typeof salesItemsData>);
+    
+    // Batch fetch sales payments
+    const paymentsData = invoiceIds.length > 0 ? 
+      await db.select()
+        .from(salesPayments)
+        .where(inArray(salesPayments.invoiceId, invoiceIds)) : [];
+    
+    // Group payments by invoice ID
+    const paymentsByInvoice = paymentsData.reduce((acc, payment) => {
+      if (!acc[payment.invoiceId]) acc[payment.invoiceId] = [];
+      acc[payment.invoiceId].push(payment);
+      return acc;
+    }, {} as Record<string, typeof paymentsData>);
+    
+    // Assemble final data
+    const data = invoices
+      .filter(invoice => retailerMap[invoice.retailerId]) // Filter out invoices without valid retailers
+      .map(invoice => ({
+        ...invoice,
+        retailer: retailerMap[invoice.retailerId],
+        items: itemsByInvoice[invoice.id] || [],
+        payments: paymentsByInvoice[invoice.id] || []
+      })) as SalesInvoiceWithDetails[];
+    
+    // Get total count with same conditions
+    const [{ count: total }] = await (
+      finalWhereCondition
+        ? db.select({ count: count() }).from(salesInvoices).where(finalWhereCondition)
+        : db.select({ count: count() }).from(salesInvoices)
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
+  }
+
+  async getCrateTransactionsPaginated(options?: PaginationOptions & {
+    search?: string;
+    type?: 'given' | 'returned';
+    retailerId?: string;
+    dateRange?: { from?: string; to?: string };
+  }): Promise<PaginatedResult<CrateTransactionWithRetailer>> {
+    const { page, limit, offset } = normalizePaginationOptions(options || {});
+    
+    // Build WHERE conditions array
+    const whereConditions = [];
+    
+    // Apply type filter
+    if (options?.type) {
+      const transactionType = options.type === 'given' ? 'Given' : 'Returned';
+      whereConditions.push(eq(crateTransactions.transactionType, transactionType));
+    }
+    
+    // Apply retailer filter
+    if (options?.retailerId) {
+      whereConditions.push(eq(crateTransactions.retailerId, options.retailerId));
+    }
+    
+    // Apply date range filter
+    if (options?.dateRange?.from) {
+      whereConditions.push(gte(crateTransactions.transactionDate, new Date(options.dateRange.from)));
+    }
+    if (options?.dateRange?.to) {
+      whereConditions.push(lte(crateTransactions.transactionDate, new Date(options.dateRange.to)));
+    }
+    
+    // Handle search by getting retailer IDs if searching by retailer name
+    if (options?.search) {
+      // Get retailer IDs that match search
+      const matchingRetailers = await db.select({ id: retailers.id })
+        .from(retailers)
+        .where(ilike(retailers.name, `%${options.search}%`));
+      const retailerIds = matchingRetailers.map(r => r.id);
+      
+      // Build search conditions
+      const searchConditions = [
+        ilike(crateTransactions.transactionType, `%${options.search}%`),
+        ilike(crateTransactions.notes, `%${options.search}%`)
+      ];
+      
+      if (retailerIds.length > 0) {
+        searchConditions.push(inArray(crateTransactions.retailerId, retailerIds));
+      }
+      
+      whereConditions.push(or(...searchConditions));
+    }
+    
+    // Combine all conditions
+    const finalWhereCondition = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    
+    // Apply sorting
+    const sortBy = options?.sortBy || 'createdAt';
+    const sortOrder = options?.sortOrder || 'desc';
+    
+    // Build sorting order
+    let orderByClause;
+    if (sortBy === 'retailerName') {
+      orderByClause = sortOrder === 'asc' ? asc(retailers.name) : desc(retailers.name);
+    } else if (sortBy === 'transactionDate') {
+      orderByClause = sortOrder === 'asc' ? asc(crateTransactions.transactionDate) : desc(crateTransactions.transactionDate);
+    } else if (sortBy === 'transactionType') {
+      orderByClause = sortOrder === 'asc' ? asc(crateTransactions.transactionType) : desc(crateTransactions.transactionType);
+    } else if (sortBy === 'quantity') {
+      orderByClause = sortOrder === 'asc' ? asc(crateTransactions.quantity) : desc(crateTransactions.quantity);
+    } else { // default to createdAt
+      orderByClause = sortOrder === 'asc' ? asc(crateTransactions.createdAt) : desc(crateTransactions.createdAt);
+    }
+    
+    // Build and execute paginated query with JOINs
+    const transactionData = await (
+      finalWhereCondition
+        ? db.select({
+            transaction: crateTransactions,
+            retailer: retailers
+          })
+          .from(crateTransactions)
+          .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id))
+          .where(finalWhereCondition)
+          .orderBy(orderByClause)
+          .limit(limit)
+          .offset(offset)
+        : db.select({
+            transaction: crateTransactions,
+            retailer: retailers
+          })
+          .from(crateTransactions)
+          .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id))
+          .orderBy(orderByClause)
+          .limit(limit)
+          .offset(offset)
+    );
+    
+    // Assemble final data
+    const data = transactionData
+      .filter(record => record.retailer) // Filter out transactions without valid retailers
+      .map(record => ({
+        ...record.transaction,
+        retailer: record.retailer!
+      })) as CrateTransactionWithRetailer[];
+    
+    // Get total count with same conditions
+    const [{ count: total }] = await (
+      finalWhereCondition
+        ? db.select({ count: count() })
+          .from(crateTransactions)
+          .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id))
+          .where(finalWhereCondition)
+        : db.select({ count: count() })
+          .from(crateTransactions)
+          .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id))
+    );
+    
+    const pagination = buildPaginationMetadata(page, limit, total);
+    
+    return { data, pagination };
   }
 
   // Bank account management

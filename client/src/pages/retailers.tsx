@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
+import { PaginationOptions, PaginatedResult, Retailer } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,13 @@ type RetailerFormData = z.infer<typeof retailerSchema>;
 export default function RetailerManagement() {
   const [open, setOpen] = useState(false);
   const [editingRetailer, setEditingRetailer] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "name",
+    sortOrder: "asc"
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -57,12 +64,21 @@ export default function RetailerManagement() {
     },
   });
 
-  const { data: retailers = [], isLoading } = useQuery({
-    queryKey: ["/api/retailers"],
+  const { data: retailersResult, isLoading, isError, error } = useQuery<PaginatedResult<Retailer>>({
+    queryKey: ["/api/retailers", paginationOptions],
+    placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers");
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      
+      const response = await authenticatedApiRequest("GET", `/api/retailers?${params.toString()}`);
       return response.json();
     },
+
   });
 
   const createRetailerMutation = useMutation({
@@ -165,23 +181,30 @@ export default function RetailerManagement() {
     setOpen(true);
   };
 
-  const filteredRetailers = retailers.filter((retailer: any) =>
-    retailer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (retailer.contactPerson && retailer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (retailer.phone && retailer.phone.includes(searchTerm))
-  );
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
 
-  // Calculate summary stats
-  const totalRetailers = retailers.length;
-  const totalUdhaar = retailers.reduce((sum: number, retailer: any) => 
-    sum + parseFloat(retailer.udhaaarBalance || "0"), 0
-  );
-  const totalShortfall = retailers.reduce((sum: number, retailer: any) => 
-    sum + parseFloat(retailer.shortfallBalance || "0"), 0
-  );
-  const totalCrates = retailers.reduce((sum: number, retailer: any) => 
-    sum + (retailer.crateBalance || 0), 0
-  );
+  // Extract retailers and metadata from paginated result
+  const retailers = retailersResult?.data || [];
+  const paginationMetadata = retailersResult?.pagination;
+
+  // Calculate summary stats using server totals
+  const totalRetailers = paginationMetadata?.total || 0;
+  // Note: Balance aggregates removed as they would be misleading from current page only
+  // Consider adding /api/retailers/stats endpoint for accurate totals
 
   // Define table columns
   const columns = [
@@ -278,6 +301,25 @@ export default function RetailerManagement() {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Retailers</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load retailers. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -315,42 +357,8 @@ export default function RetailerManagement() {
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Udhaar</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  ₹{totalUdhaar.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Credit balance</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Shortfall</CardTitle>
-                <IndianRupee className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  ₹{totalShortfall.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Deficit balance</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Crates</CardTitle>
-                <Package className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{totalCrates}</div>
-                <p className="text-xs text-muted-foreground">With retailers</p>
-              </CardContent>
-            </Card>
+            {/* Balance aggregates removed - would be misleading from current page only */}
+            {/* Consider adding /api/retailers/stats endpoint for accurate totals */}
           </div>
 
           {/* Retailers Table */}
@@ -359,22 +367,18 @@ export default function RetailerManagement() {
               <div className="flex justify-between items-center">
                 <CardTitle>Retailers</CardTitle>
                 <div className="flex items-center space-x-2">
-                  <Input
-                    placeholder="Search retailers..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-64"
-                    data-testid="input-search"
-                  />
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredRetailers}
+                data={retailers}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["name", "contactPerson", "phone"]}
+                paginationMetadata={paginationMetadata}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

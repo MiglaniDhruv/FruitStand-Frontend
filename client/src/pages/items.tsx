@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,21 +17,45 @@ import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { PaginationOptions, PaginatedResult, Item, Vendor } from "@shared/schema";
 
 export default function Items() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "name",
+    sortOrder: "asc"
+  });
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: items, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/items"],
+  const { data: itemsResult, isLoading } = useQuery<PaginatedResult<Item>>({
+    queryKey: ["/api/items", paginationOptions, selectedVendor],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (selectedVendor !== "all") params.append('vendorId', selectedVendor);
+      
+      const response = await authenticatedApiRequest("GET", `/api/items?${params.toString()}`);
+      return response.json();
+    },
+    placeholderData: keepPreviousData,
   });
 
-  const { data: vendors } = useQuery<any[]>({
-    queryKey: ["/api/vendors"],
+  const { data: vendors } = useQuery<PaginatedResult<Vendor>>({
+    queryKey: ["/api/vendors", { limit: 1000, page: 1 }],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=1000&page=1");
+      return response.json();
+    },
   });
 
   const deleteItemMutation = useMutation({
@@ -54,12 +78,26 @@ export default function Items() {
     },
   });
 
-  const filteredItems = items?.filter((item: any) => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.quality.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesVendor = selectedVendor === "all" || item.vendorId === selectedVendor;
-    return matchesSearch && matchesVendor;
-  }) || [];
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+  
+  const handleVendorFilterChange = (vendorId: string) => {
+    setSelectedVendor(vendorId);
+    setPaginationOptions(prev => ({ ...prev, page: 1 })); // Reset to first page
+  };
 
   const handleEdit = (item: any) => {
     setEditingItem(item);
@@ -78,11 +116,9 @@ export default function Items() {
   };
 
   const getVendorName = (vendorId: string) => {
-    const vendor = vendors?.find((v: any) => v.id === vendorId);
-    return vendor?.name || "Unknown";
-  };
-
-  // Define table columns
+    const vendor = (vendors?.data ?? []).find((v: any) => v.id === vendorId);
+    return vendor ? vendor.name : "Unknown Vendor";
+  };  // Define table columns
   const columns = [
     {
       accessorKey: "name",
@@ -174,38 +210,32 @@ export default function Items() {
               <div className="flex items-center justify-between">
                 <CardTitle>All Items</CardTitle>
                 <div className="flex items-center space-x-4">
-                  <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                  <Select value={selectedVendor} onValueChange={handleVendorFilterChange}>
                     <SelectTrigger className="w-48" data-testid="select-vendor-filter">
                       <SelectValue placeholder="Filter by vendor" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Vendors</SelectItem>
-                      {vendors?.map((vendor: any) => (
+                      {(vendors?.data ?? []).map((vendor: any) => (
                         <SelectItem key={vendor.id} value={vendor.id}>
                           {vendor.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      placeholder="Search items..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-64"
-                      data-testid="input-search-items"
-                    />
-                  </div>
+
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredItems}
+                data={itemsResult?.data || []}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["name", "quality"]}
+                paginationMetadata={itemsResult?.pagination}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { PaginationOptions, PaginatedResult, StockWithItem } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,13 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { format } from "date-fns";
 
 export default function Stock() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "lastUpdated",
+    sortOrder: "desc"
+  });
   const [editingStock, setEditingStock] = useState<any>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [dateFilter, setDateFilter] = useState({
@@ -59,8 +66,20 @@ export default function Stock() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: stock, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/stock"],
+  const { data: stockResult, isLoading, isError, error } = useQuery<PaginatedResult<StockWithItem>>({
+    queryKey: ["/api/stock", paginationOptions],
+    placeholderData: (prevData) => prevData,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      
+      const response = await authenticatedApiRequest("GET", `/api/stock?${params.toString()}`);
+      return response.json();
+    },
   });
 
   const { data: stockMovements, isLoading: movementsLoading } = useQuery<any[]>({
@@ -139,14 +158,21 @@ export default function Stock() {
     },
   });
 
-  const filteredStock = stock?.filter((item: any) => {
-    const searchString = searchTerm.toLowerCase();
-    return (
-      item.item.name.toLowerCase().includes(searchString) ||
-      item.item.quality.toLowerCase().includes(searchString) ||
-      (item.item.vendor?.name || '').toLowerCase().includes(searchString)
-    );
-  }) || [];
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
 
   const isLowStock = (item: any) => {
     const totalQty = parseFloat(item.quantityInKgs) + parseFloat(item.quantityInCrates) + parseFloat(item.quantityInBoxes || 0);
@@ -338,6 +364,25 @@ export default function Stock() {
     !manualEntry.vendorId || item.vendorId === manualEntry.vendorId
   ) || [];
 
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Stock</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load stock. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleWastageEntry = () => {
     if (!wastageEntry.itemId || (!wastageEntry.crates && !wastageEntry.boxes && !wastageEntry.kgs)) {
       toast({
@@ -413,24 +458,19 @@ export default function Stock() {
                     Record Wastage
                   </Button>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      placeholder="Search stock..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-64"
-                      data-testid="input-search-stock"
-                    />
                   </div>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredStock}
+                data={stockResult?.data || []}
                 columns={stockColumns}
-                searchTerm={searchTerm}
-                searchFields={["item.name", "item.quality", "item.vendor.name"]}
+                paginationMetadata={stockResult?.pagination}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

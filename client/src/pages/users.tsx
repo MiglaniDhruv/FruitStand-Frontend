@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS, ROLE_PERMISSIONS, permissionService } from "@/lib/permissions";
+import { PaginationOptions, PaginatedResult, User } from "@shared/schema";
 
 const userSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -63,7 +64,13 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [managingPermissions, setManagingPermissions] = useState<any>(null);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "username",
+    sortOrder: "asc"
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -87,8 +94,20 @@ export default function UserManagement() {
     },
   });
 
-  const { data: users, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/users"],
+  const { data: usersResult, isLoading } = useQuery<PaginatedResult<User>>({
+    queryKey: ["/api/users", paginationOptions],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      
+      const response = await authenticatedApiRequest("GET", `/api/users?${params.toString()}`);
+      return response.json();
+    },
+    placeholderData: keepPreviousData,
   });
 
   const createUserMutation = useMutation({
@@ -157,14 +176,21 @@ export default function UserManagement() {
     },
   });
 
-  const filteredUsers = users?.filter((user: any) => {
-    const searchString = searchTerm.toLowerCase();
-    return (
-      user.username.toLowerCase().includes(searchString) ||
-      user.name.toLowerCase().includes(searchString) ||
-      user.role.toLowerCase().includes(searchString)
-    );
-  }) || [];
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -436,23 +462,17 @@ export default function UserManagement() {
                   <Users className="h-5 w-5" />
                   System Users
                 </CardTitle>
-                <div className="relative">
-                  <Input
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-64"
-                    data-testid="input-search-users"
-                  />
-                </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredUsers}
+                data={usersResult?.data || []}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["username", "name", "role"]}
+                paginationMetadata={usersResult?.pagination}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

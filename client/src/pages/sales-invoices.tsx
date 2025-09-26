@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type PaginationOptions, type PaginatedResult, type SalesInvoiceWithDetails } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -90,7 +91,14 @@ export default function SalesInvoiceManagement() {
   const [paymentHistoryDialogOpen, setPaymentHistoryDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "invoiceDate",
+    sortOrder: "desc",
+  });
+  const [statusFilter, setStatusFilter] = useState("all");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -140,21 +148,31 @@ export default function SalesInvoiceManagement() {
   });
 
   // Fetch data
-  const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ["/api/sales-invoices"],
+  const { data: invoicesResult, isLoading, isError, error } = useQuery<PaginatedResult<SalesInvoiceWithDetails>>({
+    queryKey: ["/api/sales-invoices", paginationOptions, statusFilter],
+    placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/sales-invoices");
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (statusFilter !== "all") params.append('status', statusFilter);
+      
+      const response = await authenticatedApiRequest("GET", `/api/sales-invoices?${params.toString()}`);
       return response.json();
     },
   });
 
-  const { data: retailers = [] } = useQuery({
+  const { data: retailersResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers");
+      const response = await authenticatedApiRequest("GET", "/api/retailers?page=1&limit=1000");
       return response.json();
     },
   });
+  const retailers = retailersResult?.data || [];
 
   const { data: salesPayments = [] } = useQuery({
     queryKey: ["/api/sales-payments"],
@@ -172,21 +190,45 @@ export default function SalesInvoiceManagement() {
     },
   });
 
-  const { data: items = [] } = useQuery({
+  const { data: itemsResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/items"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/items");
+      const response = await authenticatedApiRequest("GET", "/api/items?page=1&limit=1000");
       return response.json();
     },
   });
+  const items = itemsResult?.data || [];
 
-  const { data: stock = [] } = useQuery({
+  const { data: stockResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/stock"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/stock");
+      const response = await authenticatedApiRequest("GET", "/api/stock?page=1&limit=1000");
       return response.json();
     },
   });
+  const stock = stockResult?.data || [];
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
@@ -513,25 +555,14 @@ export default function SalesInvoiceManagement() {
     setSelectedInvoice(invoice);
   };
 
-  // Filter invoices based on search term
-  const filteredInvoices = invoices.filter((invoice: any) =>
-    invoice.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getRetailerName(invoice.retailerId).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Extract invoices and metadata from paginated result
+  const invoices = invoicesResult?.data || [];
+  const paginationMetadata = invoicesResult?.pagination;
 
-  // Calculate summary stats
-  const totalInvoices = invoices.length;
-  const totalSales = invoices.reduce((sum: number, invoice: any) => 
-    sum + parseFloat(invoice.totalAmount || "0"), 0
-  );
-  const pendingAmount = invoices
-    .filter((invoice: any) => invoice.status !== "Paid")
-    .reduce((sum: number, invoice: any) => 
-      sum + parseFloat(invoice.balanceAmount || "0"), 0
-    );
-  const paidAmount = invoices.reduce((sum: number, invoice: any) => 
-    sum + parseFloat(invoice.paidAmount || "0"), 0
-  );
+  // Calculate summary stats using server totals
+  const totalInvoices = paginationMetadata?.total || 0;
+  // Note: totalSales, paidAmount, pendingAmount removed as they would be misleading from current page only
+  // Consider adding /api/sales-invoices/stats endpoint for accurate aggregates
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
@@ -559,6 +590,25 @@ export default function SalesInvoiceManagement() {
               ))}
             </div>
             <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Sales Invoices</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load sales invoices. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
           </div>
         </div>
       </div>
@@ -602,44 +652,8 @@ export default function SalesInvoiceManagement() {
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  ₹{totalSales.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Total invoice value</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Amount Received</CardTitle>
-                <IndianRupee className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  ₹{paidAmount.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Payments received</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
-                <Users className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  ₹{pendingAmount.toLocaleString("en-IN")}
-                </div>
-                <p className="text-xs text-muted-foreground">Outstanding dues</p>
-              </CardContent>
-            </Card>
+            {/* Amount aggregates removed - would be misleading from current page only */}
+            {/* Consider adding /api/sales-invoices/stats endpoint for accurate totals */}
           </div>
 
           {/* Sales Invoices Table */}
@@ -647,23 +661,30 @@ export default function SalesInvoiceManagement() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Sales Invoices</CardTitle>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    placeholder="Search invoices..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-64"
-                    data-testid="input-search"
-                  />
+                <div className="flex items-center space-x-4">
+                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="Paid">Paid</SelectItem>
+                      <SelectItem value="Partially Paid">Partially Paid</SelectItem>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={filteredInvoices}
+                data={invoices}
                 columns={columns}
-                searchTerm={searchTerm}
-                searchFields={["invoiceNumber", "retailerId"]}
+                paginationMetadata={paginationMetadata}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onSearchChange={handleSearchChange}
+                onSortChange={handleSortChange}
                 isLoading={isLoading}
                 enableRowSelection={true}
                 rowKey="id"

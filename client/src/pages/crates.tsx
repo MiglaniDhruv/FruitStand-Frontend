@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type PaginationOptions, type PaginatedResult, type CrateTransactionWithRetailer } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,13 @@ type CrateTransactionFormData = z.infer<typeof crateTransactionSchema>;
 
 export default function CrateManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "transactionDate",
+    sortOrder: "desc",
+  });
   const [selectedRetailer, setSelectedRetailer] = useState("all");
   const [selectedTransactionType, setSelectedTransactionType] = useState("all");
   const { toast } = useToast();
@@ -92,29 +99,41 @@ export default function CrateManagement() {
   });
 
   // Fetch data
-  const { data: crateTransactions = [], isLoading: transactionsLoading } = useQuery({
-    queryKey: ["/api/crate-transactions"],
+  const { data: transactionsResult, isLoading: transactionsLoading, isError, error } = useQuery<PaginatedResult<CrateTransactionWithRetailer>>({
+    queryKey: ["/api/crate-transactions", paginationOptions, selectedRetailer, selectedTransactionType],
+    placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/crate-transactions");
+      const params = new URLSearchParams();
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (selectedRetailer !== "all") params.append('retailerId', selectedRetailer);
+      if (selectedTransactionType !== "all") params.append('transactionType', selectedTransactionType);
+      
+      const response = await authenticatedApiRequest("GET", `/api/crate-transactions?${params.toString()}`);
       return response.json();
     },
   });
 
-  const { data: retailers = [] } = useQuery({
+  const { data: retailersResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers");
+      const response = await authenticatedApiRequest("GET", "/api/retailers?page=1&limit=1000");
       return response.json();
     },
   });
+  const retailers = retailersResult?.data || [];
 
-  const { data: salesInvoices = [] } = useQuery({
+  const { data: salesInvoicesResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/sales-invoices");
+      const response = await authenticatedApiRequest("GET", "/api/sales-invoices?page=1&limit=1000");
       return response.json();
     },
   });
+  const salesInvoices = salesInvoicesResult?.data || [];
 
   // Create crate transaction
   const createTransactionMutation = useMutation({
@@ -145,6 +164,33 @@ export default function CrateManagement() {
       });
     },
   });
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleRetailerFilterChange = (retailer: string) => {
+    setSelectedRetailer(retailer);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleTransactionTypeFilterChange = (transactionType: string) => {
+    setSelectedTransactionType(transactionType);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
 
   const handleCreateTransaction = () => {
     form.reset({
@@ -184,33 +230,17 @@ export default function CrateManagement() {
       <ArrowDownCircle className="h-4 w-4" />;
   };
 
-  // Filter transactions
-  const filteredTransactions = crateTransactions.filter((transaction: any) => {
-    const matchesSearch = getRetailerName(transaction.retailerId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRetailer = selectedRetailer === "all" || transaction.retailerId === selectedRetailer;
-    const matchesType = selectedTransactionType === "all" || transaction.transactionType === selectedTransactionType;
-    return matchesSearch && matchesRetailer && matchesType;
-  });
+  // Extract transactions and metadata from paginated result
+  const crateTransactions = transactionsResult?.data || [];
+  const paginationMetadata = transactionsResult?.pagination;
 
-  // Calculate retailer crate balances
-  const retailerCrateBalances = retailers.map((retailer: any) => {
-    const retailerTransactions = crateTransactions.filter((t: any) => t.retailerId === retailer.id);
-    const given = retailerTransactions
-      .filter((t: any) => t.transactionType === "Given")
-      .reduce((sum: number, t: any) => sum + t.quantity, 0);
-    const returned = retailerTransactions
-      .filter((t: any) => t.transactionType === "Returned")
-      .reduce((sum: number, t: any) => sum + t.quantity, 0);
-    const balance = given - returned;
-    
-    return {
-      ...retailer,
-      given,
-      returned,
-      balance,
-    };
-  });
+  // Use reliable retailer balance from database instead of per-page calculations
+  const retailerCrateBalances = retailers.map((retailer: any) => ({
+    ...retailer,
+    given: 0, // Remove per-page-derived sums to avoid misleading values
+    returned: 0, // Remove per-page-derived sums to avoid misleading values
+    balance: retailer.crateBalance || 0, // Use actual balance from retailer record
+  }));
 
   // Define transactions table columns
   const transactionColumns = [
@@ -309,16 +339,10 @@ export default function CrateManagement() {
     },
   ];
 
-  // Calculate summary stats
-  const totalTransactions = crateTransactions.length;
-  const totalCratesGiven = crateTransactions
-    .filter((t: any) => t.transactionType === "Given")
-    .reduce((sum: number, t: any) => sum + t.quantity, 0);
-  const totalCratesReturned = crateTransactions
-    .filter((t: any) => t.transactionType === "Returned")
-    .reduce((sum: number, t: any) => sum + t.quantity, 0);
-  const totalCratesOutstanding = totalCratesGiven - totalCratesReturned;
-  const retailersWithCrates = retailerCrateBalances.filter((r: any) => r.balance > 0).length;
+  // Calculate summary stats using server totals
+  const totalTransactions = paginationMetadata?.total || 0;
+  // Note: Crate aggregates removed as they would be misleading from current page only
+  // Consider adding /api/crate-transactions/stats endpoint for accurate totals with same filters
 
   if (transactionsLoading) {
     return (
@@ -333,6 +357,25 @@ export default function CrateManagement() {
               ))}
             </div>
             <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Crate Transactions</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load crate transactions. Please try again."}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
           </div>
         </div>
       </div>
@@ -376,38 +419,8 @@ export default function CrateManagement() {
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Crates Given</CardTitle>
-                <ArrowUpCircle className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{totalCratesGiven}</div>
-                <p className="text-xs text-muted-foreground">Total dispatched</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Crates Returned</CardTitle>
-                <ArrowDownCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{totalCratesReturned}</div>
-                <p className="text-xs text-muted-foreground">Total received back</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-amber-600">{totalCratesOutstanding}</div>
-                <p className="text-xs text-muted-foreground">With retailers</p>
-              </CardContent>
-            </Card>
+            {/* Crate aggregates removed - would be misleading from current page only */}
+            {/* Consider adding /api/crate-transactions/stats endpoint for accurate totals with same filters */}
           </div>
 
           {/* Main Content Tabs */}
@@ -423,7 +436,7 @@ export default function CrateManagement() {
                   <div className="flex justify-between items-center">
                     <CardTitle>Crate Transactions</CardTitle>
                     <div className="flex items-center space-x-2">
-                      <Select value={selectedRetailer} onValueChange={setSelectedRetailer}>
+                      <Select value={selectedRetailer} onValueChange={handleRetailerFilterChange}>
                         <SelectTrigger className="w-40" data-testid="select-retailer-filter">
                           <SelectValue placeholder="All Retailers" />
                         </SelectTrigger>
@@ -436,7 +449,7 @@ export default function CrateManagement() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Select value={selectedTransactionType} onValueChange={setSelectedTransactionType}>
+                      <Select value={selectedTransactionType} onValueChange={handleTransactionTypeFilterChange}>
                         <SelectTrigger className="w-32" data-testid="select-type-filter">
                           <SelectValue placeholder="All Types" />
                         </SelectTrigger>
@@ -446,22 +459,19 @@ export default function CrateManagement() {
                           <SelectItem value="Returned">Returned</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Input
-                        placeholder="Search transactions..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-64"
-                        data-testid="input-search"
-                      />
+
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <DataTable
-                    data={filteredTransactions}
+                    data={crateTransactions}
                     columns={transactionColumns}
-                    searchTerm={searchTerm}
-                    searchFields={["retailerId", "notes"]}
+                    paginationMetadata={paginationMetadata}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    onSearchChange={handleSearchChange}
+                    onSortChange={handleSortChange}
                     isLoading={transactionsLoading}
                     enableRowSelection={true}
                     rowKey="id"
@@ -476,7 +486,7 @@ export default function CrateManagement() {
                   <div className="flex justify-between items-center">
                     <CardTitle>Retailer Crate Balances</CardTitle>
                     <div className="text-sm text-muted-foreground">
-                      {retailersWithCrates} retailers have crates
+                      Retailer crate balances
                     </div>
                   </div>
                 </CardHeader>
@@ -484,8 +494,6 @@ export default function CrateManagement() {
                   <DataTable
                     data={retailerCrateBalances}
                     columns={balanceColumns}
-                    searchTerm=""
-                    searchFields={["name"]}
                     isLoading={false}
                     enableRowSelection={true}
                     rowKey="id"

@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { z } from "zod";
+import type { SortOrder } from "@shared/schema";
+import { authenticateToken, requireRole, signToken } from "./src/middleware/auth";
+import { UserRole } from "./src/types";
 import { 
   insertUserSchema,
   insertVendorSchema,
@@ -22,34 +24,6 @@ import {
   insertExpenseCategorySchema,
   insertExpenseSchema
 } from "@shared/schema";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-
-// Middleware to verify JWT token
-const authenticateToken = (req: any, res: any, next: any) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
-
-// Role-based access control
-const requireRole = (roles: string[]) => (req: any, res: any, next: any) => {
-  if (!req.user || !roles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'Insufficient permissions' });
-  }
-  next();
-};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint to stop continuous HEAD calls
@@ -80,11 +54,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
+      const token = signToken({ id: user.id, username: user.username, role: user.role as UserRole });
 
       res.json({
         token,
@@ -100,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/register", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.post("/api/auth/register", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
@@ -120,10 +90,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor routes
+  // Pagination Response Format: { data: T[], pagination: { page, limit, total, totalPages, hasNext, hasPrevious } }
+  // Note: totalPages is always >= 1, even when total = 0, to ensure consistent UI behavior
   app.get("/api/vendors", authenticateToken, async (req, res) => {
     try {
-      const vendors = await storage.getVendors();
-      res.json(vendors);
+      // Check if pagination is requested
+      const isPaginated = req.query.page || req.query.limit || req.query.paginated === 'true';
+      
+      if (!isPaginated) {
+        // Return original array response for backward compatibility
+        const vendors = await storage.getVendors();
+        res.json(vendors);
+        return;
+      }
+
+      // Extract pagination query parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+      const sortBy = req.query.sortBy as string;
+      const sortOrder: SortOrder = (req.query.sortOrder as string) === 'desc' ? 'desc' : 'asc';
+      
+      // Validate pagination parameters
+      if (page < 1) {
+        return res.status(400).json({ message: "Page must be >= 1" });
+      }
+      
+      if (limit < 1 || limit > 100) {
+        return res.status(400).json({ message: "Limit must be between 1 and 100" });
+      }
+      
+      // Validate sortBy if provided
+      const validSortFields = ['name', 'contactPerson', 'createdAt'];
+      if (sortBy && !validSortFields.includes(sortBy)) {
+        return res.status(400).json({ message: "Invalid sortBy field" });
+      }
+      
+      const paginationOptions = { page, limit, search, sortBy, sortOrder };
+      const result = await storage.getVendorsPaginated(paginationOptions);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch vendors" });
     }
@@ -141,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vendors", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.post("/api/vendors", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const vendorData = insertVendorSchema.parse(req.body);
       const vendor = await storage.createVendor(vendorData);
@@ -154,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/vendors/:id", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.put("/api/vendors/:id", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const vendorData = insertVendorSchema.partial().parse(req.body);
       const vendor = await storage.updateVendor(req.params.id, vendorData);
@@ -170,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vendors/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.delete("/api/vendors/:id", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const success = await storage.deleteVendor(req.params.id);
       if (!success) {
@@ -185,8 +190,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Items routes
   app.get("/api/items", authenticateToken, async (req, res) => {
     try {
-      const items = await storage.getItems();
-      res.json(items);
+      // Check if pagination is requested
+      const isPaginated = req.query.page || req.query.limit || req.query.paginated === 'true';
+      
+      if (!isPaginated) {
+        // Return original array response for backward compatibility
+        const items = await storage.getItems();
+        res.json(items);
+        return;
+      }
+
+      // Extract pagination query parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+      const sortBy = req.query.sortBy as string;
+      const sortOrder: SortOrder = (req.query.sortOrder as string) === 'desc' ? 'desc' : 'asc';
+      
+      // Validate pagination parameters
+      if (page < 1) {
+        return res.status(400).json({ message: "Page must be >= 1" });
+      }
+      
+      if (limit < 1 || limit > 100) {
+        return res.status(400).json({ message: "Limit must be between 1 and 100" });
+      }
+      
+      // Validate sortBy if provided
+      const validSortFields = ['name', 'quality', 'unit', 'createdAt'];
+      if (sortBy && !validSortFields.includes(sortBy)) {
+        return res.status(400).json({ message: "Invalid sortBy field" });
+      }
+      
+      const paginationOptions = { page, limit, search, sortBy, sortOrder };
+      const result = await storage.getItemsPaginated(paginationOptions);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch items" });
     }
@@ -201,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/items", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.post("/api/items", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const itemData = insertItemSchema.parse(req.body);
       const item = await storage.createItem(itemData);
@@ -214,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/items/:id", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.put("/api/items/:id", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const itemData = insertItemSchema.partial().parse(req.body);
       const item = await storage.updateItem(req.params.id, itemData);
@@ -230,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/items/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.delete("/api/items/:id", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const success = await storage.deleteItem(req.params.id);
       if (!success) {
@@ -252,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bank-accounts", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.post("/api/bank-accounts", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const accountData = insertBankAccountSchema.parse(req.body);
       const account = await storage.createBankAccount(accountData);
@@ -268,8 +306,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Purchase invoice routes
   app.get("/api/purchase-invoices", authenticateToken, async (req, res) => {
     try {
-      const invoices = await storage.getPurchaseInvoices();
-      res.json(invoices);
+      const { page, limit, search, sortBy, sortOrder, paginated, status, vendorId, dateFrom, dateTo } = req.query;
+      
+      // Support both paginated and non-paginated responses for backward compatibility
+      if (paginated === 'true') {
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+        
+        const result = await storage.getPurchaseInvoicesPaginated({
+          page: pageNum,
+          limit: limitNum,
+          search: search as string,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as SortOrder,
+          status: status as 'paid' | 'unpaid',
+          vendorId: vendorId as string,
+          dateRange: dateFrom || dateTo ? {
+            from: dateFrom as string,
+            to: dateTo as string
+          } : undefined
+        });
+        
+        res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        const invoices = await storage.getPurchaseInvoices();
+        res.json(invoices);
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch invoices" });
     }
@@ -287,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/purchase-invoices", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.post("/api/purchase-invoices", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const { invoice, items, stockOutEntryIds } = req.body;
       
@@ -296,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const invoiceData = insertPurchaseInvoiceSchema.parse(invoice);
-      const itemsData = items.map((item: any) => insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
+      const itemsData = items.map((item: any) => insertInvoiceItemSchema.parse({ ...item, invoiceId: "" }));
       
       const createdInvoice = await storage.createPurchaseInvoice(invoiceData, itemsData);
       res.status(201).json(createdInvoice);
@@ -327,7 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/payments", authenticateToken, requireRole(["Admin", "Accountant", "Operator"]), async (req, res) => {
+  app.post("/api/payments", authenticateToken, requireRole([UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.OPERATOR]), async (req, res) => {
     try {
       const paymentData = insertPaymentSchema.parse(req.body);
       const payment = await storage.createPayment(paymentData);
@@ -343,14 +405,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock routes
   app.get("/api/stock", authenticateToken, async (req, res) => {
     try {
-      const stock = await storage.getStock();
-      res.json(stock);
+      const { page, limit, search, sortBy, sortOrder, paginated, lowStock } = req.query;
+      
+      // Support both paginated and non-paginated responses for backward compatibility
+      if (paginated === 'true') {
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+        
+        const result = await storage.getStockPaginated({
+          page: pageNum,
+          limit: limitNum,
+          search: search as string,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as SortOrder,
+          lowStock: lowStock === 'true'
+        });
+        
+        res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        const stock = await storage.getStock();
+        res.json(stock);
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stock" });
     }
   });
 
-  app.put("/api/stock/:itemId", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.put("/api/stock/:itemId", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const stockData = insertStockSchema.partial().parse(req.body);
       const stock = await storage.updateStock(req.params.itemId, stockData);
@@ -391,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/stock-movements", authenticateToken, requireRole(["Admin", "Operator"]), async (req, res) => {
+  app.post("/api/stock-movements", authenticateToken, requireRole([UserRole.ADMIN, UserRole.OPERATOR]), async (req, res) => {
     try {
       const movementData = insertStockMovementSchema.parse(req.body);
       const movement = await storage.createStockMovement(movementData);
@@ -443,18 +524,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User management routes
-  app.get("/api/users", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.get("/api/users", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
-      const users = await storage.getUsers();
+      // Check if pagination is requested
+      const isPaginated = req.query.page || req.query.limit || req.query.paginated === 'true';
+      
+      if (!isPaginated) {
+        // Return original array response for backward compatibility
+        const users = await storage.getUsers();
+        // Remove passwords from response
+        const safeUsers = users.map(({ password, ...user }) => user);
+        res.json(safeUsers);
+        return;
+      }
+
+      // Extract pagination query parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+      const sortBy = req.query.sortBy as string;
+      const sortOrder: SortOrder = (req.query.sortOrder as string) === 'desc' ? 'desc' : 'asc';
+      
+      // Validate pagination parameters
+      if (page < 1) {
+        return res.status(400).json({ message: "Page must be >= 1" });
+      }
+      
+      if (limit < 1 || limit > 100) {
+        return res.status(400).json({ message: "Limit must be between 1 and 100" });
+      }
+      
+      // Validate sortBy if provided
+      const validSortFields = ['username', 'name', 'role', 'createdAt'];
+      if (sortBy && !validSortFields.includes(sortBy)) {
+        return res.status(400).json({ message: "Invalid sortBy field" });
+      }
+      
+      const paginationOptions = { page, limit, search, sortBy, sortOrder };
+      const result = await storage.getUsersPaginated(paginationOptions);
+      
       // Remove passwords from response
-      const safeUsers = users.map(({ password, ...user }) => user);
-      res.json(safeUsers);
+      const safeData = result.data.map(({ password, ...user }) => user);
+      const safeResult = { ...result, data: safeData };
+      
+      res.json(safeResult);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
-  app.post("/api/users", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.post("/api/users", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
@@ -469,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.put("/api/users/:id", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const userData = insertUserSchema.partial().parse(req.body);
       const user = await storage.updateUser(req.params.id, userData);
@@ -487,7 +606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.delete("/api/users/:id", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const success = await storage.deleteUser(req.params.id);
       if (!success) {
@@ -499,7 +618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id/permissions", authenticateToken, requireRole(["Admin"]), async (req, res) => {
+  app.put("/api/users/:id/permissions", authenticateToken, requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const { permissions } = req.body;
       if (!Array.isArray(permissions)) {
@@ -522,8 +641,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Retailer routes
   app.get("/api/retailers", authenticateToken, async (req, res) => {
     try {
-      const retailers = await storage.getRetailers();
-      res.json(retailers);
+      const { page, limit, search, sortBy, sortOrder, paginated, status } = req.query;
+      
+      // Support both paginated and non-paginated responses for backward compatibility
+      if (paginated === 'true') {
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+        
+        const result = await storage.getRetailersPaginated({
+          page: pageNum,
+          limit: limitNum,
+          search: search as string,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as SortOrder,
+          status: status as 'active' | 'inactive'
+        });
+        
+        res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        const retailers = await storage.getRetailers();
+        res.json(retailers);
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch retailers" });
     }
@@ -585,8 +723,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sales Invoice routes
   app.get("/api/sales-invoices", authenticateToken, async (req, res) => {
     try {
-      const invoices = await storage.getSalesInvoices();
-      res.json(invoices);
+      const { page, limit, search, sortBy, sortOrder, paginated, status, retailerId, dateFrom, dateTo } = req.query;
+      
+      // Support both paginated and non-paginated responses for backward compatibility
+      if (paginated === 'true') {
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+        
+        const result = await storage.getSalesInvoicesPaginated({
+          page: pageNum,
+          limit: limitNum,
+          search: search as string,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as SortOrder,
+          status: status as 'paid' | 'unpaid',
+          retailerId: retailerId as string,
+          dateRange: dateFrom || dateTo ? {
+            from: dateFrom as string,
+            to: dateTo as string
+          } : undefined
+        });
+        
+        res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        const invoices = await storage.getSalesInvoices();
+        res.json(invoices);
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch sales invoices" });
     }
@@ -613,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const invoiceData = insertSalesInvoiceSchema.parse(invoice);
-      const itemsData = items.map((item: any) => insertSalesInvoiceItemSchema.omit({ invoiceId: true }).parse(item));
+      const itemsData = items.map((item: any) => insertSalesInvoiceItemSchema.parse({ ...item, invoiceId: "" }));
       
       const createdInvoice = await storage.createSalesInvoice(invoiceData, itemsData);
       res.status(201).json(createdInvoice);
@@ -670,8 +832,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Crate Transaction routes
   app.get("/api/crate-transactions", authenticateToken, async (req, res) => {
     try {
-      const transactions = await storage.getCrateTransactions();
-      res.json(transactions);
+      const { page, limit, search, sortBy, sortOrder, paginated, type, retailerId, dateFrom, dateTo } = req.query;
+      
+      // Support both paginated and non-paginated responses for backward compatibility
+      if (paginated === 'true') {
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+        
+        const result = await storage.getCrateTransactionsPaginated({
+          page: pageNum,
+          limit: limitNum,
+          search: search as string,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as SortOrder,
+          type: type as 'given' | 'returned',
+          retailerId: retailerId as string,
+          dateRange: dateFrom || dateTo ? {
+            from: dateFrom as string,
+            to: dateTo as string
+          } : undefined
+        });
+        
+        res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        const transactions = await storage.getCrateTransactions();
+        res.json(transactions);
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch crate transactions" });
     }
