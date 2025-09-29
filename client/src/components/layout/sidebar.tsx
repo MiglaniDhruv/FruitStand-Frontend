@@ -4,12 +4,15 @@ import { authService } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { PERMISSIONS, permissionService } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
+import { useTenant } from "@/hooks/use-tenant";
+import { useTenantSlug } from "@/contexts/tenant-slug-context";
+import { TenantInfo } from "@/components/tenant/tenant-info";
+import { getTenantBranding } from "@/lib/tenant-config";
 import {
   Apple,
   BarChart3,
   Book,
   Boxes,
-  CreditCard,
   DollarSign,
   LogOut,
   Package,
@@ -24,94 +27,99 @@ import {
   Gauge,
 } from "lucide-react";
 
-const navigationItems = [
+const getNavigationItems = (slug: string) => [
   {
     title: "Dashboard",
-    href: "/",
+    href: `/${slug}/dashboard`,
     icon: Gauge,
     permission: PERMISSIONS.VIEW_DASHBOARD,
   },
   {
     title: "Vendors",
-    href: "/vendors",
+    href: `/${slug}/vendors`,
     icon: Truck,
     permission: PERMISSIONS.VIEW_VENDORS,
   },
   {
     title: "Retailers",
-    href: "/retailers",
+    href: `/${slug}/retailers`,
     icon: Store,
     permission: PERMISSIONS.VIEW_VENDORS, // Using VIEW_VENDORS for now, will add specific permission later
   },
   {
     title: "Items",
-    href: "/items",
+    href: `/${slug}/items`,
     icon: Sprout,
     permission: PERMISSIONS.VIEW_ITEMS,
   },
   {
     title: "Stock",
-    href: "/stock",
+    href: `/${slug}/stock`,
     icon: Boxes,
     permission: PERMISSIONS.VIEW_STOCK,
   },
   {
     title: "Purchase Invoices",
-    href: "/purchase-invoices",
+    href: `/${slug}/purchase-invoices`,
     icon: DollarSign,
     permission: PERMISSIONS.VIEW_PURCHASE_INVOICES,
   },
   {
     title: "Sales Invoices",
-    href: "/sales-invoices",
+    href: `/${slug}/sales-invoices`,
     icon: Receipt,
     permission: PERMISSIONS.VIEW_PURCHASE_INVOICES, // Using existing permission for now
   },
   {
     title: "Expenses",
-    href: "/expenses",
+    href: `/${slug}/expenses`,
     icon: TrendingDown,
     permission: PERMISSIONS.VIEW_PAYMENTS, // Using existing permission for now
   },
   {
     title: "Crates",
-    href: "/crates",
+    href: `/${slug}/crates`,
     icon: Package,
     permission: PERMISSIONS.VIEW_STOCK, // Using existing permission for now
   },
   {
     title: "Ledgers",
-    href: "/ledgers",
+    href: `/${slug}/ledgers`,
     icon: Book,
     permission: PERMISSIONS.VIEW_LEDGERS,
   },
   {
     title: "Reports",
-    href: "/reports",
+    href: `/${slug}/reports`,
     icon: BarChart3,
     permission: PERMISSIONS.VIEW_REPORTS,
   },
-];
-
-const adminItems = [
   {
     title: "User Management",
-    href: "/users",
+    href: `/${slug}/users`,
     icon: Users,
     permission: PERMISSIONS.VIEW_USERS,
   },
   {
     title: "Settings",
-    href: "/settings",
+    href: `/${slug}/settings`,
     icon: Settings,
     permission: PERMISSIONS.VIEW_SETTINGS,
   },
 ];
 
+
+
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const currentUser = authService.getCurrentUser();
+  const { tenant } = useTenant();
+  
+  // Get tenant slug from context
+  const { slug: tenantSlug } = useTenantSlug();
+  
+  const navigationItems = getNavigationItems(tenantSlug);
 
   const handleLogout = () => {
     authService.logout();
@@ -119,7 +127,13 @@ export default function Sidebar() {
       title: "Logged out",
       description: "You have been successfully logged out",
     });
-    setLocation("/login");
+    
+    // Always redirect to tenant login page
+    if (tenantSlug) {
+      setLocation(`/${tenantSlug}/login`);
+    } else {
+      setLocation("/login");
+    }
   };
 
   return (
@@ -132,9 +146,12 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">
-              APMC System
+              {tenant ? getTenantBranding(tenant.settings).companyName : "APMC System"}
             </h1>
-            <p className="text-sm text-muted-foreground">Commission Merchant</p>
+            <p className="text-sm text-muted-foreground">
+              Commission Merchant
+              {tenant && <span className="block">{tenant.name}</span>}
+            </p>
           </div>
         </div>
       </div>
@@ -152,6 +169,15 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Tenant Info */}
+      <div className="p-4 border-b border-border">
+        <TenantInfo 
+          compact={true} 
+          showStatus={false} 
+          showSwitcher={false} 
+        />
+      </div>
+
       {/* Navigation Menu */}
       <nav className="flex-1 p-4">
         <div className="space-y-2">
@@ -167,7 +193,7 @@ export default function Sidebar() {
                         ? "bg-accent text-accent-foreground"
                         : "text-muted-foreground hover:text-foreground hover:bg-accent",
                     )}
-                    data-testid={`link-${item.href.replace("/", "") || "dashboard"}`}
+                    data-testid={`link-${item.href.replace(/^\/.*?\//, "").replace("/", "") || "dashboard"}`}
                   >
                     <item.icon className="w-5 h-5 mr-3" />
                     {item.title}
@@ -176,32 +202,6 @@ export default function Sidebar() {
               </PermissionGuard>
             );
           })}
-        </div>
-
-        <div className="mt-8 pt-4 border-t border-border">
-          <div className="space-y-2">
-            {adminItems.map((item) => {
-              const isActive = location === item.href;
-              return (
-                <PermissionGuard key={item.href} permission={item.permission}>
-                  <Link href={item.href}>
-                    <a
-                      className={cn(
-                        "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                        isActive
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                      )}
-                      data-testid={`link-${item.href.replace("/", "")}`}
-                    >
-                      <item.icon className="w-5 h-5 mr-3" />
-                      {item.title}
-                    </a>
-                  </Link>
-                </PermissionGuard>
-              );
-            })}
-          </div>
         </div>
       </nav>
 

@@ -1,7 +1,9 @@
 import { UserRouter } from "./routes";
 
-// Export a configured router instance for the user module
+// Export configured router instance for easy integration
 export const userRouter = new UserRouter();
 
-// Export the router instance for mounting in the main application
-export default userRouter.getRouter();
+// Export individual components for flexibility
+export { UserModel } from "./model";
+export { UserController } from "./controller";
+export { UserRouter } from "./routes";

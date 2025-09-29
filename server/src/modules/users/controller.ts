@@ -13,14 +13,17 @@ export class UserController extends BaseController {
     this.userModel = new UserModel();
   }
 
-  async getAll(req: Request, res: Response) {
+  async getAll(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
+      const tenantId = req.tenantId;
+      
       // Check if pagination is requested
       const isPaginated = req.query.page || req.query.limit || req.query.paginated === 'true';
       
       if (!isPaginated) {
         // Return original array response for backward compatibility
-        const users = await this.userModel.getUsers();
+        const users = await this.userModel.getUsers(tenantId);
         // Remove passwords from response
         const safeUsers = users.map(({ password, ...user }) => user);
         res.json(safeUsers);
@@ -50,7 +53,7 @@ export class UserController extends BaseController {
       }
       
       const paginationOptions = { page, limit, search, sortBy, sortOrder };
-      const result = await this.userModel.getUsersPaginated(paginationOptions);
+      const result = await this.userModel.getUsersPaginated(tenantId, paginationOptions);
       
       // Remove passwords from response
       const safeData = result.data.map(({ password, ...user }) => user);
@@ -62,11 +65,12 @@ export class UserController extends BaseController {
     }
   }
 
-  async getById(req: Request, res: Response) {
+  async getById(req: AuthenticatedRequest, res: Response) {
     try {
-      const user = await this.userModel.getUser(req.params.id);
+      const tenantId = req.tenantId!;
+      const user = await this.userModel.getUser(tenantId, req.params.id);
       if (!user) {
-        return this.sendNotFound(res, "User not found");
+        return this.sendNotFound(res, "User not found in organization");
       }
       
       // Remove password from response
@@ -77,10 +81,11 @@ export class UserController extends BaseController {
     }
   }
 
-  async create(req: Request, res: Response) {
+  async create(req: AuthenticatedRequest, res: Response) {
     try {
+      const tenantId = req.tenantId!;
       const userData = insertUserSchema.parse(req.body);
-      const user = await this.userModel.createUser(userData);
+      const user = await this.userModel.createUser(tenantId, userData);
       
       // Remove password from response
       const { password, ...safeUser } = user;
@@ -93,13 +98,14 @@ export class UserController extends BaseController {
     }
   }
 
-  async update(req: Request, res: Response) {
+  async update(req: AuthenticatedRequest, res: Response) {
     try {
+      const tenantId = req.tenantId!;
       const userData = insertUserSchema.partial().parse(req.body);
-      const user = await this.userModel.updateUser(req.params.id, userData);
+      const user = await this.userModel.updateUser(tenantId, req.params.id, userData);
       
       if (!user) {
-        return this.sendNotFound(res, "User not found");
+        return this.sendNotFound(res, "User not found in organization");
       }
       
       // Remove password from response
@@ -113,11 +119,12 @@ export class UserController extends BaseController {
     }
   }
 
-  async delete(req: Request, res: Response) {
+  async delete(req: AuthenticatedRequest, res: Response) {
     try {
-      const success = await this.userModel.deleteUser(req.params.id);
+      const tenantId = req.tenantId!;
+      const success = await this.userModel.deleteUser(tenantId, req.params.id);
       if (!success) {
-        return this.sendNotFound(res, "User not found");
+        return this.sendNotFound(res, "User not found in organization");
       }
       res.status(204).send();
     } catch (error) {
@@ -125,14 +132,15 @@ export class UserController extends BaseController {
     }
   }
 
-  async updatePermissions(req: Request, res: Response) {
+  async updatePermissions(req: AuthenticatedRequest, res: Response) {
     try {
+      const tenantId = req.tenantId!;
       const schema = z.object({ permissions: z.array(z.nativeEnum(Permission)) });
       const { permissions } = schema.parse(req.body);
       
-      const user = await this.userModel.updateUserPermissions(req.params.id, permissions);
+      const user = await this.userModel.updateUserPermissions(tenantId, req.params.id, permissions);
       if (!user) {
-        return this.sendNotFound(res, "User not found");
+        return this.sendNotFound(res, "User not found in organization");
       }
       
       // Remove password from response

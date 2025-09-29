@@ -1,20 +1,52 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, uuid, boolean, jsonb, unique, index, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// IMPORTANT: All insert schemas now require tenantId to be provided by callers.
+// The tenantId should be injected from auth context in server-side operations.
+// Audit all usages of insert schemas to ensure tenantId is provided.
+
+// MIGRATION PLAN: Adding NOT NULL tenantId requires careful migration:
+// 1. Add nullable tenant_id columns to all affected tables
+// 2. Backfill tenant_id values for existing data
+// 3. Set columns to NOT NULL
+// 4. Add composite unique constraints and drop former unique constraints
+// Test on a database snapshot to minimize downtime/locking
+
+// Crate Transaction Type Constants
+export const CRATE_TRANSACTION_TYPES = {
+  GIVEN: 'Issue',
+  RETURNED: 'Return'
+} as const;
+
+export type CrateTransactionType = typeof CRATE_TRANSACTION_TYPES[keyof typeof CRATE_TRANSACTION_TYPES];
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  username: text("username").notNull(),
   password: text("password").notNull(),
   role: text("role").notNull(), // Admin, Operator, Accountant
   name: text("name").notNull(),
   permissions: text("permissions").array().default([]).notNull(), // Individual user permissions
   createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueUsernamePerTenant: unique().on(table.tenantId, table.username),
+}));
+
+export const tenants = pgTable("tenants", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  isActive: boolean("is_active").default(true),
+  settings: jsonb("settings").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const vendors = pgTable("vendors", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   contactPerson: text("contact_person"),
   phone: text("phone"),
@@ -24,20 +56,38 @@ export const vendors = pgTable("vendors", {
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueNamePerTenant: unique().on(table.tenantId, table.name),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqVendorsTenantId: unique('uq_vendors_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const items = pgTable("items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   quality: text("quality").notNull(),
   unit: text("unit").notNull(), // box, crate, kgs
   vendorId: uuid("vendor_id").references(() => vendors.id),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  itemsTenantIdx: index('idx_items_tenant').on(table.tenantId),
+  // Comment 5: Optional item identity uniqueness per tenant - composite unique constraint
+  itemsUnique: unique('items_tenant_identity_unique').on(table.tenantId, table.name, table.quality, table.unit),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqItemsTenantId: unique('uq_items_tenant_id').on(table.tenantId, table.id),
+  // Comment 1: Composite foreign key for tenant-scoped referential integrity (vendorId can be null)
+  fkItemsVendor: foreignKey({
+    name: 'fk_items_vendor_tenant',
+    columns: [table.tenantId, table.vendorId],
+    foreignColumns: [vendors.tenantId, vendors.id]
+  }),
+}));
 
 export const bankAccounts = pgTable("bank_accounts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   accountNumber: text("account_number").notNull(),
   bankName: text("bank_name").notNull(),
@@ -45,11 +95,16 @@ export const bankAccounts = pgTable("bank_accounts", {
   balance: decimal("balance", { precision: 12, scale: 2 }).default("0.00"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueAccountNumberPerTenant: unique().on(table.tenantId, table.accountNumber),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqBankAccountsTenantId: unique('uq_bank_accounts_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const purchaseInvoices = pgTable("purchase_invoices", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  invoiceNumber: text("invoice_number").notNull().unique(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
   vendorId: uuid("vendor_id").references(() => vendors.id).notNull(),
   invoiceDate: timestamp("invoice_date").notNull(),
   commission: decimal("commission", { precision: 10, scale: 2 }).default("0.00"),
@@ -69,10 +124,15 @@ export const purchaseInvoices = pgTable("purchase_invoices", {
   balanceAmount: decimal("balance_amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull(), // Paid, Partially Paid, Unpaid
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueInvoiceNumberPerTenant: unique().on(table.tenantId, table.invoiceNumber),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqPurchaseInvoicesTenantId: unique('uq_purchase_invoices_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const invoiceItems = pgTable("invoice_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   invoiceId: uuid("invoice_id").references(() => purchaseInvoices.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
@@ -81,10 +141,25 @@ export const invoiceItems = pgTable("invoice_items", {
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match purchaseInvoices.tenantId and items.tenantId
+}, (table) => ({
+  invoiceItemsTenantIdx: index('idx_invoice_items_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkInvoiceItemsInvoice: foreignKey({
+    name: 'fk_invoice_items_invoice_tenant',
+    columns: [table.tenantId, table.invoiceId],
+    foreignColumns: [purchaseInvoices.tenantId, purchaseInvoices.id]
+  }),
+  fkInvoiceItemsItem: foreignKey({
+    name: 'fk_invoice_items_item_tenant',
+    columns: [table.tenantId, table.itemId],
+    foreignColumns: [items.tenantId, items.id]
+  }),
+}));
 
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   invoiceId: uuid("invoice_id").references(() => purchaseInvoices.id).notNull(),
   vendorId: uuid("vendor_id").references(() => vendors.id).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -95,19 +170,43 @@ export const payments = pgTable("payments", {
   upiReference: text("upi_reference"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match purchaseInvoices.tenantId, vendors.tenantId, and bankAccounts.tenantId (if not null)
+}, (table) => ({
+  paymentsTenantIdx: index('idx_payments_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkPaymentsInvoice: foreignKey({
+    name: 'fk_payments_invoice_tenant',
+    columns: [table.tenantId, table.invoiceId],
+    foreignColumns: [purchaseInvoices.tenantId, purchaseInvoices.id]
+  }),
+  fkPaymentsVendor: foreignKey({
+    name: 'fk_payments_vendor_tenant',
+    columns: [table.tenantId, table.vendorId],
+    foreignColumns: [vendors.tenantId, vendors.id]
+  }),
+  // Comment 1: Additional composite FK for bankAccountId (nullable)
+  fkPaymentsBankAccount: foreignKey({
+    name: 'fk_payments_bank_account_tenant',
+    columns: [table.tenantId, table.bankAccountId],
+    foreignColumns: [bankAccounts.tenantId, bankAccounts.id]
+  }),
+}));
 
 export const stock = pgTable("stock", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).default("0.00"),
   quantityInBoxes: decimal("quantity_in_boxes", { precision: 8, scale: 2 }).default("0.00"),
   quantityInKgs: decimal("quantity_in_kgs", { precision: 8, scale: 2 }).default("0.00"),
   lastUpdated: timestamp("last_updated").defaultNow(),
-});
+}, (table) => ({
+  stockTenantIdx: index('idx_stock_tenant').on(table.tenantId),
+}));
 
 export const stockMovements = pgTable("stock_movements", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   movementType: text("movement_type").notNull(), // "IN" or "OUT"
   quantityInCrates: decimal("quantity_in_crates", { precision: 8, scale: 2 }).notNull(),
@@ -123,10 +222,36 @@ export const stockMovements = pgTable("stock_movements", {
   notes: text("notes"),
   movementDate: timestamp("movement_date").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match items.tenantId, vendors.tenantId (if not null), retailers.tenantId (if not null), and purchaseInvoices.tenantId (if not null)
+}, (table) => ({
+  stockMovementsTenantIdx: index('idx_stock_movements_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkStockMovementsItem: foreignKey({
+    name: 'fk_stock_movements_item_tenant',
+    columns: [table.tenantId, table.itemId],
+    foreignColumns: [items.tenantId, items.id]
+  }),
+  // Comment 1: Additional composite FKs for nullable relations
+  fkStockMovementsVendor: foreignKey({
+    name: 'fk_stock_movements_vendor_tenant',
+    columns: [table.tenantId, table.vendorId],
+    foreignColumns: [vendors.tenantId, vendors.id]
+  }),
+  fkStockMovementsRetailer: foreignKey({
+    name: 'fk_stock_movements_retailer_tenant',
+    columns: [table.tenantId, table.retailerId],
+    foreignColumns: [retailers.tenantId, retailers.id]
+  }),
+  fkStockMovementsPurchaseInvoice: foreignKey({
+    name: 'fk_stock_movements_purchase_invoice_tenant',
+    columns: [table.tenantId, table.purchaseInvoiceId],
+    foreignColumns: [purchaseInvoices.tenantId, purchaseInvoices.id]
+  }),
+}));
 
 export const cashbook = pgTable("cashbook", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   date: timestamp("date").notNull(),
   description: text("description").notNull(),
   inflow: decimal("inflow", { precision: 10, scale: 2 }).default("0.00"),
@@ -135,10 +260,13 @@ export const cashbook = pgTable("cashbook", {
   referenceType: text("reference_type"), // Payment, Other
   referenceId: uuid("reference_id"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  cashbookTenantIdx: index('idx_cashbook_tenant').on(table.tenantId),
+}));
 
 export const bankbook = pgTable("bankbook", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id).notNull(),
   date: timestamp("date").notNull(),
   description: text("description").notNull(),
@@ -148,10 +276,20 @@ export const bankbook = pgTable("bankbook", {
   referenceType: text("reference_type"), // Payment, Other
   referenceId: uuid("reference_id"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match bankAccounts.tenantId
+}, (table) => ({
+  bankbookTenantIdx: index('idx_bankbook_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkBankbookBankAccount: foreignKey({
+    name: 'fk_bankbook_bank_account_tenant',
+    columns: [table.tenantId, table.bankAccountId],
+    foreignColumns: [bankAccounts.tenantId, bankAccounts.id]
+  }),
+}));
 
 export const retailers = pgTable("retailers", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   contactPerson: text("contact_person"),
   phone: text("phone"),
@@ -164,11 +302,16 @@ export const retailers = pgTable("retailers", {
   crateBalance: integer("crate_balance").default(0), // Number of crates with retailer
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueNamePerTenant: unique().on(table.tenantId, table.name),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqRetailersTenantId: unique('uq_retailers_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const salesInvoices = pgTable("sales_invoices", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  invoiceNumber: text("invoice_number").notNull().unique(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
   retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
   invoiceDate: timestamp("invoice_date").notNull(),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
@@ -179,10 +322,15 @@ export const salesInvoices = pgTable("sales_invoices", {
   status: text("status").notNull(), // Paid, Partially Paid, Unpaid
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueInvoiceNumberPerTenant: unique().on(table.tenantId, table.invoiceNumber),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqSalesInvoicesTenantId: unique('uq_sales_invoices_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const salesInvoiceItems = pgTable("sales_invoice_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   invoiceId: uuid("invoice_id").references(() => salesInvoices.id).notNull(),
   itemId: uuid("item_id").references(() => items.id).notNull(),
   weight: decimal("weight", { precision: 8, scale: 2 }).notNull(),
@@ -191,10 +339,25 @@ export const salesInvoiceItems = pgTable("sales_invoice_items", {
   rate: decimal("rate", { precision: 8, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match salesInvoices.tenantId and items.tenantId
+}, (table) => ({
+  salesInvoiceItemsTenantIdx: index('idx_sales_invoice_items_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkSalesInvoiceItemsInvoice: foreignKey({
+    name: 'fk_sales_invoice_items_invoice_tenant',
+    columns: [table.tenantId, table.invoiceId],
+    foreignColumns: [salesInvoices.tenantId, salesInvoices.id]
+  }),
+  fkSalesInvoiceItemsItem: foreignKey({
+    name: 'fk_sales_invoice_items_item_tenant',
+    columns: [table.tenantId, table.itemId],
+    foreignColumns: [items.tenantId, items.id]
+  }),
+}));
 
 export const salesPayments = pgTable("sales_payments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   invoiceId: uuid("invoice_id").references(() => salesInvoices.id).notNull(),
   retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -206,10 +369,31 @@ export const salesPayments = pgTable("sales_payments", {
   paymentLinkId: text("payment_link_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match salesInvoices.tenantId, retailers.tenantId, and bankAccounts.tenantId (if not null)
+}, (table) => ({
+  salesPaymentsTenantIdx: index('idx_sales_payments_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkSalesPaymentsInvoice: foreignKey({
+    name: 'fk_sales_payments_invoice_tenant',
+    columns: [table.tenantId, table.invoiceId],
+    foreignColumns: [salesInvoices.tenantId, salesInvoices.id]
+  }),
+  fkSalesPaymentsRetailer: foreignKey({
+    name: 'fk_sales_payments_retailer_tenant',
+    columns: [table.tenantId, table.retailerId],
+    foreignColumns: [retailers.tenantId, retailers.id]
+  }),
+  // Comment 1: Additional composite FK for bankAccountId (nullable)
+  fkSalesPaymentsBankAccount: foreignKey({
+    name: 'fk_sales_payments_bank_account_tenant',
+    columns: [table.tenantId, table.bankAccountId],
+    foreignColumns: [bankAccounts.tenantId, bankAccounts.id]
+  }),
+}));
 
 export const crateTransactions = pgTable("crate_transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
   transactionType: text("transaction_type").notNull(), // Issue, Return
   quantity: integer("quantity").notNull(), // Number of crates
@@ -217,18 +401,33 @@ export const crateTransactions = pgTable("crate_transactions", {
   transactionDate: timestamp("transaction_date").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match retailers.tenantId
+}, (table) => ({
+  crateTransactionsTenantIdx: index('idx_crate_transactions_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkCrateTransactionsRetailer: foreignKey({
+    name: 'fk_crate_transactions_retailer_tenant',
+    columns: [table.tenantId, table.retailerId],
+    foreignColumns: [retailers.tenantId, retailers.id]
+  }),
+}));
 
 export const expenseCategories = pgTable("expense_categories", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  name: text("name").notNull(),
   description: text("description"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueNamePerTenant: unique().on(table.tenantId, table.name),
+  // Comment 1: Composite unique key for tenant-scoped referential integrity
+  uqExpenseCategoriesTenantId: unique('uq_expense_categories_tenant_id').on(table.tenantId, table.id),
+}));
 
 export const expenses = pgTable("expenses", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   categoryId: uuid("category_id").references(() => expenseCategories.id).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   paymentMode: text("payment_mode").notNull(), // Cash, Bank, UPI, Cheque
@@ -239,13 +438,59 @@ export const expenses = pgTable("expenses", {
   description: text("description").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // TENANT CONSISTENCY INVARIANT: tenantId must match expenseCategories.tenantId and bankAccounts.tenantId (if not null)
+}, (table) => ({
+  expensesTenantIdx: index('idx_expenses_tenant').on(table.tenantId),
+  // Comment 1: Composite foreign keys for tenant-scoped referential integrity
+  fkExpensesCategory: foreignKey({
+    name: 'fk_expenses_category_tenant',
+    columns: [table.tenantId, table.categoryId],
+    foreignColumns: [expenseCategories.tenantId, expenseCategories.id]
+  }),
+  // Comment 1: Additional composite FK for bankAccountId (nullable)
+  fkExpensesBankAccount: foreignKey({
+    name: 'fk_expenses_bank_account_tenant',
+    columns: [table.tenantId, table.bankAccountId],
+    foreignColumns: [bankAccounts.tenantId, bankAccounts.id]
+  }),
+}));
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
 });
+
+export const insertTenantSchema = createInsertSchema(tenants).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Tenant Settings Schema - defines the expected structure for tenant settings
+export const tenantSettingsSchema = z.object({
+  // Company Information
+  companyName: z.string().min(1).max(255).optional(),
+  address: z.string().max(1000).optional(),
+  phone: z.string().max(20).optional(),
+  email: z.string().email().optional(),
+  gstNumber: z.string().max(50).optional(),
+  
+  // Business Settings
+  commissionRate: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(), // Decimal string validation
+  currency: z.enum(["INR", "USD", "EUR"]).optional(),
+  dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).optional(),
+  
+  // Notification Settings
+  notifications: z.boolean().optional(),
+  emailAlerts: z.boolean().optional(),
+  smsAlerts: z.boolean().optional(),
+  
+  // Data & Backup Settings
+  autoBackup: z.boolean().optional(),
+  backupFrequency: z.enum(["hourly", "daily", "weekly", "monthly"]).optional(),
+}).strict(); // strict() ensures no extra properties are allowed
+
+export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
@@ -350,6 +595,7 @@ export const insertSalesPaymentSchema = createInsertSchema(salesPayments, {
 });
 
 export const insertCrateTransactionSchema = createInsertSchema(crateTransactions, {
+  transactionType: z.enum([CRATE_TRANSACTION_TYPES.GIVEN, CRATE_TRANSACTION_TYPES.RETURNED]),
   transactionDate: z.union([z.string(), z.date()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
   ),
@@ -375,6 +621,9 @@ export const insertExpenseSchema = createInsertSchema(expenses, {
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
@@ -459,8 +708,8 @@ export type SalesPaymentWithDetails = SalesPayment & {
 };
 
 export type ExpenseWithCategory = Expense & {
-  category: ExpenseCategory;
-  bankAccount?: BankAccount;
+  category: ExpenseCategory | null;
+  bankAccount: BankAccount | null;
 };
 
 export type CrateTransactionWithRetailer = CrateTransaction & {
@@ -490,4 +739,115 @@ export interface PaginationMetadata {
 export interface PaginatedResult<T> {
   data: T[];
   pagination: PaginationMetadata;
+}
+
+// Ledger Types
+export interface VendorLedgerEntry {
+  tenantId: string;
+  date: Date;
+  description: string;
+  referenceType: 'Invoice' | 'Payment';
+  referenceId: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  invoiceNumber?: string;
+  status?: string;
+  paymentMode?: string;
+  notes?: string | null;
+  createdAt?: Date | null;
+}
+
+export interface RetailerLedgerEntry {
+  tenantId: string;
+  date: Date;
+  description: string;
+  referenceType: 'Sales Invoice' | 'Sales Payment' | 'Crate Transaction';
+  referenceId: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  crateBalance?: number;
+  invoiceNumber?: string;
+  status?: string;
+  paymentMode?: string;
+  transactionType?: string;
+  quantity?: number;
+  notes?: string | null;
+  createdAt?: Date | null;
+}
+
+export interface UdhaaarBookEntry {
+  tenantId: string;
+  retailerId: string;
+  retailerName: string;
+  contactPerson: string | null;
+  phone: string | null;
+  address: string | null;
+  udhaaarBalance: number;
+  totalBalance: number;
+  shortfallBalance: number;
+  crateBalance: number;
+  isActive: boolean | null;
+  createdAt: Date | null;
+}
+
+export interface CrateLedgerEntry {
+  id: string;
+  tenantId: string;
+  retailerId: string;
+  retailerName: string | null;
+  contactPerson: string | null;
+  phone: string | null;
+  transactionType: string;
+  quantity: number;
+  depositAmount: number;
+  transactionDate: Date;
+  notes: string | null;
+  runningBalance: number;
+  createdAt: Date | null;
+}
+
+// Authentication Schemas
+export const loginSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required')
+});
+
+export const refreshTokenSchema = z.object({
+  // No body needed for refresh - refresh token comes from HttpOnly cookie
+});
+
+// Authentication Types
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: {
+    id: string;
+    tenantId: string;
+    username: string;
+    name: string;
+    role: string;
+    permissions: string[];
+  };
+}
+
+export interface RefreshTokenRequest {
+  // Token from Authorization header
+}
+
+export interface RefreshTokenResponse {
+  token: string;
+  user: {
+    id: string;
+    tenantId: string;
+    username: string;
+    name: string;
+    role: string;
+    permissions: string[];
+  };
 }

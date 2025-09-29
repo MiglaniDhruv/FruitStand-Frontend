@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,22 +15,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/hooks/use-tenant";
+import { authenticatedApiRequest } from "@/lib/auth";
+import { PermissionGuard } from "@/components/ui/permission-guard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { 
   Settings, 
   Building2, 
   Bell, 
   Shield, 
   Database,
-  Save
+  Save,
+  Loader2
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
-    companyName: "APMC Commission Merchant",
-    address: "Market Yard, Agricultural Produce Market",
-    phone: "+91 98765 43210",
-    email: "info@apmcmerchant.com",
-    gstNumber: "27XXXXX1234X1X1",
+    companyName: "",
+    address: "",
+    phone: "",
+    email: "",
+    gstNumber: "",
     commissionRate: "5",
     notifications: true,
     emailAlerts: true,
@@ -40,14 +45,73 @@ export default function SettingsPage() {
     autoBackup: true,
     backupFrequency: "daily",
   });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const { toast } = useToast();
+  const { tenant, isLoading } = useTenant();
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "System settings have been updated successfully",
-    });
+  // Load tenant settings on component mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!tenant) return;
+      
+      setLoading(true);
+      try {
+        const response = await authenticatedApiRequest("GET", "/api/tenants/current/settings");
+        const tenantSettings = await response.json();
+        
+        // Map tenant settings to form state with defaults
+        setSettings({
+          companyName: tenantSettings.companyName || tenant.name || "",
+          address: tenantSettings.address || "",
+          phone: tenantSettings.phone || "",
+          email: tenantSettings.email || "",
+          gstNumber: tenantSettings.gstNumber || "",
+          commissionRate: tenantSettings.commissionRate || "5",
+          notifications: tenantSettings.notifications ?? true,
+          emailAlerts: tenantSettings.emailAlerts ?? true,
+          smsAlerts: tenantSettings.smsAlerts ?? false,
+          currency: tenantSettings.currency || "INR",
+          dateFormat: tenantSettings.dateFormat || "DD/MM/YYYY",
+          autoBackup: tenantSettings.autoBackup ?? true,
+          backupFrequency: tenantSettings.backupFrequency || "daily",
+        });
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+        toast({
+          title: "Error loading settings",
+          description: "Failed to load organization settings. Using defaults.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (tenant && !isLoading) {
+      loadSettings();
+    }
+  }, [tenant, isLoading, toast]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await authenticatedApiRequest("PUT", "/api/tenants/current/settings", settings);
+      toast({
+        title: "Settings saved",
+        description: "Organization settings have been updated successfully",
+      });
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      toast({
+        title: "Error saving settings",
+        description: "Failed to save organization settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSettingChange = (key: string, value: any) => {
@@ -66,20 +130,36 @@ export default function SettingsPage() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">System Settings</h2>
+              <h2 className="text-2xl font-semibold text-foreground">Organization Settings</h2>
               <p className="text-sm text-muted-foreground">
-                Configure system preferences and business settings
+                Configure your organization preferences and business settings
               </p>
             </div>
-            <Button onClick={handleSave} className="gap-2" data-testid="button-save-settings">
-              <Save className="h-4 w-4" />
-              Save Changes
-            </Button>
+            <PermissionGuard permission={PERMISSIONS.MANAGE_SETTINGS}>
+              <Button 
+                onClick={handleSave} 
+                className="gap-2" 
+                data-testid="button-save-settings"
+                disabled={saving || loading}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </PermissionGuard>
           </div>
         </header>
 
         {/* Content */}
         <main className="flex-1 overflow-auto p-6 space-y-6">
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading organization settings...</span>
+            </div>
+          )}
+
+          {!loading && (
+          <>
           {/* Company Information */}
           <Card>
             <CardHeader>
@@ -300,6 +380,8 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+          </>
+          )}
         </main>
       </div>
     </div>

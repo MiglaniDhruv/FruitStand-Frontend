@@ -1,7 +1,6 @@
 import { BaseRouter } from "../../utils/base";
 import { UserController } from "./controller";
-import { authenticateToken, requireRole } from "../../middleware/auth";
-import { UserRole } from "../../types";
+import { authenticateToken, requirePermission, validateTenant, attachTenantContext } from "../../middleware/auth";
 
 export class UserRouter extends BaseRouter {
   private userController: UserController;
@@ -13,45 +12,57 @@ export class UserRouter extends BaseRouter {
   }
 
   private setupRoutes() {
-    // GET /api/users - List users with pagination support
-    this.router.get("/api/users", 
+    // GET /users - List users with pagination support
+    this.router.get("/users", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['view_users', 'manage_users']), 
       this.userController.getAll.bind(this.userController)
     );
 
-    // GET /api/users/:id - Get user by ID
-    this.router.get("/api/users/:id", 
+    // GET /users/:id - Get user by ID
+    this.router.get("/users/:id", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['view_users', 'manage_users']), 
       this.userController.getById.bind(this.userController)
     );
 
-    // POST /api/users - Create new user
-    this.router.post("/api/users", 
+    // POST /users - Create new user
+    this.router.post("/users", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['manage_users']), 
       this.userController.create.bind(this.userController)
     );
 
-    // PUT /api/users/:id - Update user
-    this.router.put("/api/users/:id", 
+    // PUT /users/:id - Update user
+    this.router.put("/users/:id", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['manage_users']), 
       this.userController.update.bind(this.userController)
     );
 
-    // DELETE /api/users/:id - Delete user
-    this.router.delete("/api/users/:id", 
+    // DELETE /users/:id - Delete user
+    this.router.delete("/users/:id", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['manage_users']), 
       this.userController.delete.bind(this.userController)
     );
 
-    // PUT /api/users/:id/permissions - Update user permissions
-    this.router.put("/api/users/:id/permissions", 
+    // PUT /users/:id/permissions - Update user permissions
+    this.router.put("/users/:id/permissions", 
       authenticateToken, 
-      requireRole([UserRole.ADMIN]), 
+      validateTenant,
+      attachTenantContext,
+      requirePermission(['manage_users']), 
       this.userController.updatePermissions.bind(this.userController)
     );
   }

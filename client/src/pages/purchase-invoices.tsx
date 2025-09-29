@@ -46,6 +46,7 @@ import InvoiceDetailsModal from "@/components/modals/invoice-details-modal";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { buildPaginationParams } from "@/lib/pagination";
 
 // Payment form schema
 const paymentSchema = z.object({
@@ -103,13 +104,7 @@ export default function PurchaseInvoices() {
     queryKey: ["/api/purchase-invoices", paginationOptions, statusFilter],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
-      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
-      if (paginationOptions.search) params.append('search', paginationOptions.search);
-      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
-      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
-      if (statusFilter !== "all") params.append('status', statusFilter);
+      const params = buildPaginationParams(paginationOptions);
       
       const response = await authenticatedApiRequest("GET", `/api/purchase-invoices?${params.toString()}`);
       return response.json();

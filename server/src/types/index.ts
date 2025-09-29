@@ -1,4 +1,5 @@
 import { Request } from "express";
+import { type Tenant } from "@shared/schema";
 
 // Authentication related types
 export interface AuthUser {
@@ -11,7 +12,9 @@ export interface AuthUser {
 
 // Authenticated request interface
 export interface AuthenticatedRequest extends Request {
-  user?: { id: string; username: string; role: UserRole };
+  user?: { id: string; username: string; role: UserRole; tenantId: string };
+  tenantId?: string;
+  tenant?: Tenant;
 }
 
 // Common API response structures
@@ -36,44 +39,52 @@ export enum UserRole {
 
 export enum Permission {
   // User management
-  USER_CREATE = "user.create",
-  USER_READ = "user.read", 
-  USER_UPDATE = "user.update",
-  USER_DELETE = "user.delete",
+  MANAGE_USERS = "manage_users",
+  VIEW_USERS = "view_users",
 
   // Vendor management
-  VENDOR_CREATE = "vendor.create",
-  VENDOR_READ = "vendor.read",
-  VENDOR_UPDATE = "vendor.update", 
-  VENDOR_DELETE = "vendor.delete",
+  MANAGE_VENDORS = "manage_vendors",
+  VIEW_VENDORS = "view_vendors",
+  DELETE_VENDORS = "delete_vendors",
 
   // Item management
-  ITEM_CREATE = "item.create",
-  ITEM_READ = "item.read",
-  ITEM_UPDATE = "item.update",
-  ITEM_DELETE = "item.delete",
+  MANAGE_ITEMS = "manage_items",
+  VIEW_ITEMS = "view_items",
+  DELETE_ITEMS = "delete_items",
 
-  // Invoice management
-  INVOICE_CREATE = "invoice.create",
-  INVOICE_READ = "invoice.read",
-  INVOICE_UPDATE = "invoice.update",
-  INVOICE_DELETE = "invoice.delete",
+  // Purchase Invoices
+  CREATE_PURCHASE_INVOICES = "create_purchase_invoices",
+  VIEW_PURCHASE_INVOICES = "view_purchase_invoices",
+  EDIT_PURCHASE_INVOICES = "edit_purchase_invoices",
+  DELETE_PURCHASE_INVOICES = "delete_purchase_invoices",
 
-  // Payment management
-  PAYMENT_CREATE = "payment.create",
-  PAYMENT_READ = "payment.read",
-  PAYMENT_UPDATE = "payment.update",
-  PAYMENT_DELETE = "payment.delete",
+  // Payments
+  CREATE_PAYMENTS = "create_payments",
+  VIEW_PAYMENTS = "view_payments",
+  EDIT_PAYMENTS = "edit_payments",
+  DELETE_PAYMENTS = "delete_payments",
 
   // Stock management
-  STOCK_CREATE = "stock.create",
-  STOCK_READ = "stock.read", 
-  STOCK_UPDATE = "stock.update",
-  STOCK_DELETE = "stock.delete",
+  MANAGE_STOCK = "manage_stock",
+  VIEW_STOCK = "view_stock",
 
-  // Reports
-  REPORTS_VIEW = "reports.view",
-  REPORTS_EXPORT = "reports.export"
+  // Financial Reports & Ledgers
+  VIEW_LEDGERS = "view_ledgers",
+  VIEW_REPORTS = "view_reports",
+  VIEW_CASHBOOK = "view_cashbook",
+  VIEW_BANKBOOK = "view_bankbook",
+
+  // Bank Accounts
+  MANAGE_BANK_ACCOUNTS = "manage_bank_accounts",
+  VIEW_BANK_ACCOUNTS = "view_bank_accounts",
+
+  // System Settings
+  MANAGE_SETTINGS = "manage_settings",
+  VIEW_SETTINGS = "view_settings",
+
+  // Dashboard & Analytics
+  VIEW_DASHBOARD = "view_dashboard",
+  VIEW_ANALYTICS = "view_analytics"
 }
 
 // Request/Response interfaces for common operations

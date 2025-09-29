@@ -1,6 +1,7 @@
 import { eq, desc, asc, ilike, or, and, count } from "drizzle-orm";
 import { db } from "../../db";
 import { type PaginationOptions, type PaginationMetadata, type SortOrder } from "@shared/schema";
+import { withTenant } from "./tenant-scope";
 
 // Pagination constants
 const DEFAULT_PAGE_SIZE = 10;
@@ -50,7 +51,7 @@ export function applySearchFilter(query: any, search: string, searchableColumns:
   
   const searchPredicate = or(...searchConditions);
   
-  // Compose with existing predicate if provided
+  // Compose with existing predicate if provided - handle tenant conditions gracefully
   if (existingPredicate) {
     return query.where(and(existingPredicate, searchPredicate));
   }
@@ -71,7 +72,22 @@ export function normalizePaginationOptions(options: PaginationOptions): {
   return { page, limit, offset };
 }
 
-// Helper function to build count query with search
+/**
+ * Helper function that wraps existing pagination helpers with tenant filtering
+ * @param table - The Drizzle table schema
+ * @param tenantId - The tenant ID to filter by
+ * @param options - Pagination options
+ * @returns Normalized pagination options with tenant context
+ */
+export function withTenantPagination(table: any, tenantId: string, options: PaginationOptions) {
+  const tenantCondition = withTenant(table, tenantId);
+  return {
+    ...normalizePaginationOptions(options),
+    tenantCondition
+  };
+}
+
+// Helper function to build count query with search - enhanced for tenant conditions
 export async function getCountWithSearch(
   table: any, 
   searchableColumns?: any[], 
@@ -82,6 +98,7 @@ export async function getCountWithSearch(
   
   let conditions = [];
   
+  // Ensure tenant conditions are properly applied in count queries
   if (additionalConditions) {
     conditions.push(additionalConditions);
   }

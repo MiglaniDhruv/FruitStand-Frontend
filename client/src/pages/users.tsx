@@ -36,6 +36,7 @@ import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS, ROLE_PERMISSIONS, permissionService } from "@/lib/permissions";
+import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, User } from "@shared/schema";
 
 const userSchema = z.object({
@@ -49,7 +50,7 @@ const userSchema = z.object({
 
 const editUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  password: z.string().transform((val) => val === "" ? undefined : val).pipe(z.string().min(6, "Password must be at least 6 characters").optional()),
   name: z.string().min(1, "Name is required"),
   role: z.enum(["Admin", "Operator", "Accountant"], {
     required_error: "Role is required",
@@ -256,34 +257,40 @@ export default function UserManagement() {
       header: "Actions",
       cell: (value: string, row: any) => (
         <div className="flex space-x-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleEdit(row)}
-            data-testid={`button-edit-${value}`}
-            title="Edit User"
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setManagingPermissions(row)}
-            data-testid={`button-permissions-${value}`}
-            title="Manage Permissions"
-          >
-            <Shield className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDelete(value)}
-            data-testid={`button-delete-${value}`}
-            title="Delete User"
-            disabled={deleteUserMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <PermissionGuard permission={PERMISSIONS.MANAGE_USERS}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleEdit(row)}
+              data-testid={`button-edit-${value}`}
+              title="Edit User"
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.MANAGE_USERS}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleManagePermissions(row)}
+              data-testid={`button-permissions-${value}`}
+              title="Manage Permissions"
+            >
+              <Shield className="h-4 w-4" />
+            </Button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.MANAGE_USERS}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleDelete(value)}
+              data-testid={`button-delete-${value}`}
+              title="Delete User"
+              disabled={deleteUserMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </PermissionGuard>
         </div>
       ),
     },
@@ -359,18 +366,19 @@ export default function UserManagement() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">User Management</h2>
+              <h2 className="text-2xl font-semibold text-foreground">Organization Users</h2>
               <p className="text-sm text-muted-foreground">
-                Manage system users and their permissions
+                Manage users in your organization
               </p>
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2" data-testid="button-add-user">
-                  <Plus className="h-4 w-4" />
-                  Add User
-                </Button>
-              </DialogTrigger>
+            <PermissionGuard permission={PERMISSIONS.MANAGE_USERS}>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2" data-testid="button-add-user">
+                    <Plus className="h-4 w-4" />
+                    Add User
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create New User</DialogTitle>
@@ -450,6 +458,7 @@ export default function UserManagement() {
                 </Form>
               </DialogContent>
             </Dialog>
+            </PermissionGuard>
           </div>
         </header>
 
@@ -460,7 +469,7 @@ export default function UserManagement() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  System Users
+                  Organization Users
                 </CardTitle>
               </div>
             </CardHeader>
@@ -606,7 +615,7 @@ export default function UserManagement() {
                       "Stock Management": [PERMISSIONS.MANAGE_STOCK, PERMISSIONS.VIEW_STOCK],
                       "Financial Reports": [PERMISSIONS.VIEW_LEDGERS, PERMISSIONS.VIEW_REPORTS, PERMISSIONS.VIEW_CASHBOOK, PERMISSIONS.VIEW_BANKBOOK],
                       "Bank Accounts": [PERMISSIONS.MANAGE_BANK_ACCOUNTS, PERMISSIONS.VIEW_BANK_ACCOUNTS],
-                      "System": [PERMISSIONS.MANAGE_SETTINGS, PERMISSIONS.VIEW_SETTINGS, PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_ANALYTICS],
+                      "Organization Settings": [PERMISSIONS.MANAGE_SETTINGS, PERMISSIONS.VIEW_SETTINGS, PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_ANALYTICS],
                     }).map(([category, permissions]) => (
                       <div key={category} className="border rounded-lg p-3">
                         <h5 className="font-medium mb-3">{category}</h5>

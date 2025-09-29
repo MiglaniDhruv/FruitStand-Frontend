@@ -7,34 +7,41 @@ import {
   applySearchFilter,
   normalizePaginationOptions,
   getCountWithSearch,
-  buildPaginationMetadata
+  buildPaginationMetadata,
+  withTenantPagination
 } from "../../utils/pagination";
+import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
 
 export class UserModel {
-  async getUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(asc(users.createdAt));
+  async getUsers(tenantId: string): Promise<User[]> {
+    return await db.select().from(users)
+      .where(withTenant(users, tenantId))
+      .orderBy(asc(users.createdAt));
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+  async getUser(tenantId: string, id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(withTenant(users, tenantId, eq(users.id, id)));
     return user || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+  async getUserByUsername(tenantId: string, username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(withTenant(users, tenantId, eq(users.username, username)));
     return user || undefined;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(tenantId: string, insertUser: InsertUser): Promise<User> {
     const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    const userWithTenant = ensureTenantInsert({ ...insertUser, password: hashedPassword }, tenantId);
     const [user] = await db
       .insert(users)
-      .values({ ...insertUser, password: hashedPassword })
+      .values(userWithTenant)
       .returning();
     return user;
   }
 
-  async updateUser(id: string, insertUser: Partial<InsertUser>): Promise<User | undefined> {
+  async updateUser(tenantId: string, id: string, insertUser: Partial<InsertUser>): Promise<User | undefined> {
     const updateData = { ...insertUser };
     if (updateData.password) {
       updateData.password = await bcrypt.hash(updateData.password, 10);
@@ -42,27 +49,39 @@ export class UserModel {
     const [user] = await db
       .update(users)
       .set(updateData)
-      .where(eq(users.id, id))
+      .where(withTenant(users, tenantId, eq(users.id, id)))
       .returning();
     return user || undefined;
   }
 
-  async updateUserPermissions(id: string, permissions: string[]): Promise<User | undefined> {
+  async updateUserPermissions(tenantId: string, id: string, permissions: string[]): Promise<User | undefined> {
     const [user] = await db
       .update(users)
       .set({ permissions })
-      .where(eq(users.id, id))
+      .where(withTenant(users, tenantId, eq(users.id, id)))
       .returning();
     return user || undefined;
   }
 
-  async deleteUser(id: string): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id));
+  async deleteUser(tenantId: string, id: string): Promise<boolean> {
+    const result = await db.delete(users)
+      .where(withTenant(users, tenantId, eq(users.id, id)));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
-  async getUsersPaginated(options: PaginationOptions): Promise<PaginatedResult<User>> {
-    const { page, limit, offset } = normalizePaginationOptions(options);
+  // Special methods for authentication (no tenant filtering needed)
+  async getUserByUsernameForAuth(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserForAuth(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUsersPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<User>> {
+    const { page, limit, offset, tenantCondition } = withTenantPagination(users, tenantId, options);
     
     // Define table columns for sorting and searching
     const tableColumns = {
@@ -74,12 +93,12 @@ export class UserModel {
     
     const searchableColumns = [users.username, users.name];
     
-    // Build base query
-    let query = db.select().from(users);
+    // Build base query with tenant filtering
+    let query = db.select().from(users).where(tenantCondition);
     
-    // Apply search filter using helper
+    // Apply search filter using helper with tenant condition
     if (options.search) {
-      query = applySearchFilter(query, options.search, searchableColumns);
+      query = applySearchFilter(query, options.search, searchableColumns, tenantCondition);
     }
     
     // Apply sorting using helper
@@ -88,11 +107,12 @@ export class UserModel {
     // Apply pagination and execute
     const data = await query.limit(limit).offset(offset);
     
-    // Get total count
+    // Get total count with tenant filtering
     const total = await getCountWithSearch(
       users, 
       options.search ? searchableColumns : undefined, 
-      options.search
+      options.search,
+      tenantCondition
     );
     
     const pagination = buildPaginationMetadata(page, limit, total);

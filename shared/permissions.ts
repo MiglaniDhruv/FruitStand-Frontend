@@ -52,7 +52,7 @@ export const PERMISSIONS = {
 // Define permissions for each role
 export const ROLE_PERMISSIONS = {
   Admin: [
-    // Full system access
+    // Full organization access
     PERMISSIONS.MANAGE_USERS,
     PERMISSIONS.VIEW_USERS,
     PERMISSIONS.MANAGE_VENDORS,
@@ -85,6 +85,7 @@ export const ROLE_PERMISSIONS = {
   
   Operator: [
     // Operations focused permissions
+    PERMISSIONS.VIEW_USERS,
     PERMISSIONS.VIEW_VENDORS,
     PERMISSIONS.MANAGE_VENDORS, // Can add/edit vendors
     PERMISSIONS.VIEW_ITEMS,

@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/contexts/auth-context";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -19,53 +20,163 @@ import Ledgers from "@/pages/ledgers";
 import Reports from "@/pages/reports";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
-import { authService } from "@/lib/auth";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
-  
-  useEffect(() => {
-    // Check authentication status on mount and when localStorage changes
-    const checkAuth = () => {
-      setIsAuthenticated(authService.isAuthenticated());
-    };
-    
-    // Listen for storage changes (e.g., when login/logout happens)
-    window.addEventListener('storage', checkAuth);
-    
-    // Also check periodically to catch any auth changes
-    const interval = setInterval(checkAuth, 1000);
-    
-    return () => {
-      window.removeEventListener('storage', checkAuth);
-      clearInterval(interval);
-    };
-  }, []);
-  
-  if (!isAuthenticated) {
-    return <Login />;
-  }
-  
-  return <Component />;
-}
+import { TenantLandingRedirect } from "@/components/tenant/tenant-landing-redirect";
+import { TenantLogin } from "@/components/tenant/tenant-login";
+import { TenantProtectedRoute } from "@/components/tenant/tenant-protected-route";
+import { TenantSlugProvider } from "@/contexts/tenant-slug-context";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/vendors" component={() => <ProtectedRoute component={Vendors} />} />
-      <Route path="/retailers" component={() => <ProtectedRoute component={Retailers} />} />
-      <Route path="/items" component={() => <ProtectedRoute component={Items} />} />
-      <Route path="/purchase-invoices" component={() => <ProtectedRoute component={PurchaseInvoices} />} />
-      <Route path="/sales-invoices" component={() => <ProtectedRoute component={SalesInvoices} />} />
-      <Route path="/expenses" component={() => <ProtectedRoute component={Expenses} />} />
-      <Route path="/crates" component={() => <ProtectedRoute component={Crates} />} />
-      <Route path="/stock" component={() => <ProtectedRoute component={Stock} />} />
-      <Route path="/ledgers" component={() => <ProtectedRoute component={Ledgers} />} />
-      <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
-      <Route path="/users" component={() => <ProtectedRoute component={Users} />} />
-      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+      {/* Tenant-specific routes */}
+      <Route
+        path="/:slug/login"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantLogin slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/dashboard"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Dashboard}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/vendors"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Vendors}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/retailers"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Retailers}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/items"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute component={Items} slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/purchase-invoices"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={PurchaseInvoices}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/sales-invoices"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={SalesInvoices}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/expenses"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Expenses}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/crates"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute component={Crates} slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/stock"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute component={Stock} slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/ledgers"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Ledgers}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/reports"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Reports}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/users"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute component={Users} slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/settings"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={Settings}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantLandingRedirect slug={props.params.slug} />
+          </TenantSlugProvider>
+        )}
+      />
       <Route component={NotFound} />
     </Switch>
   );
@@ -74,10 +185,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

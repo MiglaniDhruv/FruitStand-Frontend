@@ -281,7 +281,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Bank Account</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger data-testid="select-bank-account">
                             <SelectValue placeholder="Select bank account" />

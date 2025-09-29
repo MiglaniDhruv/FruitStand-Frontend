@@ -76,6 +76,7 @@ export default function Stock() {
       if (paginationOptions.search) params.append('search', paginationOptions.search);
       if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
       if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      params.append('paginated', 'true');
       
       const response = await authenticatedApiRequest("GET", `/api/stock?${params.toString()}`);
       return response.json();

@@ -14,7 +14,7 @@ export const permissionService = {
     if (!user) return false;
     
     // Check individual user permissions first, fallback to role permissions
-    const userPermissions = (user as any).permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS];
+    const userPermissions = user.permissions ?? ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS];
     return userPermissions ? userPermissions.includes(permission as any) : false;
   },
 
@@ -39,7 +39,7 @@ export const permissionService = {
     const user = authService.getCurrentUser();
     if (!user) return [];
     
-    return (user as any).permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
+    return user.permissions ?? [...(ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] ?? [])];
   },
 
   /**
@@ -72,7 +72,7 @@ export const permissionService = {
     if (!user) return { role: '', label: 'Unknown', color: 'gray' };
 
     const roleInfo: Record<string, { label: string; color: string }> = {
-      Admin: { label: 'Administrator', color: 'red' },
+      Admin: { label: 'Organization Administrator', color: 'red' },
       Operator: { label: 'Operator', color: 'blue' },
       Accountant: { label: 'Accountant', color: 'green' },
     };

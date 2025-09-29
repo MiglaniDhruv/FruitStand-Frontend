@@ -48,6 +48,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
+import { buildPaginationParams } from "@/lib/pagination";
 
 const crateTransactionSchema = z.object({
   retailerId: z.string().min(1, "Retailer is required"),
@@ -103,14 +104,7 @@ export default function CrateManagement() {
     queryKey: ["/api/crate-transactions", paginationOptions, selectedRetailer, selectedTransactionType],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
-      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
-      if (paginationOptions.search) params.append('search', paginationOptions.search);
-      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
-      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
-      if (selectedRetailer !== "all") params.append('retailerId', selectedRetailer);
-      if (selectedTransactionType !== "all") params.append('transactionType', selectedTransactionType);
+      const params = buildPaginationParams(paginationOptions);
       
       const response = await authenticatedApiRequest("GET", `/api/crate-transactions?${params.toString()}`);
       return response.json();
@@ -120,7 +114,8 @@ export default function CrateManagement() {
   const { data: retailersResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers?page=1&limit=1000");
+      const params = buildPaginationParams(paginationOptions);
+      const response = await authenticatedApiRequest("GET", `/api/retailers?${params.toString()}`);
       return response.json();
     },
   });
@@ -129,7 +124,8 @@ export default function CrateManagement() {
   const { data: salesInvoicesResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/sales-invoices?page=1&limit=1000");
+      const params = buildPaginationParams(paginationOptions);
+      const response = await authenticatedApiRequest("GET", `/api/sales-invoices?${params.toString()}`);
       return response.json();
     },
   });

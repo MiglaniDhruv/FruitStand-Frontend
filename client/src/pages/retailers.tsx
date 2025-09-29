@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { PaginationOptions, PaginatedResult, Retailer } from "@shared/schema";
+import { buildPaginationParams } from "@/lib/pagination";
 import {
   Dialog,
   DialogContent,
@@ -68,12 +69,7 @@ export default function RetailerManagement() {
     queryKey: ["/api/retailers", paginationOptions],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
-      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
-      if (paginationOptions.search) params.append('search', paginationOptions.search);
-      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
-      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      const params = buildPaginationParams(paginationOptions);
       
       const response = await authenticatedApiRequest("GET", `/api/retailers?${params.toString()}`);
       return response.json();
