@@ -10,6 +10,10 @@ const createPurchaseInvoiceBodySchema = z.object({
   items: z.array(insertInvoiceItemSchema.omit({ invoiceId: true }))
 });
 
+const shareInvoiceParamsSchema = z.object({
+  id: z.string().uuid('Invalid invoice ID format')
+});
+
 export class PurchaseInvoiceController extends BaseController {
   private purchaseInvoiceModel: PurchaseInvoiceModel;
 
@@ -109,6 +113,32 @@ export class PurchaseInvoiceController extends BaseController {
       res.status(201).json(invoice);
     } catch (error) {
       this.handleError(res, error, 'Failed to create purchase invoice');
+    }
+  }
+
+  async createShareLink(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      
+      const validation = shareInvoiceParamsSchema.safeParse(req.params);
+      
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.errors);
+      }
+
+      const { id: invoiceId } = validation.data;
+      
+      const shareLink = await this.purchaseInvoiceModel.createShareLink(tenantId, invoiceId);
+      
+      res.status(201).json({
+        success: true,
+        data: {
+          shareLink,
+          publicUrl: `${req.protocol}://${req.get('host')}/api/public/invoices/${shareLink.token}`
+        }
+      });
+    } catch (error) {
+      this.handleError(res, error, 'Failed to create share link');
     }
   }
 }

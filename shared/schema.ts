@@ -51,8 +51,6 @@ export const vendors = pgTable("vendors", {
   contactPerson: text("contact_person"),
   phone: text("phone"),
   address: text("address"),
-  gstNumber: text("gst_number"),
-  panNumber: text("pan_number"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -294,8 +292,6 @@ export const retailers = pgTable("retailers", {
   contactPerson: text("contact_person"),
   phone: text("phone"),
   address: text("address"),
-  gstNumber: text("gst_number"),
-  panNumber: text("pan_number"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
   udhaaarBalance: decimal("udhaar_balance", { precision: 10, scale: 2 }).default("0.00"), // Credit balance
   shortfallBalance: decimal("shortfall_balance", { precision: 10, scale: 2 }).default("0.00"), // Deficit balance
@@ -455,6 +451,78 @@ export const expenses = pgTable("expenses", {
   }),
 }));
 
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  recipientType: text("recipient_type").notNull(), // 'vendor' or 'retailer'
+  recipientId: uuid("recipient_id").notNull(),
+  recipientPhone: text("recipient_phone").notNull(),
+  messageType: text("message_type").notNull(), // 'sales_invoice', 'purchase_invoice', 'payment_reminder', 'payment_notification'
+  referenceType: text("reference_type").notNull(), // 'SalesInvoice', 'PurchaseInvoice', 'Payment'
+  referenceId: uuid("reference_id").notNull(),
+  referenceNumber: text("reference_number").notNull(),
+  templateId: text("template_id").notNull(), // Twilio ContentSid
+  templateVariables: jsonb("template_variables").notNull(),
+  twilioMessageSid: text("twilio_message_sid"),
+  status: text("status").notNull().default("pending"), // 'pending', 'sent', 'delivered', 'failed', 'read'
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  cost: decimal("cost", { precision: 10, scale: 4 }),
+  costCurrency: text("cost_currency"),
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  whatsappMessagesTenantIdx: index('idx_whatsapp_messages_tenant').on(table.tenantId),
+  whatsappMessagesRecipientIdx: index('idx_whatsapp_messages_recipient').on(table.recipientType, table.recipientId),
+  whatsappMessagesStatusIdx: index('idx_whatsapp_messages_status').on(table.status),
+  whatsappMessagesCreatedAtIdx: index('idx_whatsapp_messages_created_at').on(table.createdAt),
+  uqWhatsappMessagesTenantId: unique('uq_whatsapp_messages_tenant_id').on(table.tenantId, table.id),
+}));
+
+export const whatsappCreditTransactions = pgTable("whatsapp_credit_transactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  transactionType: text("transaction_type").notNull(), // 'allocation', 'usage', 'adjustment'
+  amount: integer("amount").notNull(), // Positive for allocation, negative for usage
+  balanceAfter: integer("balance_after").notNull(), // Running balance after this transaction
+  referenceType: text("reference_type").notNull(), // 'admin_allocation', 'message_sent', 'manual_adjustment'
+  referenceId: uuid("reference_id"), // Links to whatsapp_messages for usage transactions
+  performedBy: uuid("performed_by"), // User ID who performed the action (for allocations/adjustments)
+  notes: text("notes"), // Reason for allocation or adjustment
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  creditTransactionsTenantIdx: index('idx_credit_transactions_tenant').on(table.tenantId),
+  creditTransactionsTypeIdx: index('idx_credit_transactions_type').on(table.transactionType),
+  creditTransactionsCreatedAtIdx: index('idx_credit_transactions_created_at').on(table.createdAt),
+  uqWhatsappCreditTransactionsTenantId: unique('uq_whatsapp_credit_transactions_tenant_id').on(table.tenantId, table.id),
+  // Foreign key to whatsapp_messages for usage transactions
+  fkCreditTransactionsMessage: foreignKey({
+    name: 'fk_credit_transactions_message_tenant',
+    columns: [table.tenantId, table.referenceId],
+    foreignColumns: [whatsappMessages.tenantId, whatsappMessages.id]
+  }),
+}));
+
+export const invoiceShareLinks = pgTable("invoice_share_links", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  token: text("token").notNull(),
+  invoiceId: uuid("invoice_id").notNull(),
+  invoiceType: text("invoice_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  accessCount: integer("access_count").default(0),
+  lastAccessedAt: timestamp("last_accessed_at"),
+}, (table) => ({
+  invoiceShareLinksTokenUnique: unique('uq_invoice_share_links_token').on(table.token),
+  invoiceShareLinksInvoiceUnique: unique('uq_invoice_share_links_invoice').on(table.tenantId, table.invoiceId, table.invoiceType),
+  uqInvoiceShareLinksTenantId: unique('uq_invoice_share_links_tenant_id').on(table.tenantId, table.id),
+  invoiceShareLinksTenantIdx: index('idx_invoice_share_links_tenant').on(table.tenantId),
+  invoiceShareLinksTokenIdx: index('idx_invoice_share_links_token').on(table.token),
+  invoiceShareLinksTypeIdx: index('idx_invoice_share_links_type').on(table.invoiceType),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -466,6 +534,11 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({
   createdAt: true,
 });
 
+// Phone Number Validation Schema
+export const phoneNumberSchema = z.string()
+  .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
+  .transform(val => val.startsWith('+') ? val : `+91${val}`);
+
 // Tenant Settings Schema - defines the expected structure for tenant settings
 export const tenantSettingsSchema = z.object({
   // Company Information
@@ -473,7 +546,12 @@ export const tenantSettingsSchema = z.object({
   address: z.string().max(1000).optional(),
   phone: z.string().max(20).optional(),
   email: z.string().email().optional(),
-  gstNumber: z.string().max(50).optional(),
+  
+  // Branding Settings
+  branding: z.object({
+    logoUrl: z.string().url().optional(),
+    favicon: z.string().url().optional(),
+  }).optional(),
   
   // Business Settings
   commissionRate: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(), // Decimal string validation
@@ -488,6 +566,32 @@ export const tenantSettingsSchema = z.object({
   // Data & Backup Settings
   autoBackup: z.boolean().optional(),
   backupFrequency: z.enum(["hourly", "daily", "weekly", "monthly"]).optional(),
+  
+  // WhatsApp Settings
+  whatsapp: z.object({
+    enabled: z.boolean().default(false),
+    accountSid: z.string().optional(),
+    authToken: z.string().optional(),
+    phoneNumber: phoneNumberSchema.optional(),
+    creditBalance: z.number().int().min(0).default(0),
+    lowCreditThreshold: z.number().int().min(0).default(50),
+    scheduler: z.object({
+      enabled: z.boolean().default(true), // Enable/disable automatic payment reminders
+      preferredSendHour: z.number().int().min(0).max(23).default(9), // Hour of day (0-23) to send reminders
+      reminderFrequency: z.enum(['daily', 'weekly', 'monthly']).default('daily'), // How often to send reminders
+      sendOnWeekends: z.boolean().default(true), // Whether to send reminders on weekends
+    }).optional().default({
+      enabled: true,
+      preferredSendHour: 9,
+      reminderFrequency: 'daily',
+      sendOnWeekends: true,
+    }),
+    defaultTemplates: z.object({
+      paymentReminder: z.string().optional(),
+      invoiceNotification: z.string().optional(),
+      welcomeMessage: z.string().optional(),
+    }).optional(),
+  }).optional(),
 }).strict(); // strict() ensures no extra properties are allowed
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
@@ -618,6 +722,32 @@ export const insertExpenseSchema = createInsertSchema(expenses, {
   createdAt: true,
 });
 
+export const insertWhatsAppMessageSchema = createInsertSchema(whatsappMessages, {
+  sentAt: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ).optional(),
+  deliveredAt: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ).optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWhatsAppCreditTransactionSchema = createInsertSchema(whatsappCreditTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertInvoiceShareLinkSchema = createInsertSchema(invoiceShareLinks, {
+  invoiceType: z.enum(['purchase', 'sales']),
+}).omit({
+  id: true,
+  createdAt: true,
+  accessCount: true,
+  lastAccessedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -674,6 +804,15 @@ export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 
+export type WhatsAppMessage = typeof whatsappMessages.$inferSelect;
+export type InsertWhatsAppMessage = z.infer<typeof insertWhatsAppMessageSchema>;
+
+export type WhatsAppCreditTransaction = typeof whatsappCreditTransactions.$inferSelect;
+export type InsertWhatsAppCreditTransaction = z.infer<typeof insertWhatsAppCreditTransactionSchema>;
+
+export type InvoiceShareLink = typeof invoiceShareLinks.$inferSelect;
+export type InsertInvoiceShareLink = z.infer<typeof insertInvoiceShareLinkSchema>;
+
 export type CashbookEntry = typeof cashbook.$inferSelect;
 export type BankbookEntry = typeof bankbook.$inferSelect;
 
@@ -716,6 +855,21 @@ export type CrateTransactionWithRetailer = CrateTransaction & {
   retailer: Retailer;
 };
 
+export type WhatsAppCreditTransactionWithDetails = WhatsAppCreditTransaction & {
+  performedByUser?: User;
+  message?: WhatsAppMessage;
+};
+
+export type PublicInvoiceData = {
+  invoice: PurchaseInvoice | SalesInvoice;
+  items: InvoiceItem[] | SalesInvoiceItem[];
+  payments: Payment[] | SalesPayment[];
+  vendor?: Vendor;
+  retailer?: Retailer;
+  tenant: { name: string; slug: string; settings: any };
+  invoiceType: 'purchase' | 'sales';
+};
+
 // Pagination types
 export type SortOrder = 'asc' | 'desc';
 
@@ -725,6 +879,7 @@ export interface PaginationOptions {
   search?: string;
   sortBy?: string;
   sortOrder?: SortOrder;
+  status?: string; // Add this line: 'active', 'inactive', or 'all'
 }
 
 export interface PaginationMetadata {

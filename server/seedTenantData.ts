@@ -37,7 +37,6 @@ const TENANT_CONFIGS = [
       address: 'Shop 45, Mumbai APMC Market, Vashi, Navi Mumbai - 400703',
       phone: '+91-9876543210',
       email: 'info@mumbaifruits.com',
-      gstNumber: 'GST27ABCDE1234F1Z5',
       commissionRate: '8.5',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
@@ -52,14 +51,26 @@ const TENANT_CONFIGS = [
         backupFrequency: 'daily',
         retentionDays: 30
       },
-      branding: {
-        primaryColor: '#2563eb',
-        secondaryColor: '#64748b'
-      },
       business: {
         crateDepositRate: 50,
         defaultPaymentTerms: 7,
         defaultCommissionRate: 8.5
+      },
+      whatsapp: {
+        enabled: false,
+        creditBalance: 500,
+        lowCreditThreshold: 100,
+        scheduler: {
+          enabled: true,
+          preferredSendHour: 9, // 9 AM
+          reminderFrequency: 'daily', // Send reminders every day
+          sendOnWeekends: true,
+        },
+        defaultTemplates: {
+          paymentReminder: 'Dear {vendorName}, your payment of ₹{amount} for invoice {invoiceNumber} is due. Please clear the dues at the earliest.',
+          invoiceNotification: 'Dear {vendorName}, invoice {invoiceNumber} for ₹{amount} has been generated. Please review and confirm.',
+          welcomeMessage: 'Welcome to Mumbai Fruit Market! We are pleased to work with you.'
+        }
       }
     }
   },
@@ -73,7 +84,6 @@ const TENANT_CONFIGS = [
       address: 'Unit 12, Pune Agricultural Market, Market Yard, Pune - 411037',
       phone: '+91-9876543211',
       email: 'contact@punefresh.com',
-      gstNumber: 'GST27FGHIJ5678K2A6',
       commissionRate: '7.0',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
@@ -88,14 +98,26 @@ const TENANT_CONFIGS = [
         backupFrequency: 'weekly',
         retentionDays: 15
       },
-      branding: {
-        primaryColor: '#059669',
-        secondaryColor: '#6b7280'
-      },
       business: {
         crateDepositRate: 40,
         defaultPaymentTerms: 15,
         defaultCommissionRate: 7.0
+      },
+      whatsapp: {
+        enabled: false,
+        creditBalance: 200,
+        lowCreditThreshold: 50,
+        scheduler: {
+          enabled: true,
+          preferredSendHour: 10, // 10 AM
+          reminderFrequency: 'weekly', // Send reminders once per week (Mondays)
+          sendOnWeekends: false, // Don't send on weekends
+        },
+        defaultTemplates: {
+          paymentReminder: 'Hi {vendorName}, gentle reminder about payment of ₹{amount} for invoice {invoiceNumber}. Thank you!',
+          invoiceNotification: 'New invoice {invoiceNumber} for ₹{amount} has been generated. Please check your account.',
+          welcomeMessage: 'Welcome to Pune Fresh Produce! Looking forward to a great partnership.'
+        }
       }
     }
   },
@@ -109,7 +131,6 @@ const TENANT_CONFIGS = [
       address: 'Plot 8, Nashik Organic Market, Nashik - 422003',
       phone: '+91-9876543212',
       email: 'hello@nashikorganic.com',
-      gstNumber: 'GST27KLMNO9012P3Q7',
       commissionRate: '10.0',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
@@ -124,14 +145,26 @@ const TENANT_CONFIGS = [
         backupFrequency: 'weekly',
         retentionDays: 7
       },
-      branding: {
-        primaryColor: '#dc2626',
-        secondaryColor: '#71717a'
-      },
       business: {
         crateDepositRate: 60,
         defaultPaymentTerms: 30,
         defaultCommissionRate: 10.0
+      },
+      whatsapp: {
+        enabled: false,
+        creditBalance: 100,
+        lowCreditThreshold: 25,
+        scheduler: {
+          enabled: false, // Disabled by default for new tenant
+          preferredSendHour: 14, // 2 PM
+          reminderFrequency: 'monthly', // Send reminders once per month (1st of month)
+          sendOnWeekends: true,
+        },
+        defaultTemplates: {
+          paymentReminder: 'Dear Partner, payment of ₹{amount} for invoice {invoiceNumber} is pending. Kindly settle at earliest.',
+          invoiceNotification: 'Invoice {invoiceNumber} of ₹{amount} generated for your account. Please review.',
+          welcomeMessage: 'Welcome to Nashik Organic Hub! Excited to provide you with premium organic produce.'
+        }
       }
     }
   }
@@ -253,7 +286,6 @@ async function createTenantVendors(tenantId: string, scenario: string) {
         contactPerson: `${vendor.name} Manager`,
         phone: vendor.phone,
         address: `${vendor.name} Farm, ${scenario === 'established' ? 'Maharashtra' : scenario === 'growing' ? 'Pune Region' : 'Nashik Region'}`,
-        gstNumber: `GST27${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
         balance: Math.round(balance).toString(),
         isActive: true
       }, tenantId)
@@ -363,7 +395,6 @@ async function createTenantRetailers(tenantId: string, scenario: string) {
         contactPerson: `${retailer.name} Owner`,
         phone: `+91-987654${3300 + i}`,
         address: `${retailer.name}, Market Area`,
-        gstNumber: `GST27${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
         balance: Math.round(balance).toString(),
         isActive: true
       }, tenantId)

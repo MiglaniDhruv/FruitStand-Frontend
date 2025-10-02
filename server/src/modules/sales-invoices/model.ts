@@ -1,8 +1,9 @@
 import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count } from 'drizzle-orm';
 import { db } from '../../../db';
-import { salesInvoices, salesInvoiceItems, retailers, salesPayments, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer } from '@shared/schema';
+import { salesInvoices, salesInvoiceItems, retailers, salesPayments, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
+import { InvoiceShareLinkModel } from '../invoice-share-links/model';
 
 // Local type that allows null retailers for legacy compatibility
 type SalesInvoiceWithNullableRetailer = SalesInvoice & {
@@ -12,6 +13,18 @@ type SalesInvoiceWithNullableRetailer = SalesInvoice & {
 };
 
 export class SalesInvoiceModel {
+  private shareModel = new InvoiceShareLinkModel();
+
+  async createShareLink(tenantId: string, invoiceId: string): Promise<InvoiceShareLink> {
+    // Verify the invoice exists and belongs to this tenant
+    const invoice = await this.getSalesInvoice(tenantId, invoiceId);
+    if (!invoice) {
+      throw new Error('Sales invoice not found');
+    }
+    
+    return await this.shareModel.createOrGetShareLink(tenantId, invoiceId, 'sales');
+  }
+
   async getSalesInvoices(tenantId: string): Promise<SalesInvoiceWithDetails[]> {
     const invoices = await db.select().from(salesInvoices)
       .where(withTenant(salesInvoices, tenantId))

@@ -47,7 +47,7 @@ export const TenantInfo: React.FC<TenantInfoProps> = ({
   }
 
   const logoUrl = tenant.settings?.branding?.logoUrl;
-  const companyName = tenant.settings?.branding?.companyName || tenant.name;
+  const companyName = tenant.settings?.companyName || tenant.name;
 
   if (compact) {
     return (

@@ -1,17 +1,10 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type SalesInvoiceWithDetails } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,8 +35,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { z } from "zod";
-import { Plus, Edit, Trash2, FileText, IndianRupee, Users, TrendingUp, Minus, DollarSign, Eye, History, CheckCircle } from "lucide-react";
+import { Plus, FileText, IndianRupee, Users, TrendingUp, Minus, Eye } from "lucide-react";
 import { format } from "date-fns";
+import { useTenantSlug } from "@/contexts/tenant-slug-context";
 
 const salesInvoiceSchema = z.object({
   retailerId: z.string().min(1, "Retailer is required"),
@@ -58,11 +52,11 @@ const salesInvoiceSchema = z.object({
 
 const salesInvoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
-  weight: z.number().min(0.1, "Weight must be positive"),
-  crates: z.number().min(0.1, "Crates must be positive"),
-  boxes: z.number().min(0.1, "Boxes must be positive"),
-  rate: z.number().min(0.01, "Rate must be positive"),
-  amount: z.number().min(0, "Amount must be positive"),
+  weight: z.number().min(0, "Weight must be non-negative"),
+  crates: z.number().min(0, "Crates must be non-negative"),
+  boxes: z.number().min(0, "Boxes must be non-negative"),
+  rate: z.number().min(0, "Rate must be non-negative"),
+  amount: z.number().min(0, "Amount must be non-negative"),
 });
 
 const invoiceFormSchema = z.object({
@@ -72,25 +66,9 @@ const invoiceFormSchema = z.object({
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
-const paymentSchema = z.object({
-  invoiceId: z.string().min(1, "Sales invoice is required"),
-  retailerId: z.string().min(1, "Retailer is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
-  paymentDate: z.string().min(1, "Payment date is required"),
-  paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"]),
-  bankAccountId: z.string().optional(),
-  transactionReference: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-type PaymentFormData = z.infer<typeof paymentSchema>;
-
 export default function SalesInvoiceManagement() {
   const [open, setOpen] = useState(false);
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [paymentHistoryDialogOpen, setPaymentHistoryDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
     page: 1,
     limit: 10,
@@ -101,6 +79,8 @@ export default function SalesInvoiceManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const { slug } = useTenantSlug();
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
@@ -133,33 +113,24 @@ export default function SalesInvoiceManagement() {
     name: "items",
   });
 
-  const paymentForm = useForm<PaymentFormData>({
-    resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      invoiceId: "",
-      retailerId: "",
-      amount: 0,
-      paymentDate: format(new Date(), "yyyy-MM-dd"),
-      paymentMode: "Cash",
-      bankAccountId: "",
-      transactionReference: "",
-      notes: "",
-    },
-  });
-
-  // Fetch data
+  // Queries
   const { data: invoicesResult, isLoading, isError, error } = useQuery<PaginatedResult<SalesInvoiceWithDetails>>({
     queryKey: ["/api/sales-invoices", paginationOptions, statusFilter],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
-      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
-      if (paginationOptions.search) params.append('search', paginationOptions.search);
-      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
-      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
-      if (statusFilter !== "all") params.append('status', statusFilter);
-      
+      const params = new URLSearchParams({
+        page: (paginationOptions.page || 1).toString(),
+        limit: (paginationOptions.limit || 10).toString(),
+        search: paginationOptions.search || "",
+        sortBy: paginationOptions.sortBy || "invoiceDate",
+        sortOrder: paginationOptions.sortOrder || "desc",
+      });
+
+      // Only add status filter if it's not "all"
+      if (statusFilter !== "all") {
+        params.append("status", statusFilter);
+      }
+
       const response = await authenticatedApiRequest("GET", `/api/sales-invoices?${params.toString()}`);
       return response.json();
     },
@@ -168,24 +139,7 @@ export default function SalesInvoiceManagement() {
   const { data: retailersResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers?page=1&limit=1000");
-      return response.json();
-    },
-  });
-  const retailers = retailersResult?.data || [];
-
-  const { data: salesPayments = [] } = useQuery({
-    queryKey: ["/api/sales-payments"],
-    queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/sales-payments");
-      return response.json();
-    },
-  });
-
-  const { data: bankAccounts = [] } = useQuery({
-    queryKey: ["/api/bank-accounts"],
-    queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
+      const response = await authenticatedApiRequest("GET", "/api/retailers?limit=1000");
       return response.json();
     },
   });
@@ -193,20 +147,18 @@ export default function SalesInvoiceManagement() {
   const { data: itemsResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/items"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/items?page=1&limit=1000");
+      const response = await authenticatedApiRequest("GET", "/api/items?limit=1000");
       return response.json();
     },
   });
-  const items = itemsResult?.data || [];
 
   const { data: stockResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/stock"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/stock?page=1&limit=1000");
+      const response = await authenticatedApiRequest("GET", "/api/stock?limit=1000");
       return response.json();
     },
   });
-  const stock = stockResult?.data || [];
 
   // Pagination handlers
   const handlePageChange = (page: number) => {
@@ -230,81 +182,6 @@ export default function SalesInvoiceManagement() {
     setPaginationOptions(prev => ({ ...prev, page: 1 }));
   };
 
-  const createPaymentMutation = useMutation({
-    mutationFn: async (data: PaymentFormData) => {
-      const paymentData = {
-        ...data,
-        amount: data.amount.toFixed(2), // Convert number to string for backend
-        bankAccountId: data.bankAccountId || null,
-      };
-      const response = await authenticatedApiRequest("POST", "/api/sales-payments", paymentData);
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Payment recorded",
-        description: "Sales payment has been recorded successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
-      setPaymentDialogOpen(false);
-      paymentForm.reset();
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to record payment",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const createInvoiceMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await authenticatedApiRequest("POST", "/api/sales-invoices", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Sales invoice created",
-        description: "New sales invoice has been created successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
-      setOpen(false);
-      form.reset();
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create sales invoice",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const markAsPaidMutation = useMutation({
-    mutationFn: async (invoiceId: string) => {
-      const response = await authenticatedApiRequest("POST", `/api/sales-invoices/${invoiceId}/mark-paid`);
-      return response.json();
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Invoice marked as paid",
-        description: `Invoice marked as paid. Shortfall of ₹${parseFloat(data.shortfallAdded).toLocaleString("en-IN")} added to retailer balance.`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to mark invoice as paid",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleCreateNew = () => {
     setEditingInvoice(null);
     form.reset({
@@ -323,6 +200,7 @@ export default function SalesInvoiceManagement() {
           itemId: "",
           weight: 0,
           crates: 0,
+          boxes: 0,
           rate: 0,
           amount: 0,
         },
@@ -331,172 +209,124 @@ export default function SalesInvoiceManagement() {
     setOpen(true);
   };
 
-  // Helper function to get quantity based on item unit
-  const getQuantityForCalculation = (itemId: string, weight: number, crates: number, boxes: number) => {
-    const itemDetails = items.find((i: any) => i.id === itemId);
-    if (!itemDetails) return weight;
-    
-    switch (itemDetails.unit) {
-      case "kgs":
-        return weight;
-      case "crate":
-        return crates;
-      case "box":
-        return boxes; // Box uses boxes field
-      default:
-        return weight;
-    }
+  const getQuantityForCalculation = (item: any) => {
+    return item.weight || (item.crates + item.boxes) || 1;
   };
 
-  const calculateItemAmount = (index: number) => {
-    const itemId = form.watch(`items.${index}.itemId`);
-    const weight = form.watch(`items.${index}.weight`);
-    const crates = form.watch(`items.${index}.crates`);
-    const boxes = form.watch(`items.${index}.boxes`);
-    const rate = form.watch(`items.${index}.rate`);
-    
-    const quantity = getQuantityForCalculation(itemId, weight || 0, crates || 0, boxes || 0);
-    const amount = quantity * rate;
-    form.setValue(`items.${index}.amount`, amount);
-    calculateTotalAmount();
+  const calculateItemAmount = (rate: number, item: any) => {
+    const quantity = getQuantityForCalculation(item);
+    return rate * quantity;
   };
 
   const calculateTotalAmount = () => {
-    const items = form.getValues("items");
-    const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-    form.setValue("invoice.totalAmount", totalAmount);
-    
-    const paidAmount = form.getValues("invoice.paidAmount");
-    const balanceAmount = totalAmount - paidAmount;
-    form.setValue("invoice.balanceAmount", balanceAmount);
-    
-    // Update payment status
-    if (paidAmount === 0) {
-      form.setValue("invoice.status", "Pending");
-    } else if (paidAmount < totalAmount) {
-      form.setValue("invoice.status", "Partial");
-    } else {
-      form.setValue("invoice.status", "Paid");
-    }
+    const items = form.watch("items");
+    return items.reduce((total, item) => {
+      return total + calculateItemAmount(item.rate, item);
+    }, 0);
   };
 
   const getAvailableStock = (itemId: string) => {
-    const itemStock = stock.find((s: any) => s.itemId === itemId);
-    return itemStock?.totalQuantity || 0;
+    const stock = stockResult?.data?.find((s: any) => s.itemId === itemId);
+    return stock?.availableQuantity || 0;
   };
 
   const getItemName = (itemId: string) => {
-    const item = items.find((i: any) => i.id === itemId);
+    const item = itemsResult?.data?.find((i: any) => i.id === itemId);
     return item?.name || "Unknown Item";
   };
 
   const getRetailerName = (retailerId: string) => {
-    const retailer = retailers.find((r: any) => r.id === retailerId);
+    const retailer = retailersResult?.data?.find((r: any) => r.id === retailerId);
     return retailer?.name || "Unknown Retailer";
   };
 
-  const onSubmit = (data: InvoiceFormData) => {
-    // Convert numbers to strings for backend compatibility
-    const formattedData = {
-      invoice: {
+  const onSubmit = async (data: InvoiceFormData) => {
+    try {
+      // Calculate totals
+      const totalAmount = calculateTotalAmount();
+      const invoiceData = {
         ...data.invoice,
-        totalAmount: data.invoice.totalAmount.toFixed(2),
-        paidAmount: data.invoice.paidAmount.toFixed(2),
-        balanceAmount: data.invoice.balanceAmount.toFixed(2),
-      },
-      items: data.items.map(item => ({
-        ...item,
-        weight: (item.weight || 0).toFixed(2),
-        crates: (item.crates || 0).toFixed(2),
-        boxes: (item.boxes || 0).toFixed(2),
-        rate: item.rate.toFixed(2),
-        amount: item.amount.toFixed(2),
-      })),
-    };
-    createInvoiceMutation.mutate(formattedData);
+        totalAmount,
+        balanceAmount: totalAmount - data.invoice.paidAmount,
+        items: data.items.map(item => ({
+          ...item,
+          amount: calculateItemAmount(item.rate, item),
+        })),
+      };
+
+      const endpoint = editingInvoice ? `/api/sales-invoices/${editingInvoice.id}` : "/api/sales-invoices";
+      const method = editingInvoice ? "PUT" : "POST";
+
+      const response = await authenticatedApiRequest(method, endpoint, invoiceData);
+      
+      if (!response.ok) {
+        throw new Error("Failed to save invoice");
+      }
+
+      toast({
+        title: editingInvoice ? "Invoice updated" : "Invoice created",
+        description: editingInvoice ? "Sales invoice has been updated successfully" : "Sales invoice has been created successfully",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+      setOpen(false);
+      form.reset();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save invoice",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRecordPayment = (invoice: any) => {
-    setSelectedInvoice(invoice);
-    paymentForm.reset({
-      invoiceId: invoice.id,
-      retailerId: invoice.retailerId,
-      amount: 0,
-      paymentDate: format(new Date(), "yyyy-MM-dd"),
-      paymentMode: "Cash",
-      bankAccountId: "",
-      transactionReference: "",
-      notes: "",
-    });
-    setPaymentDialogOpen(true);
-  };
-
-  const handleViewPaymentHistory = (invoice: any) => {
-    setSelectedInvoice(invoice);
-    setPaymentHistoryDialogOpen(true);
-  };
-
-  const handleMarkAsPaid = (invoice: any) => {
-    markAsPaidMutation.mutate(invoice.id);
-  };
-
-  const onSubmitPayment = (data: PaymentFormData) => {
-    createPaymentMutation.mutate(data);
-  };
-
-  const getInvoicePayments = (invoiceId: string) => {
-    return salesPayments.filter((payment: any) => payment.invoiceId === invoiceId);
+  const handleViewInvoice = (invoice: any) => {
+    setLocation(`/${slug}/sales-invoices/${invoice.id}`);
   };
 
   // Define table columns
   const columns = [
     {
       accessorKey: "invoiceNumber",
-      header: "Invoice #",
-      cell: (value: string) => <div className="font-medium">{value}</div>,
+      header: "Invoice Number",
+      cell: (value: string) => <div className="font-medium">{value || "AUTO"}</div>,
+    },
+    {
+      accessorKey: "retailer.name",
+      header: "Retailer",
+      cell: (value: string) => value,
     },
     {
       accessorKey: "invoiceDate",
       header: "Date",
-      cell: (value: string) => format(new Date(value), "dd/MM/yyyy"),
+      cell: (value: string) => format(new Date(value), "MMM dd, yyyy"),
     },
     {
-      accessorKey: "retailerId",
-      header: "Retailer",
-      cell: (value: string) => getRetailerName(value),
+      accessorKey: "items",
+      header: "Items",
+      cell: (value: any[]) => `${value?.length || 0} items`,
     },
     {
       accessorKey: "totalAmount",
       header: "Total Amount",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
     },
     {
       accessorKey: "paidAmount",
       header: "Paid Amount",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
     },
     {
       accessorKey: "balanceAmount",
-      header: "Due Amount",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+      header: "Balance",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
     },
     {
-      accessorKey: "shortfallAmount",
-      header: "Shortfall Amount",
+      accessorKey: "paymentStatus",
+      header: "Payment Status",
       cell: (value: string) => (
-        <span className="text-amber-600 font-medium">
-          {parseFloat(value || "0") > 0 
-            ? `₹${parseFloat(value).toLocaleString("en-IN")}` 
-            : "-"
-          }
-        </span>
-      ),
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: (value: string) => (
-        <Badge className={getPaymentStatusColor(value)}>
+        <Badge className={getPaymentStatusColor(value)} variant="secondary">
           {value}
         </Badge>
       ),
@@ -515,65 +345,27 @@ export default function SalesInvoiceManagement() {
           >
             <Eye className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleRecordPayment(invoice)}
-            data-testid={`button-payment-${invoice.id}`}
-            title="Record Payment"
-          >
-            <DollarSign className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleViewPaymentHistory(invoice)}
-            data-testid={`button-history-${invoice.id}`}
-            title="Payment History"
-          >
-            <History className="h-4 w-4" />
-          </Button>
-          {(invoice.status === "Pending" || invoice.status === "Partial") && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => markAsPaidMutation.mutate(invoice.id)}
-              data-testid={`button-mark-paid-${invoice.id}`}
-              title="Mark as Paid"
-              disabled={markAsPaidMutation.isPending}
-            >
-              <CheckCircle className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       ),
     },
   ];
 
-  // Add missing handler functions (handleViewInvoice was missing)
-  const handleViewInvoice = (invoice: any) => {
-    setSelectedInvoice(invoice);
-  };
-
   // Extract invoices and metadata from paginated result
   const invoices = invoicesResult?.data || [];
+  const retailers = retailersResult?.data || [];
+  const items = itemsResult?.data || [];
   const paginationMetadata = invoicesResult?.pagination;
-
-  // Calculate summary stats using server totals
-  const totalInvoices = paginationMetadata?.total || 0;
-  // Note: totalSales, paidAmount, pendingAmount removed as they would be misleading from current page only
-  // Consider adding /api/sales-invoices/stats endpoint for accurate aggregates
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
       case "Paid":
-        return "bg-green-500";
-      case "Partial":
-        return "bg-yellow-500";
+        return "bg-chart-2/10 text-chart-2";
       case "Pending":
-        return "bg-red-500";
+        return "bg-chart-1/10 text-chart-1";
+      case "Partial":
+        return "bg-chart-4/10 text-chart-4";
       default:
-        return "bg-gray-500";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -615,61 +407,89 @@ export default function SalesInvoiceManagement() {
     );
   }
 
+  const totalRevenue = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.totalAmount || "0"), 0);
+  const totalPaid = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.paidAmount || "0"), 0);
+  const totalPending = totalRevenue - totalPaid;
+  const totalInvoices = invoices.length;
+
   return (
     <div className="flex h-screen">
       <Sidebar />
+
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Sales Invoice Management</h2>
+              <h2 className="text-2xl font-semibold text-foreground">Sales Invoices</h2>
               <p className="text-sm text-muted-foreground">
-                Create and manage sales invoices for retailers
+                Manage sales invoices and track payments
               </p>
             </div>
-            <Button onClick={handleCreateNew} data-testid="button-add-invoice">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button onClick={handleCreateNew} data-testid="button-create-invoice">
+              <Plus className="mr-2 h-4 w-4" />
               Create Invoice
             </Button>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto space-y-8">
-
-          {/* Summary Cards */}
+        {/* Summary Cards */}
+        <div className="p-6 bg-muted/50">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <IndianRupee className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString('en-IN')}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{totalInvoices}</div>
-                <p className="text-xs text-muted-foreground">Sales invoices</p>
+                <div className="text-2xl font-bold text-orange-600">₹{totalPending.toLocaleString('en-IN')}</div>
               </CardContent>
             </Card>
-            
-            {/* Amount aggregates removed - would be misleading from current page only */}
-            {/* Consider adding /api/sales-invoices/stats endpoint for accurate totals */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalInvoices}</div>
+              </CardContent>
+            </Card>
           </div>
+        </div>
 
-          {/* Sales Invoices Table */}
+        {/* Content */}
+        <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Sales Invoices</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>All Invoices</CardTitle>
                 <div className="flex items-center space-x-4">
                   <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-                    <SelectTrigger className="w-48">
+                    <SelectTrigger className="w-48" data-testid="select-status-filter">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="Paid">Paid</SelectItem>
-                      <SelectItem value="Partially Paid">Partially Paid</SelectItem>
+                      <SelectItem value="Partial">Partial</SelectItem>
                       <SelectItem value="Pending">Pending</SelectItem>
                     </SelectContent>
                   </Select>
@@ -691,28 +511,30 @@ export default function SalesInvoiceManagement() {
               />
             </CardContent>
           </Card>
-          </div>
         </main>
       </div>
 
-      {/* Create Invoice Dialog */}
+      {/* Create Invoice Dialog - Keep this as it's for creating invoices, not payments */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-6xl">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Sales Invoice</DialogTitle>
+            <DialogTitle>{editingInvoice ? "Edit" : "Create"} Sales Invoice</DialogTitle>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Invoice Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="invoice.retailerId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Retailer *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-retailer">
                             <SelectValue placeholder="Select retailer" />
@@ -733,233 +555,36 @@ export default function SalesInvoiceManagement() {
 
                 <FormField
                   control={form.control}
-                  name="invoice.invoiceNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Invoice Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Auto-generated" {...field} data-testid="input-invoice-number" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="invoice.invoiceDate"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Invoice Date *</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-invoice-date" />
+                        <Input
+                          type="date"
+                          {...field}
+                          data-testid="input-invoice-date"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              {/* Invoice Items */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Invoice Items</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => append({
-                      itemId: "",
-                      weight: 0,
-                      crates: 0,
-                      boxes: 0,
-                      rate: 0,
-                      amount: 0,
-                    })}
-                    data-testid="button-add-item"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  {fields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-6 gap-4 items-end p-4 border rounded-lg">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.itemId`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Item</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid={`select-item-${index}`}>
-                                  <SelectValue placeholder="Select item" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {items.map((item: any) => (
-                                  <SelectItem key={item.id} value={item.id}>
-                                    {item.name} - {item.quality} ({item.unit?.charAt(0).toUpperCase() + item.unit?.slice(1) || 'N/A'}) (Stock: {getAvailableStock(item.id)})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.weight`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Weight (Kgs) *</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.1"
-                                {...field}
-                                onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
-                                  calculateItemAmount(index);
-                                }}
-                                data-testid={`input-weight-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.crates`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Crates *</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="0.00"
-                                {...field}
-                                onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
-                                  calculateItemAmount(index);
-                                }}
-                                data-testid={`input-crates-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.boxes`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Boxes *</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="0.00"
-                                {...field}
-                                onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
-                                  calculateItemAmount(index);
-                                }}
-                                data-testid={`input-boxes-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.rate`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Rate</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="₹"
-                                {...field}
-                                onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
-                                  calculateItemAmount(index);
-                                }}
-                                data-testid={`input-rate-${index}`}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.amount`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Amount</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                readOnly
-                                {...field}
-                                className="bg-muted"
-                                data-testid={`input-amount-${index}`}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          remove(index);
-                          calculateTotalAmount();
-                        }}
-                        disabled={fields.length === 1}
-                        data-testid={`button-remove-item-${index}`}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Payment Details */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FormField
                   control={form.control}
-                  name="invoice.totalAmount"
+                  name="invoice.invoiceNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Total Amount</FormLabel>
+                      <FormLabel>Invoice Number</FormLabel>
                       <FormControl>
                         <Input
-                          type="number"
-                          readOnly
+                          placeholder="Leave empty for auto-generation"
                           {...field}
-                          className="bg-muted font-medium"
-                          data-testid="input-total-amount"
+                          data-testid="input-invoice-number"
                         />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -974,54 +599,203 @@ export default function SalesInvoiceManagement() {
                         <Input
                           type="number"
                           step="0.01"
+                          placeholder="Enter paid amount"
                           {...field}
-                          onChange={(e) => {
-                            field.onChange(parseFloat(e.target.value) || 0);
-                            calculateTotalAmount();
-                          }}
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                           data-testid="input-paid-amount"
                         />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
+              </div>
 
-                <FormField
-                  control={form.control}
-                  name="invoice.balanceAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due Amount</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          readOnly
-                          {...field}
-                          className="bg-muted"
-                          data-testid="input-due-amount"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+              {/* Items */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium">Invoice Items</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => append({
+                      itemId: "",
+                      weight: 0,
+                      crates: 0,
+                      boxes: 0,
+                      rate: 0,
+                      amount: 0,
+                    })}
+                    data-testid="button-add-item"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Item
+                  </Button>
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="invoice.status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Status</FormLabel>
-                      <FormControl>
-                        <Input
-                          readOnly
-                          {...field}
-                          className="bg-muted"
-                          data-testid="input-payment-status"
+                <div className="space-y-4">
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium">Item {index + 1}</h4>
+                        {fields.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(index)}
+                            data-testid={`button-remove-item-${index}`}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.itemId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Item *</FormLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid={`select-item-${index}`}>
+                                    <SelectValue placeholder="Select item" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {items.map((item: any) => (
+                                    <SelectItem key={item.id} value={item.id}>
+                                      {item.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.weight`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Weight (KG)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0"
+                                  {...field}
+                                  value={field.value || ""}
+                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  data-testid={`input-weight-${index}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.crates`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Crates</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  {...field}
+                                  value={field.value || ""}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  data-testid={`input-crates-${index}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.boxes`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Boxes</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  {...field}
+                                  value={field.value || ""}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  data-testid={`input-boxes-${index}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.rate`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Rate (₹)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  {...field}
+                                  value={field.value || ""}
+                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  data-testid={`input-rate-${index}`}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="flex items-end">
+                          <div className="text-sm">
+                            <div className="text-muted-foreground mb-1">Amount</div>
+                            <div className="font-medium">
+                              ₹{calculateItemAmount(
+                                form.watch(`items.${index}.rate`),
+                                form.watch(`items.${index}`)
+                              ).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {form.watch(`items.${index}.itemId`) && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          Available Stock: {getAvailableStock(form.watch(`items.${index}.itemId`))} units
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Total Amount Display */}
+              <div className="bg-muted p-4 rounded-lg">
+                <div className="flex justify-between items-center text-lg font-semibold">
+                  <span>Total Amount:</span>
+                  <span>₹{calculateTotalAmount().toFixed(2)}</span>
+                </div>
               </div>
 
               <FormField
@@ -1031,64 +805,10 @@ export default function SalesInvoiceManagement() {
                   <FormItem>
                     <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <Input placeholder="Additional notes..." {...field} data-testid="input-notes" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createInvoiceMutation.isPending}
-                  data-testid="button-submit"
-                >
-                  {createInvoiceMutation.isPending ? "Creating..." : "Create Invoice"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Record Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-          </DialogHeader>
-          
-          <Form {...paymentForm}>
-            <form onSubmit={paymentForm.handleSubmit(onSubmitPayment)} className="space-y-4">
-              {selectedInvoice && (
-                <div className="bg-muted p-4 rounded-lg">
-                  <div className="text-sm space-y-1">
-                    <div><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</div>
-                    <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
-                    <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
-                    <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString("en-IN")}</div>
-                  </div>
-                </div>
-              )}
-
-              <FormField
-                control={paymentForm.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment Amount *</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="₹ 0.00"
+                      <Textarea
+                        placeholder="Enter notes (optional)"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        data-testid="input-payment-amount"
+                        data-testid="textarea-notes"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1096,174 +816,21 @@ export default function SalesInvoiceManagement() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={paymentForm.control}
-                  name="paymentDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Date *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-payment-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={paymentForm.control}
-                  name="paymentMode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Mode *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-payment-mode">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Cash">Cash</SelectItem>
-                          <SelectItem value="Bank">Bank Transfer</SelectItem>
-                          <SelectItem value="UPI">UPI</SelectItem>
-                          <SelectItem value="Cheque">Cheque</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {paymentForm.watch("paymentMode") !== "Cash" && (
-                <FormField
-                  control={paymentForm.control}
-                  name="bankAccountId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bank Account</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-bank-account">
-                            <SelectValue placeholder="Select bank account" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {bankAccounts.map((account: any) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.bankName} - {account.accountNumber?.slice(-4)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              <FormField
-                control={paymentForm.control}
-                name="transactionReference"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Transaction Reference</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Reference number..." {...field} data-testid="input-transaction-ref" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={paymentForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Additional notes..." {...field} data-testid="input-payment-notes" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} data-testid="button-payment-cancel">
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  data-testid="button-cancel"
+                >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createPaymentMutation.isPending}
-                  data-testid="button-payment-submit"
-                >
-                  {createPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                <Button type="submit" data-testid="button-submit">
+                  {editingInvoice ? "Update" : "Create"} Invoice
                 </Button>
               </div>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payment History Dialog */}
-      <Dialog open={paymentHistoryDialogOpen} onOpenChange={setPaymentHistoryDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Payment History</DialogTitle>
-          </DialogHeader>
-          
-          {selectedInvoice && (
-            <div className="space-y-4">
-              <div className="bg-muted p-4 rounded-lg">
-                <div className="text-sm space-y-1">
-                  <div><strong>Invoice:</strong> {selectedInvoice.invoiceNumber}</div>
-                  <div><strong>Retailer:</strong> {getRetailerName(selectedInvoice.retailerId)}</div>
-                  <div><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.totalAmount).toLocaleString("en-IN")}</div>
-                  <div><strong>Paid Amount:</strong> ₹{parseFloat(selectedInvoice.paidAmount).toLocaleString("en-IN")}</div>
-                  <div><strong>Due Amount:</strong> ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString("en-IN")}</div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-3">Payment Records</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Mode</TableHead>
-                      <TableHead>Reference</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getInvoicePayments(selectedInvoice.id).map((payment: any) => (
-                      <TableRow key={payment.id}>
-                        <TableCell>{format(new Date(payment.paymentDate), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="font-medium">₹{parseFloat(payment.amount).toLocaleString("en-IN")}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{payment.paymentMode}</Badge>
-                        </TableCell>
-                        <TableCell>{payment.transactionReference || "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                    {getInvoicePayments(selectedInvoice.id).length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                          No payments recorded for this invoice
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button variant="outline" onClick={() => setPaymentHistoryDialogOpen(false)} data-testid="button-history-close">
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>

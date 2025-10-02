@@ -1,6 +1,18 @@
-import { eq, desc, asc, and, or, ilike, count } from 'drizzle-orm';
+import { eq, desc, asc, and, or, ilike, count, inArray } from 'drizzle-orm';
 import { db } from '../../../db';
-import { retailers, type Retailer, type InsertRetailer, type PaginationOptions, type PaginatedResult } from '@shared/schema';
+import { 
+  retailers, 
+  salesInvoices,
+  salesInvoiceItems,
+  salesPayments,
+  crateTransactions,
+  stockMovements,
+  whatsappMessages,
+  type Retailer, 
+  type InsertRetailer, 
+  type PaginationOptions, 
+  type PaginatedResult 
+} from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 
@@ -33,12 +45,71 @@ export class RetailerModel {
   }
 
   async deleteRetailer(tenantId: string, id: string): Promise<boolean> {
-    const [retailer] = await db
-      .update(retailers)
-      .set({ isActive: false })
-      .where(withTenant(retailers, tenantId, eq(retailers.id, id)))
-      .returning();
-    return !!retailer;
+    return await db.transaction(async (tx) => {
+      // a. Delete whatsappMessages where recipientType='retailer' and recipientId=id
+      await tx.delete(whatsappMessages)
+        .where(and(
+          withTenant(whatsappMessages, tenantId),
+          eq(whatsappMessages.recipientType, 'retailer'),
+          eq(whatsappMessages.recipientId, id)
+        ));
+
+      // b. Delete salesPayments where retailerId=id
+      await tx.delete(salesPayments)
+        .where(and(
+          withTenant(salesPayments, tenantId),
+          eq(salesPayments.retailerId, id)
+        ));
+
+      // c. Delete salesInvoiceItems - first get all salesInvoices IDs for this retailer
+      const retailerInvoices = await tx.select({ id: salesInvoices.id })
+        .from(salesInvoices)
+        .where(and(
+          withTenant(salesInvoices, tenantId),
+          eq(salesInvoices.retailerId, id)
+        ));
+
+      const invoiceIds = retailerInvoices.map(invoice => invoice.id);
+      
+      if (invoiceIds.length > 0) {
+        await tx.delete(salesInvoiceItems)
+          .where(and(
+            withTenant(salesInvoiceItems, tenantId),
+            inArray(salesInvoiceItems.invoiceId, invoiceIds)
+          ));
+      }
+
+      // d. Delete crateTransactions where retailerId=id
+      await tx.delete(crateTransactions)
+        .where(and(
+          withTenant(crateTransactions, tenantId),
+          eq(crateTransactions.retailerId, id)
+        ));
+
+      // e. Delete stockMovements where retailerId=id (retailerId is nullable)
+      await tx.delete(stockMovements)
+        .where(and(
+          withTenant(stockMovements, tenantId),
+          eq(stockMovements.retailerId, id)
+        ));
+
+      // f. Delete salesInvoices where retailerId=id
+      await tx.delete(salesInvoices)
+        .where(and(
+          withTenant(salesInvoices, tenantId),
+          eq(salesInvoices.retailerId, id)
+        ));
+
+      // g. Finally delete the retailer record itself
+      const [deletedRetailer] = await tx.delete(retailers)
+        .where(and(
+          withTenant(retailers, tenantId),
+          eq(retailers.id, id)
+        ))
+        .returning();
+
+      return !!deletedRetailer;
+    });
   }
 
   async getRetailersPaginated(tenantId: string, options?: PaginationOptions & {

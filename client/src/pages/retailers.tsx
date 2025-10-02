@@ -34,8 +34,6 @@ const retailerSchema = z.object({
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
-  gstNumber: z.string().optional(),
-  panNumber: z.string().optional(),
 });
 
 type RetailerFormData = z.infer<typeof retailerSchema>;
@@ -60,8 +58,6 @@ export default function RetailerManagement() {
       contactPerson: "",
       phone: "",
       address: "",
-      gstNumber: "",
-      panNumber: "",
     },
   });
 
@@ -151,8 +147,6 @@ export default function RetailerManagement() {
       contactPerson: retailer.contactPerson || "",
       phone: retailer.phone || "",
       address: retailer.address || "",
-      gstNumber: retailer.gstNumber || "",
-      panNumber: retailer.panNumber || "",
     });
     setOpen(true);
   };
@@ -451,36 +445,6 @@ export default function RetailerManagement() {
                   </FormItem>
                 )}
               />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="gstNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>GST Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="GST number" {...field} data-testid="input-gst" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="panNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>PAN Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="PAN number" {...field} data-testid="input-pan" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">

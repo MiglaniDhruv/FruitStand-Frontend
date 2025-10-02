@@ -35,7 +35,6 @@ export default function SettingsPage() {
     address: "",
     phone: "",
     email: "",
-    gstNumber: "",
     commissionRate: "5",
     notifications: true,
     emailAlerts: true,
@@ -67,7 +66,6 @@ export default function SettingsPage() {
           address: tenantSettings.address || "",
           phone: tenantSettings.phone || "",
           email: tenantSettings.email || "",
-          gstNumber: tenantSettings.gstNumber || "",
           commissionRate: tenantSettings.commissionRate || "5",
           notifications: tenantSettings.notifications ?? true,
           emailAlerts: tenantSettings.emailAlerts ?? true,
@@ -169,25 +167,14 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input
-                    id="companyName"
-                    value={settings.companyName}
-                    onChange={(e) => handleSettingChange("companyName", e.target.value)}
-                    data-testid="input-company-name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gstNumber">GST Number</Label>
-                  <Input
-                    id="gstNumber"
-                    value={settings.gstNumber}
-                    onChange={(e) => handleSettingChange("gstNumber", e.target.value)}
-                    data-testid="input-gst-number"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input
+                  id="companyName"
+                  value={settings.companyName}
+                  onChange={(e) => handleSettingChange("companyName", e.target.value)}
+                  data-testid="input-company-name"
+                />
               </div>
               
               <div className="space-y-2">

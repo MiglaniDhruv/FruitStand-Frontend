@@ -5,6 +5,7 @@ import RecentTransactions from "@/components/dashboard/recent-transactions";
 import QuickActions from "@/components/dashboard/quick-actions";
 import LowStockAlert from "@/components/dashboard/low-stock-alert";
 import RecentPayments from "@/components/dashboard/recent-payments";
+import { LowCreditWarningBanner } from "@/components/whatsapp/low-credit-warning-banner";
 import { useTenant } from "@/hooks/use-tenant";
 import { Search, Bell, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,8 @@ export default function Dashboard() {
         {/* Dashboard Content */}
         <main className="flex-1 overflow-auto p-6">
           <KPICards kpis={kpis} loading={kpisLoading} />
+          
+          <LowCreditWarningBanner />
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">

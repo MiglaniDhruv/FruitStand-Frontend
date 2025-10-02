@@ -50,5 +50,13 @@ export class SalesInvoiceRouter extends BaseRouter {
       attachTenantContext,
       this.salesInvoiceController.markSalesInvoiceAsPaid.bind(this.salesInvoiceController)
     );
+
+    // POST /sales-invoices/:id/share-link - Create share link for sales invoice
+    this.router.post('/sales-invoices/:id/share-link', 
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.salesInvoiceController.createShareLink.bind(this.salesInvoiceController)
+    );
   }
 }

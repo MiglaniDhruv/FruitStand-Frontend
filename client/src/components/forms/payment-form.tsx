@@ -30,21 +30,19 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 
-const paymentSchema = z.object({
+const paymentFormSchema = z.object({
   invoiceId: z.string().min(1, "Invoice is required"),
   vendorId: z.string().min(1, "Vendor is required"),
   amount: z.string().min(1, "Amount is required"),
-  paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"], {
-    required_error: "Payment mode is required",
-  }),
   paymentDate: z.string().min(1, "Payment date is required"),
-  bankAccountId: z.string().nullable().optional(),
+  paymentMode: z.enum(["Cash", "Bank", "UPI", "Cheque"]),
+  bankAccountId: z.string().optional(),
   chequeNumber: z.string().optional(),
   upiReference: z.string().optional(),
   notes: z.string().optional(),
 });
 
-type PaymentFormData = z.infer<typeof paymentSchema>;
+type PaymentFormData = z.infer<typeof paymentFormSchema>;
 
 interface PaymentFormProps {
   open: boolean;
@@ -59,7 +57,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
   const queryClient = useQueryClient();
 
   const form = useForm<PaymentFormData>({
-    resolver: zodResolver(paymentSchema),
+    resolver: zodResolver(paymentFormSchema),
     defaultValues: {
       invoiceId: preSelectedInvoiceId || "",
       vendorId: "",

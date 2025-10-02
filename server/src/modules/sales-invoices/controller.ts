@@ -28,6 +28,10 @@ const salesInvoiceValidation = {
   })
 };
 
+const shareInvoiceParamsSchema = z.object({
+  id: z.string().uuid('Invalid invoice ID format')
+});
+
 export class SalesInvoiceController extends BaseController {
   private salesInvoiceModel: SalesInvoiceModel;
 
@@ -136,6 +140,32 @@ export class SalesInvoiceController extends BaseController {
       return res.json({ data: result.data, pagination: result.pagination });
     } catch (error) {
       this.handleError(res, error, 'Failed to fetch paginated sales invoices');
+    }
+  }
+
+  async createShareLink(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      
+      const validation = shareInvoiceParamsSchema.safeParse(req.params);
+      
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.errors);
+      }
+
+      const { id: invoiceId } = validation.data;
+      
+      const shareLink = await this.salesInvoiceModel.createShareLink(tenantId, invoiceId);
+      
+      res.status(201).json({
+        success: true,
+        data: {
+          shareLink,
+          publicUrl: `${req.protocol}://${req.get('host')}/api/public/invoices/${shareLink.token}`
+        }
+      });
+    } catch (error) {
+      this.handleError(res, error, 'Failed to create share link');
     }
   }
 }

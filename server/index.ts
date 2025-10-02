@@ -20,6 +20,8 @@ import { expenseRouter } from "./src/modules/expenses";
 import { ledgerRouter } from "./src/modules/ledgers";
 import { dashboardRouter } from "./src/modules/dashboard";
 import { tenantRouter } from "./src/modules/tenants";
+import { whatsappRouter } from "./src/modules/whatsapp";
+import { publicRouter } from "./src/modules/public/router";
 
 const app = express();
 app.use(express.json());
@@ -96,6 +98,18 @@ app.use(extractTenantSlug);
     console.error("Failed to initialize database:", error);
   }
 
+  // Initialize WhatsApp payment reminder scheduler
+  try {
+    const { initializePaymentReminderScheduler } = await import("./src/services/whatsapp");
+    await initializePaymentReminderScheduler();
+    console.log("WhatsApp payment reminder scheduler initialized");
+  } catch (error) {
+    console.error("Failed to initialize WhatsApp scheduler:", error);
+  }
+
+  // Mount public router first (no authentication required)
+  app.use("/api/public", publicRouter);
+
   // Mount all modular routers (routes already include /api prefix)
   app.use("/api", authRouter.getRouter());
   app.use("/api", userRouter.getRouter());
@@ -112,6 +126,7 @@ app.use(extractTenantSlug);
   app.use("/api", ledgerRouter.getRouter());
   app.use("/api", dashboardRouter.getRouter());
   app.use("/api", tenantRouter.getRouter());
+  app.use("/api", whatsappRouter.getRouter());
 
   // Setup server for WebSocket support (required for Vite HMR)
   const { createServer } = await import("http");

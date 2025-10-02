@@ -12,7 +12,9 @@ import Vendors from "@/pages/vendors";
 import Retailers from "@/pages/retailers";
 import Items from "@/pages/items";
 import PurchaseInvoices from "@/pages/purchase-invoices";
+import PurchaseInvoiceDetailPage from "@/pages/purchase-invoice-detail";
 import SalesInvoices from "@/pages/sales-invoices";
+import SalesInvoiceDetailPage from "@/pages/sales-invoice-detail";
 import Expenses from "@/pages/expenses";
 import Crates from "@/pages/crates";
 import Stock from "@/pages/stock";
@@ -20,6 +22,9 @@ import Ledgers from "@/pages/ledgers";
 import Reports from "@/pages/reports";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
+import WhatsAppLogsPage from "@/pages/whatsapp-logs";
+import SharedInvoicePage from '@/pages/public/shared-invoice';
+import LandingPage from "@/pages/landing";
 
 import { TenantLandingRedirect } from "@/components/tenant/tenant-landing-redirect";
 import { TenantLogin } from "@/components/tenant/tenant-login";
@@ -29,6 +34,22 @@ import { TenantSlugProvider } from "@/contexts/tenant-slug-context";
 function Router() {
   return (
     <Switch>
+      {/* Public routes - no authentication required */}
+      <Route
+        path="/public/purchase-invoices/:token"
+        component={(props) => <SharedInvoicePage />}
+      />
+      <Route
+        path="/public/sales-invoices/:token"
+        component={(props) => <SharedInvoicePage />}
+      />
+      <Route
+        path="/public/invoices/:token"
+        component={(props) => <SharedInvoicePage />}
+      />
+
+      <Route path="/" component={LandingPage} />
+
       {/* Tenant-specific routes */}
       <Route
         path="/:slug/login"
@@ -80,11 +101,33 @@ function Router() {
         )}
       />
       <Route
+        path="/:slug/purchase-invoices/:invoiceId"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={PurchaseInvoiceDetailPage}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
         path="/:slug/purchase-invoices"
         component={(props) => (
           <TenantSlugProvider slug={props.params.slug}>
             <TenantProtectedRoute
               component={PurchaseInvoices}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/sales-invoices/:invoiceId"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={SalesInvoiceDetailPage}
               slug={props.params.slug}
             />
           </TenantSlugProvider>
@@ -164,6 +207,17 @@ function Router() {
           <TenantSlugProvider slug={props.params.slug}>
             <TenantProtectedRoute
               component={Settings}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
+        path="/:slug/whatsapp-logs"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={WhatsAppLogsPage}
               slug={props.params.slug}
             />
           </TenantSlugProvider>

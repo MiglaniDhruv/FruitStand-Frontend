@@ -1,6 +1,14 @@
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import { 
   vendors,
+  purchaseInvoices,
+  invoiceItems,
+  payments,
+  stockMovements,
+  whatsappMessages,
+  items,
+  salesInvoiceItems,
+  stock,
   type Vendor, 
   type InsertVendor,
   type PaginationOptions,
@@ -46,12 +54,104 @@ export class VendorModel {
   }
 
   async deleteVendor(tenantId: string, id: string): Promise<boolean> {
-    const [vendor] = await db
-      .update(vendors)
-      .set({ isActive: false })
-      .where(withTenant(vendors, tenantId, eq(vendors.id, id)))
-      .returning();
-    return !!vendor;
+    return await db.transaction(async (tx) => {
+      // a. Delete whatsappMessages where recipientType='vendor' and recipientId=id
+      await tx.delete(whatsappMessages)
+        .where(and(
+          withTenant(whatsappMessages, tenantId),
+          eq(whatsappMessages.recipientType, 'vendor'),
+          eq(whatsappMessages.recipientId, id)
+        ));
+
+      // b. Delete payments where vendorId=id
+      await tx.delete(payments)
+        .where(and(
+          withTenant(payments, tenantId),
+          eq(payments.vendorId, id)
+        ));
+
+      // c. Delete invoiceItems - first get all purchaseInvoices IDs for this vendor
+      const vendorInvoices = await tx.select({ id: purchaseInvoices.id })
+        .from(purchaseInvoices)
+        .where(and(
+          withTenant(purchaseInvoices, tenantId),
+          eq(purchaseInvoices.vendorId, id)
+        ));
+
+      const invoiceIds = vendorInvoices.map(invoice => invoice.id);
+      
+      if (invoiceIds.length > 0) {
+        await tx.delete(invoiceItems)
+          .where(and(
+            withTenant(invoiceItems, tenantId),
+            inArray(invoiceItems.invoiceId, invoiceIds)
+          ));
+      }
+
+      // d. Delete purchaseInvoices where vendorId=id
+      await tx.delete(purchaseInvoices)
+        .where(and(
+          withTenant(purchaseInvoices, tenantId),
+          eq(purchaseInvoices.vendorId, id)
+        ));
+
+      // e. Get all items that belong to this vendor before deleting dependent records
+      const vendorItems = await tx.select({ id: items.id })
+        .from(items)
+        .where(and(
+          withTenant(items, tenantId),
+          eq(items.vendorId, id)
+        ));
+
+      const itemIds = vendorItems.map(item => item.id);
+      
+      if (itemIds.length > 0) {
+        // Delete salesInvoiceItems that reference these items
+        await tx.delete(salesInvoiceItems)
+          .where(and(
+            withTenant(salesInvoiceItems, tenantId),
+            inArray(salesInvoiceItems.itemId, itemIds)
+          ));
+
+        // Delete stock records that reference these items
+        await tx.delete(stock)
+          .where(and(
+            withTenant(stock, tenantId),
+            inArray(stock.itemId, itemIds)
+          ));
+
+        // Delete stockMovements that reference these items
+        await tx.delete(stockMovements)
+          .where(and(
+            withTenant(stockMovements, tenantId),
+            inArray(stockMovements.itemId, itemIds)
+          ));
+      }
+
+      // f. Delete stockMovements where vendorId=id (vendorId is nullable)
+      await tx.delete(stockMovements)
+        .where(and(
+          withTenant(stockMovements, tenantId),
+          eq(stockMovements.vendorId, id)
+        ));
+
+      // g. Delete items where vendorId=id
+      await tx.delete(items)
+        .where(and(
+          withTenant(items, tenantId),
+          eq(items.vendorId, id)
+        ));
+
+      // h. Finally delete the vendor record itself
+      const [deletedVendor] = await tx.delete(vendors)
+        .where(and(
+          withTenant(vendors, tenantId),
+          eq(vendors.id, id)
+        ))
+        .returning();
+
+      return !!deletedVendor;
+    });
   }
 
   async getVendorsPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<Vendor>> {
@@ -66,10 +166,18 @@ export class VendorModel {
     
     const searchableColumns = [vendors.name, vendors.contactPerson];
     
-    // Combine tenant filtering with existing isActive filtering
-    const combinedCondition = and(tenantCondition, eq(vendors.isActive, true))!;
+    // Build WHERE conditions array starting with tenant filtering
+    const whereConditions = [tenantCondition];
     
-    // Build base query with tenant and isActive filters
+    // Filter by active vendors by default unless status is 'all'
+    if (options.status !== 'all') {
+      const isActive = options.status === 'inactive' ? false : true;
+      whereConditions.push(eq(vendors.isActive, isActive));
+    }
+    
+    // Combine all conditions
+    const combinedCondition = and(...whereConditions)!;
+    
     let query = db.select().from(vendors).where(combinedCondition);
     
     // Apply search filter using helper

@@ -29,8 +29,6 @@ const vendorSchema = z.object({
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
-  gstNumber: z.string().optional(),
-  panNumber: z.string().optional(),
   isActive: z.boolean().default(true),
 });
 
@@ -54,8 +52,6 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
       contactPerson: vendor?.contactPerson || "",
       phone: vendor?.phone || "",
       address: vendor?.address || "",
-      gstNumber: vendor?.gstNumber || "",
-      panNumber: vendor?.panNumber || "",
       isActive: vendor?.isActive ?? true,
     },
   });
@@ -67,8 +63,6 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
       contactPerson: vendor?.contactPerson || "",
       phone: vendor?.phone || "",
       address: vendor?.address || "",
-      gstNumber: vendor?.gstNumber || "",
-      panNumber: vendor?.panNumber || "",
       isActive: vendor?.isActive ?? true,
     });
   }, [vendor, form]);
@@ -148,34 +142,6 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
                     <FormLabel>Phone Number</FormLabel>
                     <FormControl>
                       <Input placeholder="Enter phone number" {...field} data-testid="input-phone" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="gstNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>GST Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter GST number" {...field} data-testid="input-gst-number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="panNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PAN Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter PAN number" {...field} data-testid="input-pan-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

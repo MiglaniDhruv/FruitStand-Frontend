@@ -37,5 +37,14 @@ export class PurchaseInvoiceRouter extends BaseRouter {
       requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
       this.purchaseInvoiceController.create.bind(this.purchaseInvoiceController)
     );
+
+    // POST /purchase-invoices/:id/share-link - Create share link for purchase invoice
+    this.router.post('/purchase-invoices/:id/share-link', 
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
+      this.purchaseInvoiceController.createShareLink.bind(this.purchaseInvoiceController)
+    );
   }
 }

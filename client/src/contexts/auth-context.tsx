@@ -36,14 +36,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
+    // Listen for token refresh notifications
+    const handleTokenRefresh = () => {
+      refreshAuth();
+    };
+
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('auth-token-refreshed', handleTokenRefresh);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('auth-token-refreshed', handleTokenRefresh);
     };
   }, []);
 

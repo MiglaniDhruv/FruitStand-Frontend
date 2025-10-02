@@ -1,11 +1,24 @@
 import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count } from 'drizzle-orm';
 import { db } from '../../../db';
-import { purchaseInvoices, invoiceItems, vendors, items, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InvoiceWithItems, type PaginationOptions, type PaginatedResult } from '@shared/schema';
+import { purchaseInvoices, invoiceItems, vendors, items, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InvoiceWithItems, type PaginationOptions, type PaginatedResult, type InvoiceShareLink } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { assertSameTenant } from '../../utils/tenant';
+import { InvoiceShareLinkModel } from '../invoice-share-links/model';
 
 export class PurchaseInvoiceModel {
+  private shareModel = new InvoiceShareLinkModel();
+
+  async createShareLink(tenantId: string, invoiceId: string): Promise<InvoiceShareLink> {
+    // Verify the invoice exists and belongs to this tenant
+    const invoice = await this.getPurchaseInvoice(tenantId, invoiceId);
+    if (!invoice) {
+      throw new Error('Purchase invoice not found');
+    }
+    
+    return await this.shareModel.createOrGetShareLink(tenantId, invoiceId, 'purchase');
+  }
+
   async getPurchaseInvoices(tenantId: string): Promise<InvoiceWithItems[]> {
     const invoices = await db.select().from(purchaseInvoices)
       .where(withTenant(purchaseInvoices, tenantId))

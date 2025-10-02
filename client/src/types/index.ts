@@ -8,11 +8,15 @@ export interface TenantInfo {
 }
 
 export interface TenantSettings {
+  // Company Information
+  companyName?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  
   branding?: {
-    primaryColor?: string;
-    secondaryColor?: string;
     logoUrl?: string;
-    companyName?: string;
+    favicon?: string;
   };
   businessRules?: {
     commissionRates?: Record<string, number>;
@@ -26,6 +30,25 @@ export interface TenantSettings {
   support?: {
     email?: string;
     phone?: string;
+  };
+  whatsapp?: {
+    enabled?: boolean;
+    accountSid?: string;
+    authToken?: string;
+    phoneNumber?: string;
+    creditBalance?: number;
+    lowCreditThreshold?: number;
+    scheduler?: {
+      enabled?: boolean;
+      preferredSendHour?: number;
+      reminderFrequency?: 'daily' | 'weekly' | 'monthly';
+      sendOnWeekends?: boolean;
+    };
+    defaultTemplates?: {
+      paymentReminder?: string;
+      invoiceNotification?: string;
+      welcomeMessage?: string;
+    };
   };
 }
 

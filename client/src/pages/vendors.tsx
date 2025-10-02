@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import { useToast } from "@/hooks/use-toast";
@@ -20,8 +27,10 @@ export default function Vendors() {
     limit: 10,
     search: "",
     sortBy: "name",
-    sortOrder: "asc"
+    sortOrder: "asc",
+    status: "active" // Default to showing only active vendors
   });
+  const [searchInput, setSearchInput] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
   const { toast } = useToast();
@@ -36,6 +45,7 @@ export default function Vendors() {
       if (paginationOptions.search) params.append('search', paginationOptions.search);
       if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
       if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      if (paginationOptions.status) params.append('status', paginationOptions.status);
       
       const response = await authenticatedApiRequest("GET", `/api/vendors?${params.toString()}`);
       return response.json();
@@ -74,9 +84,19 @@ export default function Vendors() {
   const handleSearchChange = (search: string) => {
     setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
   };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
+  };
   
   const handleSortChange = (sortBy: string, sortOrder: string) => {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleStatusChange = (status: string) => {
+    setPaginationOptions(prev => ({ ...prev, status, page: 1 }));
   };
 
   // Define table columns
@@ -94,11 +114,6 @@ export default function Vendors() {
     {
       accessorKey: "phone",
       header: "Phone",
-      cell: (value: string) => value || "-",
-    },
-    {
-      accessorKey: "gstNumber",
-      header: "GST Number",
       cell: (value: string) => value || "-",
     },
     {
@@ -184,8 +199,35 @@ export default function Vendors() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>All Vendors</CardTitle>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>All Vendors</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search vendors by name or contact person..."
+                      value={searchInput}
+                      onChange={handleSearchInputChange}
+                      className="pl-8"
+                      data-testid="input-search-vendors"
+                    />
+                  </div>
+                  <Select
+                    value={paginationOptions.status || "active"}
+                    onValueChange={handleStatusChange}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active Only</SelectItem>
+                      <SelectItem value="inactive">Inactive Only</SelectItem>
+                      <SelectItem value="all">All Vendors</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>

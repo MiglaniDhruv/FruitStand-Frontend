@@ -3,6 +3,7 @@ import { BaseController } from '../../utils/base';
 import { PaymentModel } from './model';
 import { insertPaymentSchema } from '@shared/schema';
 import { type AuthenticatedRequest } from '../../types';
+import { whatsAppService } from '../../services/whatsapp/index.js';
 
 export class PaymentController extends BaseController {
   private paymentModel: PaymentModel;
@@ -51,6 +52,16 @@ export class PaymentController extends BaseController {
       const paymentData = validation.data;
       
       const payment = await this.paymentModel.createPayment(tenantId, paymentData);
+      
+      // Attempt to send WhatsApp payment notification (non-blocking)
+      try {
+        await whatsAppService.sendPaymentNotification(tenantId, payment.id, 'purchase');
+        console.log(`✅ WhatsApp payment notification sent for purchase payment ${payment.id}`);
+      } catch (whatsappError: any) {
+        // Log error but don't fail the payment creation
+        console.error(`⚠️ Failed to send WhatsApp notification for purchase payment ${payment.id}:`, whatsappError.message);
+        // Optionally, you could add a flag to the response indicating notification failed
+      }
       
       res.status(201).json(payment);
     } catch (error) {

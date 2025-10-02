@@ -7,7 +7,7 @@ import { PermissionGuard } from "@/components/ui/permission-guard";
 import { useTenant } from "@/hooks/use-tenant";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { TenantInfo } from "@/components/tenant/tenant-info";
-import { getTenantBranding } from "@/lib/tenant-config";
+import { LowCreditWarningBanner } from "@/components/whatsapp/low-credit-warning-banner";
 import {
   Apple,
   BarChart3,
@@ -25,6 +25,7 @@ import {
   User,
   Users,
   Gauge,
+  MessageSquare,
 } from "lucide-react";
 
 const getNavigationItems = (slug: string) => [
@@ -101,6 +102,12 @@ const getNavigationItems = (slug: string) => [
     permission: PERMISSIONS.VIEW_USERS,
   },
   {
+    title: "WhatsApp Logs",
+    href: `/${slug}/whatsapp-logs`,
+    icon: MessageSquare,
+    permission: PERMISSIONS.VIEW_WHATSAPP_LOGS,
+  },
+  {
     title: "Settings",
     href: `/${slug}/settings`,
     icon: Settings,
@@ -146,7 +153,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">
-              {tenant ? getTenantBranding(tenant.settings).companyName : "APMC System"}
+              {tenant?.settings?.companyName || "APMC System"}
             </h1>
             <p className="text-sm text-muted-foreground">
               Commission Merchant
@@ -176,6 +183,11 @@ export default function Sidebar() {
           showStatus={false} 
           showSwitcher={false} 
         />
+      </div>
+
+      {/* Low Credit Warning */}
+      <div className="px-4">
+        <LowCreditWarningBanner />
       </div>
 
       {/* Navigation Menu */}

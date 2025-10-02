@@ -142,7 +142,7 @@ export class RetailerController extends BaseController {
         return this.sendNotFound(res, 'Retailer not found');
       }
 
-            return res.status(204).send();
+      return res.status(204).send();
     } catch (error) {
       this.handleError(res, error, 'Failed to delete retailer');
     }

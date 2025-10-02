@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,6 @@ interface LoginProps {
 }
 
 export default function Login({ redirectTo }: LoginProps) {
-  const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -63,12 +61,8 @@ export default function Login({ redirectTo }: LoginProps) {
         description: "Welcome to APMC System",
       });
       
-      // Use wouter navigation if available, otherwise fallback to window location
-      if (finalRedirectTo) {
-        setLocation(finalRedirectTo);
-      } else {
-        window.location.href = "/";
-      }
+      // Force a full page reload to ensure AuthProvider re-initializes with fresh token
+      window.location.assign(finalRedirectTo);
     } catch (error) {
       let description = 'Invalid credentials';
       if (error instanceof Error) {
@@ -143,9 +137,6 @@ export default function Login({ redirectTo }: LoginProps) {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            Default: admin / admin123
-          </div>
         </CardContent>
       </Card>
     </div>

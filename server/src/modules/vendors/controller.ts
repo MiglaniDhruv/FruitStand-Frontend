@@ -37,7 +37,10 @@ export class VendorController extends BaseController {
       }
 
       // Use base controller utilities for pagination parsing
-      const opts = this.getPaginationOptions(req.query);
+      const opts = {
+        ...this.getPaginationOptions(req.query),
+        status: req.query.status as string | undefined
+      };
       
       // Validate pagination parameters (with defaults from getPaginationOptions)
       const page = opts.page || 1;
