@@ -2,12 +2,24 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { BaseController } from '../../utils/base';
 import { PurchaseInvoiceModel } from './model';
-import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema } from '@shared/schema';
+import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
 import { type AuthenticatedRequest } from '../../types';
 
 const createPurchaseInvoiceBodySchema = z.object({
-  invoice: insertPurchaseInvoiceSchema,
-  items: z.array(insertInvoiceItemSchema.omit({ invoiceId: true }))
+  invoice: insertPurchaseInvoiceSchema.omit({ tenantId: true }),
+  items: z.array(insertInvoiceItemSchema.omit({ invoiceId: true, tenantId: true })),
+  crateTransaction: z.object({
+    partyType: z.enum(['retailer', 'vendor']),
+    vendorId: z.string().uuid().optional(),
+    retailerId: z.string().uuid().optional(),
+    transactionType: z.enum(['Given', 'Received']),
+    quantity: z.coerce.number(),
+    transactionDate: z.union([z.string(), z.date()]).transform((val) => 
+      typeof val === 'string' ? new Date(val) : val
+    ),
+    notes: z.string().optional(),
+  }).optional(),
+  stockOutEntryIds: z.array(z.string().uuid()).optional(),
 });
 
 const shareInvoiceParamsSchema = z.object({
@@ -106,9 +118,20 @@ export class PurchaseInvoiceController extends BaseController {
         return this.sendValidationError(res, validation.error.errors);
       }
 
-      const { invoice: invoiceData, items: itemsData } = validation.data;
+      const { invoice: invoiceData, items: itemsData, crateTransaction, stockOutEntryIds } = validation.data;
       
-      const invoice = await this.purchaseInvoiceModel.createPurchaseInvoice(tenantId, invoiceData, itemsData as any);
+      // Add tenantId to the data before passing to model
+      const invoiceWithTenant = { ...invoiceData, tenantId };
+      const itemsWithTenant = itemsData.map(item => ({ ...item, tenantId }));
+      const crateTransactionWithTenant = crateTransaction ? { ...crateTransaction, tenantId } : undefined;
+      
+      const invoice = await this.purchaseInvoiceModel.createPurchaseInvoice(
+        tenantId, 
+        invoiceWithTenant, 
+        itemsWithTenant as any,
+        crateTransactionWithTenant,
+        stockOutEntryIds
+      );
       
       res.status(201).json(invoice);
     } catch (error) {
@@ -139,6 +162,27 @@ export class PurchaseInvoiceController extends BaseController {
       });
     } catch (error) {
       this.handleError(res, error, 'Failed to create share link');
+    }
+  }
+
+  async delete(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Invoice ID is required' });
+      }
+
+      const success = await this.purchaseInvoiceModel.deletePurchaseInvoice(tenantId, id);
+      
+      if (!success) {
+        return this.sendNotFound(res, 'Invoice not found');
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      this.handleError(res, error, 'Failed to delete purchase invoice');
     }
   }
 }

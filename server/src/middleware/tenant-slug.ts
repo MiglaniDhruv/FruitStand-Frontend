@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { TenantModel } from "../modules/tenants/model";
 import { AuthenticatedRequest } from "../types";
 import { SYSTEM_ROUTES } from "../constants/routes";
-import { i } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 
 // Simple in-memory cache for tenant slugs to avoid repeated DB hits
 interface TenantCacheEntry {

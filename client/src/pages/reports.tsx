@@ -177,7 +177,7 @@ export default function Reports() {
 
   // Outstanding amounts
   const purchaseOutstanding = filteredPurchases.reduce((sum, inv) => sum + parseFloat(inv.balanceAmount || "0"), 0);
-  const salesOutstanding = filteredSales.reduce((sum, inv) => sum + parseFloat(inv.balanceAmount || "0"), 0);
+  const salesOutstanding = filteredSales.reduce((sum, inv) => sum + parseFloat(inv.udhaaarAmount || "0"), 0);
 
   // Top performers
   const retailerSales = filteredSales.reduce((acc: any, sale) => {
@@ -824,8 +824,8 @@ export default function Reports() {
                       ₹{salesOutstanding.toLocaleString("en-IN")}
                     </div>
                     <div className="space-y-2">
-                      {filteredSales.filter(s => parseFloat(s.balanceAmount || "0") > 0)
-                        .sort((a, b) => parseFloat(b.balanceAmount || "0") - parseFloat(a.balanceAmount || "0"))
+                      {filteredSales.filter(s => parseFloat(s.udhaaarAmount || "0") > 0)
+                        .sort((a, b) => parseFloat(b.udhaaarAmount || "0") - parseFloat(a.udhaaarAmount || "0"))
                         .slice(0, 5)
                         .map((sale) => {
                           const retailer = retailers.find((r: any) => r.id === sale.retailerId);
@@ -833,7 +833,7 @@ export default function Reports() {
                             <div key={sale.id} className="flex justify-between items-center text-sm">
                               <span>{retailer?.name || "Unknown"}</span>
                               <span className="text-amber-600 font-medium">
-                                ₹{parseFloat(sale.balanceAmount || "0").toLocaleString("en-IN")}
+                                ₹{parseFloat(sale.udhaaarAmount || "0").toLocaleString("en-IN")}
                               </span>
                             </div>
                           );

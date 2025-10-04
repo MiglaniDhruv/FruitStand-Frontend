@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema } from '@shared/schema';
+import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { SalesInvoiceModel } from './model';
 import { type AuthenticatedRequest } from '../../types';
@@ -8,7 +8,8 @@ import { type AuthenticatedRequest } from '../../types';
 const salesInvoiceValidation = {
   createSalesInvoice: z.object({
     invoice: insertSalesInvoiceSchema,
-    items: z.array(insertSalesInvoiceItemSchema).min(1)
+    items: z.array(insertSalesInvoiceItemSchema).min(1),
+    crateTransaction: insertCrateTransactionSchema.optional(),
   }),
   getSalesInvoicesPaginated: z.object({
     page: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
@@ -75,17 +76,24 @@ export class SalesInvoiceController extends BaseController {
     try {
       const tenantId = req.tenantId!;
       
-      const validation = salesInvoiceValidation.createSalesInvoice.safeParse(req.body);
+      // Inject tenantId into invoice, items, and crateTransaction before validation
+      const requestData = {
+        invoice: { ...req.body.invoice, tenantId },
+        items: req.body.items?.map((item: any) => ({ ...item, tenantId })) || [],
+        crateTransaction: req.body.crateTransaction ? { ...req.body.crateTransaction, tenantId } : undefined,
+      };
+      
+      const validation = salesInvoiceValidation.createSalesInvoice.safeParse(requestData);
       
       if (!validation.success) {
         return this.sendValidationError(res, validation.error.errors);
       }
 
-      const { invoice, items } = validation.data;
+      const { invoice, items, crateTransaction } = validation.data;
       
-      const newSalesInvoice = await this.salesInvoiceModel.createSalesInvoice(tenantId, invoice, items);
+      const result = await this.salesInvoiceModel.createSalesInvoice(tenantId, invoice, items, crateTransaction);
       
-      res.status(201).json(newSalesInvoice);
+      res.status(201).json(result);
     } catch (error) {
       this.handleError(res, error, 'Failed to create sales invoice');
     }
@@ -105,6 +113,23 @@ export class SalesInvoiceController extends BaseController {
       res.json(result);
     } catch (error) {
       this.handleError(res, error, 'Failed to mark sales invoice as paid');
+    }
+  }
+
+  async revertInvoiceStatus(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Sales invoice ID is required' });
+      }
+
+      const result = await this.salesInvoiceModel.revertInvoiceStatus(tenantId, id);
+      
+      res.json(result);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to revert sales invoice status');
     }
   }
 
@@ -166,6 +191,27 @@ export class SalesInvoiceController extends BaseController {
       });
     } catch (error) {
       this.handleError(res, error, 'Failed to create share link');
+    }
+  }
+
+  async delete(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Sales invoice ID is required' });
+      }
+
+      const success = await this.salesInvoiceModel.deleteSalesInvoice(tenantId, id);
+      
+      if (!success) {
+        return this.sendNotFound(res, 'Sales invoice not found');
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      this.handleError(res, error, 'Failed to delete sales invoice');
     }
   }
 }

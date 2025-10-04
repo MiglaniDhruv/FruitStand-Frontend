@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, or, count, ilike, lte, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, or, count, ilike, lte, inArray, isNull } from "drizzle-orm";
 import { 
   stock,
   stockMovements,
@@ -182,23 +182,25 @@ export class StockModel {
     return { data, pagination };
   }
 
-  async getStockByItem(tenantId: string, itemId: string): Promise<Stock | undefined> {
-    const [stockItem] = await db.select().from(stock)
+  async getStockByItem(tenantId: string, itemId: string, externalTx?: any): Promise<Stock | undefined> {
+    const dbToUse = externalTx || db;
+    const [stockItem] = await dbToUse.select().from(stock)
       .where(withTenant(stock, tenantId, eq(stock.itemId, itemId)));
     return stockItem || undefined;
   }
 
-  async updateStock(tenantId: string, itemId: string, insertStock: Partial<InsertStock>): Promise<Stock> {
-    const existing = await this.getStockByItem(tenantId, itemId);
+  async updateStock(tenantId: string, itemId: string, insertStock: Partial<InsertStock>, externalTx?: any): Promise<Stock> {
+    const dbToUse = externalTx || db;
+    const existing = await this.getStockByItem(tenantId, itemId, externalTx);
     if (existing) {
-      const [updated] = await db
+      const [updated] = await dbToUse
         .update(stock)
         .set({ ...insertStock, lastUpdated: new Date() })
         .where(withTenant(stock, tenantId, eq(stock.itemId, itemId)))
         .returning();
       return updated;
     } else {
-      const [created] = await db.insert(stock)
+      const [created] = await dbToUse.insert(stock)
         .values(ensureTenantInsert({ ...insertStock, itemId }, tenantId))
         .returning();
       return created;
@@ -242,7 +244,8 @@ export class StockModel {
           withTenant(stockMovements, tenantId),
           withTenant(items, tenantId),
           eq(items.vendorId, vendorId),
-          eq(stockMovements.movementType, "OUT")
+          eq(stockMovements.movementType, "OUT"),
+          isNull(stockMovements.purchaseInvoiceId)
         )
       )
       .orderBy(desc(stockMovements.createdAt));
@@ -257,31 +260,40 @@ export class StockModel {
     return result;
   }
 
-  async createStockMovement(tenantId: string, insertMovement: InsertStockMovement): Promise<StockMovement> {
-    const [movement] = await db.insert(stockMovements)
-      .values(ensureTenantInsert(insertMovement, tenantId))
-      .returning();
-    
-    // Update stock balance after movement
-    const balance = await this.calculateStockBalance(tenantId, insertMovement.itemId);
-    await this.updateStock(tenantId, insertMovement.itemId, {
-      quantityInCrates: balance.crates.toString(),
-      quantityInBoxes: balance.boxes.toString(),
-      quantityInKgs: balance.kgs.toString()
-    });
-    
-    return movement;
+  async createStockMovement(tenantId: string, insertMovement: InsertStockMovement, externalTx?: any): Promise<StockMovement> {
+    const executeTransaction = async (tx: any) => {
+      const [movement] = await tx.insert(stockMovements)
+        .values(ensureTenantInsert(insertMovement, tenantId))
+        .returning();
+      
+      // Update stock balance after movement
+      const balance = await this.calculateStockBalance(tenantId, insertMovement.itemId, tx);
+      await this.updateStock(tenantId, insertMovement.itemId, {
+        quantityInCrates: balance.crates.toString(),
+        quantityInBoxes: balance.boxes.toString(),
+        quantityInKgs: balance.kgs.toString()
+      }, tx);
+      
+      return movement;
+    };
+
+    if (externalTx) {
+      return await executeTransaction(externalTx);
+    } else {
+      return await db.transaction(executeTransaction);
+    }
   }
 
-  async calculateStockBalance(tenantId: string, itemId: string): Promise<{ crates: number; kgs: number; boxes: number }> {
-    const movements = await db.select().from(stockMovements)
+  async calculateStockBalance(tenantId: string, itemId: string, externalTx?: any): Promise<{ crates: number; kgs: number; boxes: number }> {
+    const dbToUse = externalTx || db;
+    const movements = await dbToUse.select().from(stockMovements)
       .where(withTenant(stockMovements, tenantId, eq(stockMovements.itemId, itemId)));
     
     let totalCrates = 0;
     let totalKgs = 0;
     let totalBoxes = 0;
     
-    movements.forEach(movement => {
+    movements.forEach((movement: any) => {
       const cratesQty = parseFloat(movement.quantityInCrates);
       const kgsQty = parseFloat(movement.quantityInKgs);
       const boxesQty = parseFloat(movement.quantityInBoxes || "0");

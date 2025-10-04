@@ -51,12 +51,28 @@ export class SalesInvoiceRouter extends BaseRouter {
       this.salesInvoiceController.markSalesInvoiceAsPaid.bind(this.salesInvoiceController)
     );
 
+    // PUT /sales-invoices/:id/revert-status - Revert sales invoice status from Paid to Partially Paid/Unpaid
+    this.router.put('/sales-invoices/:id/revert-status', 
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.salesInvoiceController.revertInvoiceStatus.bind(this.salesInvoiceController)
+    );
+
     // POST /sales-invoices/:id/share-link - Create share link for sales invoice
     this.router.post('/sales-invoices/:id/share-link', 
       authenticateToken,
       validateTenant,
       attachTenantContext,
       this.salesInvoiceController.createShareLink.bind(this.salesInvoiceController)
+    );
+
+    // DELETE /sales-invoices/:id - Delete a sales invoice
+    this.router.delete('/sales-invoices/:id', 
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.salesInvoiceController.delete.bind(this.salesInvoiceController)
     );
   }
 }

@@ -282,7 +282,7 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className={`grid grid-cols-1 ${isPurchaseInvoice ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-4 mb-6`}>
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
               <p className="text-lg font-bold text-foreground">₹{getTotalAmount().toLocaleString('en-IN')}</p>
@@ -291,10 +291,25 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
               <p className="text-sm font-medium text-muted-foreground">Paid Amount</p>
               <p className="text-lg font-bold text-chart-2">₹{safeParseFloat(invoice.paidAmount).toLocaleString('en-IN')}</p>
             </div>
-            <div className="text-center p-4 bg-chart-1/10 rounded-lg">
-              <p className="text-sm font-medium text-muted-foreground">Balance Amount</p>
-              <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</p>
-            </div>
+            {isPurchaseInvoice ? (
+              <div className="text-center p-4 bg-chart-1/10 rounded-lg">
+                <p className="text-sm font-medium text-muted-foreground">Balance Amount</p>
+                <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-center p-4 bg-chart-1/10 rounded-lg">
+                  <p className="text-sm font-medium text-muted-foreground">Udhaar</p>
+                  <p className="text-xs text-muted-foreground mb-1">Amount retailer needs to pay</p>
+                  <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.udhaaarAmount).toLocaleString('en-IN')}</p>
+                </div>
+                <div className="text-center p-4 bg-amber-100 rounded-lg">
+                  <p className="text-sm font-medium text-muted-foreground">Shortfall</p>
+                  <p className="text-xs text-muted-foreground mb-1">Deficit when marked as Paid</p>
+                  <p className="text-lg font-bold text-amber-700">₹{safeParseFloat(invoice.shortfallAmount).toLocaleString('en-IN')}</p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Payment History */}

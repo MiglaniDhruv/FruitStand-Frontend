@@ -45,7 +45,8 @@ import {
   DollarSign,
   Tag,
   FileText,
-  CreditCard
+  CreditCard,
+  Search
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -79,6 +80,7 @@ export default function ExpenseManagement() {
     sortBy: "paymentDate",
     sortOrder: "desc",
   });
+  const [searchInput, setSearchInput] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedPaymentMode, setSelectedPaymentMode] = useState("all");
   const { toast } = useToast();
@@ -165,6 +167,12 @@ export default function ExpenseManagement() {
   const handlePaymentModeFilterChange = (paymentMode: string) => {
     setSelectedPaymentMode(paymentMode);
     setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
   };
 
   // Expense mutations
@@ -561,9 +569,21 @@ export default function ExpenseManagement() {
             <TabsContent value="expenses" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle>Expenses</CardTitle>
-                    <div className="flex items-center space-x-2">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Expenses</CardTitle>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search expenses by description..."
+                          value={searchInput}
+                          onChange={handleSearchInputChange}
+                          className="pl-8"
+                          data-testid="input-search-expenses"
+                        />
+                      </div>
                       <Select value={selectedCategory} onValueChange={handleCategoryFilterChange}>
                         <SelectTrigger className="w-40" data-testid="select-category-filter">
                           <SelectValue placeholder="All Categories" />
@@ -589,7 +609,6 @@ export default function ExpenseManagement() {
                           <SelectItem value="Card">Card</SelectItem>
                         </SelectContent>
                       </Select>
-
                     </div>
                   </div>
                 </CardHeader>

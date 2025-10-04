@@ -99,7 +99,7 @@ async function getOverdueSalesInvoices(tenantId: string): Promise<any[]> {
             eq(salesInvoices.status, 'Partially Paid')
           ),
           lt(salesInvoices.invoiceDate, today),
-          gt(salesInvoices.balanceAmount, '0')
+          gt(salesInvoices.udhaaarAmount, '0')
         )
       )
     )

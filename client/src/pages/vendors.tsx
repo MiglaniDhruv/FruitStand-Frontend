@@ -13,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, DollarSign } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
+import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -33,6 +34,8 @@ export default function Vendors() {
   const [searchInput, setSearchInput] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
+  const [showVendorPaymentModal, setShowVendorPaymentModal] = useState(false);
+  const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -138,6 +141,15 @@ export default function Vendors() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => handleRecordPayment(vendor)}
+            title="Record Payment"
+            data-testid={`button-record-payment-vendor-${vendor.id}`}
+          >
+            <DollarSign className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handleEdit(vendor)}
             data-testid={`button-edit-vendor-${vendor.id}`}
           >
@@ -170,6 +182,16 @@ export default function Vendors() {
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingVendor(null);
+  };
+
+  const handleRecordPayment = (vendor: any) => {
+    setSelectedVendorForPayment(vendor);
+    setShowVendorPaymentModal(true);
+  };
+
+  const handleCloseVendorPaymentModal = () => {
+    setShowVendorPaymentModal(false);
+    setSelectedVendorForPayment(null);
   };
 
   return (
@@ -252,6 +274,13 @@ export default function Vendors() {
         open={showForm}
         onOpenChange={handleCloseForm}
         vendor={editingVendor}
+      />
+
+      <VendorPaymentForm
+        open={showVendorPaymentModal}
+        onOpenChange={handleCloseVendorPaymentModal}
+        vendorId={selectedVendorForPayment?.id || ""}
+        vendorName={selectedVendorForPayment?.name}
       />
     </div>
   );

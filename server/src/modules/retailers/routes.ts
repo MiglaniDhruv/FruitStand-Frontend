@@ -20,6 +20,14 @@ export class RetailerRouter extends BaseRouter {
       this.retailerController.getAll.bind(this.retailerController)
     );
 
+    // GET /retailers/stats - Get retailer statistics
+    this.router.get('/retailers/stats',
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.retailerController.getStats.bind(this.retailerController)
+    );
+
     // GET /retailers/:id - Get a specific retailer
     this.router.get('/retailers/:id', 
       authenticateToken,
@@ -50,6 +58,22 @@ export class RetailerRouter extends BaseRouter {
       validateTenant,
       attachTenantContext,
       this.retailerController.delete.bind(this.retailerController)
+    );
+
+    // POST /retailers/:id/payments - Record retailer payment
+    this.router.post('/retailers/:id/payments',
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.retailerController.recordPayment.bind(this.retailerController)
+    );
+
+    // GET /retailers/:id/outstanding-invoices - Get outstanding invoices
+    this.router.get('/retailers/:id/outstanding-invoices',
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.retailerController.getOutstandingInvoices.bind(this.retailerController)
     );
   }
 }

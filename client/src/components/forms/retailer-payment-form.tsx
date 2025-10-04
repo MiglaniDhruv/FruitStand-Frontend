@@ -1,0 +1,536 @@
+import React, { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Alert,
+  AlertDescription,
+} from "@/components/ui/alert";
+import { Info, AlertCircle, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { authenticatedApiRequest } from "@/lib/auth";
+import { InsertRetailerPayment, RetailerPaymentDistributionResult, SalesInvoice } from "@shared/schema";
+
+const retailerPaymentFormSchema = z.object({
+  amount: z.string().min(1, "Amount is required").refine((val) => parseFloat(val) > 0, "Amount must be greater than 0"),
+  paymentMode: z.enum(['Cash', 'Bank', 'UPI', 'Cheque', 'PaymentLink']),
+  paymentDate: z.string().min(1, "Payment date is required"),
+  bankAccountId: z.string().optional(),
+  chequeNumber: z.string().optional(),
+  upiReference: z.string().optional(),
+  paymentLinkId: z.string().optional(),
+  notes: z.string().optional(),
+}).refine((data) => {
+  if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+    return false;
+  }
+  if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
+    return false;
+  }
+  if (data.paymentMode === 'UPI' && !data.upiReference) {
+    return false;
+  }
+  if (data.paymentMode === 'PaymentLink' && !data.paymentLinkId) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Required fields missing for selected payment mode",
+});
+
+type RetailerPaymentFormData = z.infer<typeof retailerPaymentFormSchema>;
+
+interface RetailerPaymentFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  retailerId: string;
+  retailerName?: string;
+}
+
+export default function RetailerPaymentForm({ open, onOpenChange, retailerId, retailerName }: RetailerPaymentFormProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  const [outstandingInvoices, setOutstandingInvoices] = useState<SalesInvoice[]>([]);
+  const [distributionPreview, setDistributionPreview] = useState<Array<{ invoice: SalesInvoice; allocatedAmount: number }>>([]);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const today = new Date().toISOString().split('T')[0];
+  
+  const form = useForm<RetailerPaymentFormData>({
+    resolver: zodResolver(retailerPaymentFormSchema),
+    defaultValues: {
+      amount: "",
+      paymentMode: 'Cash',
+      paymentDate: today,
+      bankAccountId: "",
+      chequeNumber: "",
+      upiReference: "",
+      paymentLinkId: "",
+      notes: "",
+    },
+  });
+
+  const paymentMode = form.watch('paymentMode');
+  const amount = form.watch('amount');
+
+  // Fetch outstanding invoices
+  const { data: invoicesData, isLoading: invoicesLoading } = useQuery({
+    queryKey: ["/api/retailers", retailerId, "outstanding-invoices"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", `/api/retailers/${retailerId}/outstanding-invoices`);
+      return response.json();
+    },
+    enabled: open && !!retailerId,
+  });
+
+  // Fetch bank accounts
+  const { data: bankAccountsData } = useQuery({
+    queryKey: ["/api/bank-accounts"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
+      return response.json();
+    },
+    enabled: open,
+  });
+
+  // Update outstanding invoices when data changes
+  useEffect(() => {
+    if (invoicesData) {
+      setOutstandingInvoices(invoicesData);
+    }
+  }, [invoicesData]);
+
+  // Calculate distribution preview
+  useEffect(() => {
+    const paymentAmount = parseFloat(amount || '0');
+    
+    if (paymentAmount > 0 && outstandingInvoices.length > 0) {
+      let remainingAmount = paymentAmount;
+      const preview: Array<{ invoice: SalesInvoice; allocatedAmount: number }> = [];
+      
+      for (const invoice of outstandingInvoices) {
+        if (remainingAmount <= 0) break;
+        
+        const invoiceBalance = parseFloat(invoice.udhaaarAmount || '0');
+        const allocation = Math.min(remainingAmount, invoiceBalance);
+        
+        preview.push({
+          invoice,
+          allocatedAmount: allocation
+        });
+        
+        remainingAmount -= allocation;
+      }
+      
+      setDistributionPreview(preview);
+      setShowPreview(true);
+    } else {
+      setShowPreview(false);
+      setDistributionPreview([]);
+    }
+  }, [amount, outstandingInvoices]);
+
+  // Reset form and preview state when modal is closed
+  useEffect(() => {
+    if (!open) {
+      form.reset({
+        amount: "",
+        paymentMode: 'Cash',
+        paymentDate: new Date().toISOString().split('T')[0],
+        bankAccountId: "",
+        chequeNumber: "",
+        upiReference: "",
+        paymentLinkId: "",
+        notes: "",
+      });
+      setOutstandingInvoices([]);
+      setDistributionPreview([]);
+      setShowPreview(false);
+    }
+  }, [open, form]);
+
+  // Create payment mutation
+  const mutation = useMutation({
+    mutationFn: async (data: RetailerPaymentFormData): Promise<RetailerPaymentDistributionResult> => {
+      const payload: InsertRetailerPayment = {
+        retailerId,
+        amount: data.amount,
+        paymentMode: data.paymentMode,
+        paymentDate: new Date(data.paymentDate),
+        bankAccountId: data.bankAccountId || undefined,
+        chequeNumber: data.chequeNumber || undefined,
+        upiReference: data.upiReference || undefined,
+        paymentLinkId: data.paymentLinkId || undefined,
+        notes: data.notes || undefined,
+      };
+      
+      const response = await authenticatedApiRequest("POST", `/api/retailers/${retailerId}/payments`, payload);
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Payment Recorded",
+        description: `Payment recorded and distributed across ${result.invoicesUpdated.length} invoice(s)`,
+      });
+      
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+      
+      onOpenChange(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to record payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: RetailerPaymentFormData) => {
+    mutation.mutate(data);
+  };
+
+  const totalOutstanding = outstandingInvoices.reduce((sum, invoice) => sum + parseFloat(invoice.udhaaarAmount || '0'), 0);
+  const paymentAmount = parseFloat(amount || '0');
+  const totalDistributed = distributionPreview.reduce((sum, item) => sum + item.allocatedAmount, 0);
+  const remainingAmount = Math.max(0, paymentAmount - totalDistributed);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Record Payment - {retailerName || 'Retailer'}</DialogTitle>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment Amount *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Enter amount"
+                        {...field}
+                        data-testid="input-retailer-payment-amount"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="paymentMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment Mode *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-retailer-payment-mode">
+                          <SelectValue placeholder="Select payment mode" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="Bank">Bank Transfer</SelectItem>
+                        <SelectItem value="UPI">UPI</SelectItem>
+                        <SelectItem value="Cheque">Cheque</SelectItem>
+                        <SelectItem value="PaymentLink">Payment Link</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="paymentDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment Date *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        data-testid="input-retailer-payment-date"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {paymentMode === 'Bank' && (
+                <FormField
+                  control={form.control}
+                  name="bankAccountId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bank Account *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-retailer-payment-bank">
+                            <SelectValue placeholder="Select bank account" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {bankAccountsData?.map((account: any) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.accountName} - {account.accountNumber}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {paymentMode === 'Cheque' && (
+                <FormField
+                  control={form.control}
+                  name="chequeNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cheque Number *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Enter cheque number"
+                          {...field}
+                          data-testid="input-retailer-payment-cheque"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {paymentMode === 'UPI' && (
+                <FormField
+                  control={form.control}
+                  name="upiReference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UPI Reference *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Enter UPI transaction ID"
+                          {...field}
+                          data-testid="input-retailer-payment-upi"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {paymentMode === 'PaymentLink' && (
+                <FormField
+                  control={form.control}
+                  name="paymentLinkId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Link ID *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Enter payment link ID"
+                          {...field}
+                          data-testid="input-retailer-payment-link"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter any additional notes"
+                      className="min-h-[80px]"
+                      {...field}
+                      data-testid="textarea-retailer-payment-notes"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Distribution Preview */}
+            {invoicesLoading ? (
+              <Card>
+                <CardContent className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading outstanding invoices...</span>
+                </CardContent>
+              </Card>
+            ) : outstandingInvoices.length === 0 ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  No outstanding invoices for this retailer
+                </AlertDescription>
+              </Alert>
+            ) : showPreview && distributionPreview.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Distribution Preview</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    This payment will be distributed across the following invoices (FIFO)
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Invoice Number</TableHead>
+                          <TableHead>Invoice Date</TableHead>
+                          <TableHead className="text-right">Udhaar</TableHead>
+                          <TableHead className="text-right">Allocated Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {distributionPreview.map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">
+                              {item.invoice.invoiceNumber}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(item.invoice.invoiceDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              ₹{parseFloat(item.invoice.udhaaarAmount || '0').toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              ₹{item.allocatedAmount.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Total Payment:</span>
+                      <span>₹{paymentAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Distributed:</span>
+                      <span>₹{totalDistributed.toFixed(2)}</span>
+                    </div>
+                    {remainingAmount > 0 && (
+                      <div className="flex justify-between text-orange-600">
+                        <span>Remaining:</span>
+                        <span>₹{remainingAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {paymentAmount > totalOutstanding && (
+                    <Alert className="mt-4">
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        Payment amount exceeds total outstanding. Excess: ₹{(paymentAmount - totalOutstanding).toFixed(2)}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-retailer-payment"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={mutation.isPending || outstandingInvoices.length === 0}
+                data-testid="button-record-retailer-payment"
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Recording...
+                  </>
+                ) : (
+                  "Record Payment"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

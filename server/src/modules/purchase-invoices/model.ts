@@ -1,10 +1,15 @@
-import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count } from 'drizzle-orm';
+import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count, sql, isNull } from 'drizzle-orm';
 import { db } from '../../../db';
-import { purchaseInvoices, invoiceItems, vendors, items, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InvoiceWithItems, type PaginationOptions, type PaginatedResult, type InvoiceShareLink } from '@shared/schema';
+import { purchaseInvoices, invoiceItems, vendors, items, invoiceShareLinks, stockMovements, payments, crateTransactions, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InsertCrateTransaction, type InvoiceWithItems, type PaginationOptions, type PaginatedResult, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { assertSameTenant } from '../../utils/tenant';
 import { InvoiceShareLinkModel } from '../invoice-share-links/model';
+
+// Local type that extends InvoiceWithItems to include optional crate transaction
+type InvoiceWithItemsAndCrate = InvoiceWithItems & {
+  crateTransaction?: CrateTransaction | null;
+};
 
 export class PurchaseInvoiceModel {
   private shareModel = new InvoiceShareLinkModel();
@@ -85,7 +90,13 @@ export class PurchaseInvoiceModel {
     return { ...invoice, vendor, items: itemsList };
   }
 
-  async createPurchaseInvoice(tenantId: string, invoiceData: InsertPurchaseInvoice, itemsData: InsertInvoiceItem[]): Promise<InvoiceWithItems> {
+  async createPurchaseInvoice(
+    tenantId: string, 
+    invoiceData: InsertPurchaseInvoice, 
+    itemsData: InsertInvoiceItem[],
+    crateTransactionData?: InsertCrateTransaction,
+    stockOutEntryIds?: string[]
+  ): Promise<InvoiceWithItemsAndCrate> {
     return await db.transaction(async (tx) => {
       // Validate tenant references
       await assertSameTenant(tx, tenantId, [
@@ -104,6 +115,63 @@ export class PurchaseInvoiceModel {
       
       const [invoice] = await tx.insert(purchaseInvoices).values(invoiceWithTenant).returning();
       
+      // Link selected stock OUT entries to this purchase invoice
+      if (stockOutEntryIds && stockOutEntryIds.length > 0) {
+        // Fetch selected movements with their items to validate
+        const selectedMovements = await tx.select({
+          movement: stockMovements,
+          item: items
+        })
+        .from(stockMovements)
+        .innerJoin(items, eq(stockMovements.itemId, items.id))
+        .where(
+          and(
+            withTenant(stockMovements, tenantId),
+            inArray(stockMovements.id, stockOutEntryIds)
+          )
+        );
+        
+        // Validate all movements exist
+        if (selectedMovements.length !== stockOutEntryIds.length) {
+          throw new Error('Some selected stock movements not found');
+        }
+        
+        // Validate none are already allocated
+        const alreadyAllocated = selectedMovements.filter(sm => sm.movement.purchaseInvoiceId !== null);
+        if (alreadyAllocated.length > 0) {
+          throw new Error('Some selected stock movements are already allocated to another purchase invoice');
+        }
+        
+        // Validate all belong to the correct vendor
+        const wrongVendor = selectedMovements.filter(sm => sm.item.vendorId !== invoiceData.vendorId);
+        if (wrongVendor.length > 0) {
+          throw new Error('Some selected stock movements do not belong to the selected vendor');
+        }
+        
+        // Validate all movements are of type OUT
+        const nonOutMovements = selectedMovements.filter(sm => sm.movement.movementType !== 'OUT');
+        if (nonOutMovements.length > 0) {
+          throw new Error('Some selected stock movements are not of type OUT');
+        }
+        
+        // Link movements to this invoice with concurrent protection
+        const updatedMovements = await tx.update(stockMovements)
+          .set({ purchaseInvoiceId: invoice.id })
+          .where(
+            and(
+              withTenant(stockMovements, tenantId),
+              inArray(stockMovements.id, stockOutEntryIds),
+              isNull(stockMovements.purchaseInvoiceId)
+            )
+          )
+          .returning();
+        
+        // Verify all movements were updated (protect against concurrent allocation)
+        if (updatedMovements.length !== stockOutEntryIds.length) {
+          throw new Error('Some stock movements were concurrently allocated to another purchase invoice');
+        }
+      }
+      
       const itemsWithInvoiceIdAndTenant = itemsData.map(item => 
         ensureTenantInsert({
           ...item,
@@ -120,7 +188,52 @@ export class PurchaseInvoiceModel {
         throw new Error('Invoice vendor not found');
       }
       
-      return { ...invoice, vendor, items: createdItems };
+      // Create crate transaction if provided
+      let crateTransaction: CrateTransaction | null = null;
+      if (crateTransactionData) {
+        // Link crate transaction to the created invoice and ensure it references the same vendor
+        const crateDataWithInvoice = ensureTenantInsert({
+          ...crateTransactionData,
+          purchaseInvoiceId: invoice.id,
+          partyType: 'vendor',
+          vendorId: invoice.vendorId,
+          retailerId: null,
+        }, tenantId);
+        
+        // Insert crate transaction within the same transaction
+        const [createdCrateTransaction] = await tx.insert(crateTransactions)
+          .values(crateDataWithInvoice)
+          .returning();
+        
+        crateTransaction = createdCrateTransaction;
+        
+        // Update vendor crate balance
+        // 'Received' increases balance (we receive crates from vendor)
+        // 'Returned' decreases balance (we return crates to vendor)
+        const balanceChange = crateTransactionData.transactionType === 'Received' 
+          ? crateTransactionData.quantity 
+          : -crateTransactionData.quantity;
+        
+        await tx.update(vendors)
+          .set({ 
+            crateBalance: sql`COALESCE(${vendors.crateBalance}, 0) + ${balanceChange}`
+          })
+          .where(withTenant(vendors, tenantId, eq(vendors.id, invoice.vendorId)));
+      }
+      
+      // Update vendor balance - increase by netAmount since we now owe them more
+      await tx.update(vendors)
+        .set({ 
+          balance: sql`COALESCE(${vendors.balance}, 0) + ${invoice.netAmount}`
+        })
+        .where(withTenant(vendors, tenantId, eq(vendors.id, invoice.vendorId)));
+      
+      return { 
+        ...invoice, 
+        vendor, 
+        items: createdItems,
+        crateTransaction 
+      };
     });
   }
 
@@ -268,5 +381,50 @@ export class PurchaseInvoiceModel {
     const pagination = buildPaginationMetadata(page, limit, total);
     
     return { data, pagination };
+  }
+
+  async deletePurchaseInvoice(tenantId: string, id: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      // Delete related records in cascade order (children first, then parent)
+      
+      // Delete invoice share links
+      await tx.delete(invoiceShareLinks)
+        .where(and(
+          withTenant(invoiceShareLinks, tenantId),
+          eq(invoiceShareLinks.invoiceId, id),
+          eq(invoiceShareLinks.invoiceType, 'purchase')
+        ));
+      
+      // Delete stock movements
+      await tx.delete(stockMovements)
+        .where(and(
+          withTenant(stockMovements, tenantId),
+          eq(stockMovements.purchaseInvoiceId, id)
+        ));
+      
+      // Delete payments
+      await tx.delete(payments)
+        .where(and(
+          withTenant(payments, tenantId),
+          eq(payments.invoiceId, id)
+        ));
+      
+      // Delete invoice items
+      await tx.delete(invoiceItems)
+        .where(and(
+          withTenant(invoiceItems, tenantId),
+          eq(invoiceItems.invoiceId, id)
+        ));
+      
+      // Finally delete the purchase invoice itself
+      const [deletedInvoice] = await tx.delete(purchaseInvoices)
+        .where(and(
+          withTenant(purchaseInvoices, tenantId),
+          eq(purchaseInvoices.id, id)
+        ))
+        .returning();
+      
+      return !!deletedInvoice;
+    });
   }
 }

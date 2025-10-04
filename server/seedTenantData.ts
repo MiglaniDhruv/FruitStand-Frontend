@@ -873,29 +873,29 @@ async function seedTenantData() {
       const users = await createTenantUsers(tenantId, config);
       console.log(`   ✅ Created ${users.length} users`);
       
-      // Create vendors
-      const vendors = await createTenantVendors(tenantId, config.scenario);
-      console.log(`   ✅ Created ${vendors.length} vendors`);
+      // // Create vendors
+      // const vendors = await createTenantVendors(tenantId, config.scenario);
+      // console.log(`   ✅ Created ${vendors.length} vendors`);
       
-      // Create items
-      const items = await createTenantItems(tenantId, config.scenario);
-      console.log(`   ✅ Created ${items.length} items`);
+      // // Create items
+      // const items = await createTenantItems(tenantId, config.scenario);
+      // console.log(`   ✅ Created ${items.length} items`);
       
-      // Create bank accounts
-      const bankAccounts = await createTenantBankAccounts(tenantId, config.scenario);
-      console.log(`   ✅ Created ${bankAccounts.length} bank accounts`);
+      // // Create bank accounts
+      // const bankAccounts = await createTenantBankAccounts(tenantId, config.scenario);
+      // console.log(`   ✅ Created ${bankAccounts.length} bank accounts`);
       
-      // Create retailers
-      const retailers = await createTenantRetailers(tenantId, config.scenario);
-      console.log(`   ✅ Created ${retailers.length} retailers`);
+      // // Create retailers
+      // const retailers = await createTenantRetailers(tenantId, config.scenario);
+      // console.log(`   ✅ Created ${retailers.length} retailers`);
       
-      // Create expense categories
-      const expenseCategories = await createTenantExpenseCategories(tenantId);
-      console.log(`   ✅ Created ${expenseCategories.length} expense categories`);
+      // // Create expense categories
+      // const expenseCategories = await createTenantExpenseCategories(tenantId);
+      // console.log(`   ✅ Created ${expenseCategories.length} expense categories`);
       
-      // Create comprehensive transactional data
-      await createTransactionalData(tenantId, config.scenario, vendors, items, bankAccounts, retailers, expenseCategories);
-      console.log(`   ✅ Created comprehensive transactional data`);
+      // // Create comprehensive transactional data
+      // await createTransactionalData(tenantId, config.scenario, vendors, items, bankAccounts, retailers, expenseCategories);
+      // console.log(`   ✅ Created comprehensive transactional data`);
       
       console.log(`   🎉 Completed setup for ${config.name}\n`);
     }

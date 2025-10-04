@@ -1,12 +1,12 @@
 import { format } from 'date-fns';
 
-// Template variable types
+// Template variable interfaces
 export interface SalesInvoiceVariables {
   retailerName: string;
   invoiceNumber: string;
   invoiceDate: string;
   totalAmount: string;
-  balanceAmount: string;
+  udhaaarAmount: string;
 }
 
 export interface PurchaseInvoiceVariables {
@@ -20,7 +20,7 @@ export interface PurchaseInvoiceVariables {
 export interface PaymentReminderVariables {
   recipientName: string;
   invoiceNumber: string;
-  balanceAmount: string;
+  udhaaarAmount: string;
   dueDate: string;
 }
 
@@ -55,7 +55,7 @@ export function buildSalesInvoiceVariables(invoice: any, retailer: any): SalesIn
     invoiceNumber: invoice.invoiceNumber || '',
     invoiceDate: formatDate(invoice.invoiceDate),
     totalAmount: formatCurrency(invoice.totalAmount || '0'),
-    balanceAmount: formatCurrency(invoice.balanceAmount || '0')
+    udhaaarAmount: formatCurrency(invoice.udhaaarAmount || '0')
   };
 }
 
@@ -82,7 +82,7 @@ export function buildPaymentReminderVariables(
   return {
     recipientName: truncateText(recipient.name || (recipientType === 'vendor' ? 'Vendor' : 'Customer')),
     invoiceNumber: invoice.invoiceNumber || '',
-    balanceAmount: formatCurrency(invoice.balanceAmount || '0'),
+    udhaaarAmount: formatCurrency(recipientType === 'vendor' ? (invoice.balanceAmount || '0') : (invoice.udhaaarAmount || '0')),
     dueDate: formatDate(dueDate)
   };
 }

@@ -1,4 +1,4 @@
-import { eq, asc, and, inArray } from "drizzle-orm";
+import { eq, asc, and, inArray, count, sum } from "drizzle-orm";
 import { 
   vendors,
   purchaseInvoices,
@@ -202,5 +202,21 @@ export class VendorModel {
     const pagination = buildPaginationMetadata(page, limit, total);
     
     return { data, pagination };
+  }
+
+  async getVendorStats(tenantId: string): Promise<{ totalVendors: number; totalBalance: string; totalCrates: number }> {
+    const [result] = await db.select({
+      totalVendors: count(),
+      totalBalance: sum(vendors.balance),
+      totalCrates: sum(vendors.crateBalance)
+    })
+    .from(vendors)
+    .where(withTenant(vendors, tenantId, eq(vendors.isActive, true)));
+
+    return {
+      totalVendors: result.totalVendors,
+      totalBalance: result.totalBalance || '0.00',
+      totalCrates: Number(result.totalCrates) || 0
+    };
   }
 }

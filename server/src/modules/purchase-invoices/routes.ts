@@ -46,5 +46,14 @@ export class PurchaseInvoiceRouter extends BaseRouter {
       requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
       this.purchaseInvoiceController.createShareLink.bind(this.purchaseInvoiceController)
     );
+
+    // DELETE /purchase-invoices/:id - Delete a purchase invoice (Admin/Operator only)
+    this.router.delete('/purchase-invoices/:id', 
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
+      this.purchaseInvoiceController.delete.bind(this.purchaseInvoiceController)
+    );
   }
 }

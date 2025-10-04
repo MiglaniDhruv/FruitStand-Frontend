@@ -63,6 +63,7 @@ export default function Stock() {
     reason: "",
     notes: "",
   });
+  const [searchInput, setSearchInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -175,6 +176,12 @@ export default function Stock() {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
   };
 
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
+  };
+
   const isLowStock = (item: any) => {
     const totalQty = parseFloat(item.quantityInKgs) + parseFloat(item.quantityInCrates) + parseFloat(item.quantityInBoxes || 0);
     return totalQty < 20 && totalQty > 0;
@@ -275,6 +282,7 @@ export default function Stock() {
       itemId: editingStock.itemId,
       data: {
         quantityInCrates: quantities.crates,
+        quantityInBoxes: quantities.boxes,
         quantityInKgs: quantities.kgs,
       },
     });
@@ -440,26 +448,36 @@ export default function Stock() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Current Stock</CardTitle>
-                <div className="flex items-center space-x-4">
-                  <Button
-                    onClick={() => setShowManualEntry(true)}
-                    data-testid="button-add-stock"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Stock
-                  </Button>
-                  <Button 
-                    variant="destructive"
-                    onClick={() => setShowWastageEntry(true)}
-                    data-testid="button-add-wastage"
-                  >
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    Record Wastage
-                  </Button>
-                  <div className="relative">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Stock Inventory</CardTitle>
+                  <div className="flex items-center space-x-2">
+                    <Button 
+                      onClick={() => setShowManualEntry(true)}
+                      data-testid="button-add-stock"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Stock
+                    </Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={() => setShowWastageEntry(true)}
+                      data-testid="button-add-wastage"
+                    >
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Record Wastage
+                    </Button>
                   </div>
+                </div>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search stock by item name or quality..."
+                    value={searchInput}
+                    onChange={handleSearchInputChange}
+                    className="pl-8"
+                    data-testid="input-search-stock"
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -493,7 +511,7 @@ export default function Stock() {
                 {editingStock.item.name} - {editingStock.item.quality}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="crates">Quantity in Crates</Label>
                 <Input
@@ -503,6 +521,17 @@ export default function Stock() {
                   value={quantities.crates}
                   onChange={(e) => setQuantities({ ...quantities, crates: e.target.value })}
                   data-testid="input-quantity-crates"
+                />
+              </div>
+              <div>
+                <Label htmlFor="boxes">Quantity in Boxes</Label>
+                <Input
+                  id="boxes"
+                  type="number"
+                  step="0.01"
+                  value={quantities.boxes}
+                  onChange={(e) => setQuantities({ ...quantities, boxes: e.target.value })}
+                  data-testid="input-quantity-boxes"
                 />
               </div>
               <div>
@@ -627,6 +656,7 @@ export default function Stock() {
                                   }`}>
                                     {movement.movementType === "IN" ? "+" : "-"}
                                     {parseFloat(movement.quantityInCrates).toFixed(2)} Crates, 
+                                    {parseFloat(movement.quantityInBoxes || "0").toFixed(2)} Boxes, 
                                     {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs
                                   </span>
                                 </div>
@@ -662,6 +692,9 @@ export default function Stock() {
                                     <div className={movement.movementType === "IN" ? "text-green-600" : "text-red-600"}>
                                       {movement.movementType === "IN" ? "+" : "-"}
                                       {parseFloat(movement.quantityInCrates).toFixed(2)} Crates
+                                      <br />
+                                      {movement.movementType === "IN" ? "+" : "-"}
+                                      {parseFloat(movement.quantityInBoxes || "0").toFixed(2)} Boxes
                                       <br />
                                       {movement.movementType === "IN" ? "+" : "-"}
                                       {parseFloat(movement.quantityInKgs).toFixed(2)} Kgs

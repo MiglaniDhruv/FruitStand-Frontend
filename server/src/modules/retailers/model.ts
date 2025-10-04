@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, or, ilike, count, inArray } from 'drizzle-orm';
+import { eq, desc, asc, and, or, ilike, count, inArray, sum } from 'drizzle-orm';
 import { db } from '../../../db';
 import { 
   retailers, 
@@ -168,5 +168,23 @@ export class RetailerModel {
     const pagination = buildPaginationMetadata(page, limit, total);
     
     return { data: retailersData, pagination };
+  }
+
+  async getRetailerStats(tenantId: string): Promise<{ totalRetailers: number; totalUdhaar: string; totalShortfall: string; totalCrates: number }> {
+    const [result] = await db.select({
+      totalRetailers: count(),
+      totalUdhaar: sum(retailers.udhaaarBalance),
+      totalShortfall: sum(retailers.shortfallBalance),
+      totalCrates: sum(retailers.crateBalance)
+    })
+    .from(retailers)
+    .where(withTenant(retailers, tenantId, eq(retailers.isActive, true)));
+
+    return {
+      totalRetailers: result.totalRetailers,
+      totalUdhaar: result.totalUdhaar || '0.00',
+      totalShortfall: result.totalShortfall || '0.00',
+      totalCrates: Number(result.totalCrates) || 0
+    };
   }
 }

@@ -1,9 +1,11 @@
-import { eq, asc, and, or, gt } from "drizzle-orm";
+import { eq, asc, and, or, gt, count } from "drizzle-orm";
 import { 
   items,
+  vendors,
   stock,
   type Item, 
   type InsertItem,
+  type ItemWithVendor,
   type PaginationOptions,
   type PaginatedResult
 } from "@shared/schema";
@@ -87,7 +89,7 @@ export class ItemModel {
     });
   }
 
-  async getItemsPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<Item>> {
+  async getItemsPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<ItemWithVendor>> {
     const { page, limit, offset, tenantCondition } = withTenantPagination(items, tenantId, options);
     
     // Define table columns for sorting and searching
@@ -103,8 +105,10 @@ export class ItemModel {
     // Combine tenant filtering with existing isActive filtering
     const combinedCondition = and(tenantCondition, eq(items.isActive, true))!;
     
-    // Build base query with tenant and isActive filters
-    let query = db.select().from(items).where(combinedCondition);
+    // Build base query with left join to vendors
+    let query = db.select({ item: items, vendor: vendors }).from(items)
+      .leftJoin(vendors, and(eq(items.vendorId, vendors.id), eq(vendors.tenantId, tenantId)))
+      .where(combinedCondition);
     
     // Apply search filter using helper
     if (options.search) {
@@ -115,15 +119,24 @@ export class ItemModel {
     query = applySorting(query, options.sortBy || 'name', options.sortOrder || 'asc', tableColumns);
     
     // Apply pagination and execute
-    const data = await query.limit(limit).offset(offset);
+    const results = await query.limit(limit).offset(offset);
     
-    // Get total count with tenant and isActive filtering
-    const total = await getCountWithSearch(
-      items, 
-      options.search ? searchableColumns : undefined, 
-      options.search,
-      combinedCondition
-    );
+    // Map results to ItemWithVendor format
+    const data = results.map(record => ({
+      ...record.item,
+      vendor: record.vendor
+    })) as ItemWithVendor[];
+    
+    // Get total count with same joins and filtering
+    let countQuery = db.select({ count: count() }).from(items)
+      .leftJoin(vendors, and(eq(items.vendorId, vendors.id), eq(vendors.tenantId, tenantId)))
+      .where(combinedCondition);
+    
+    if (options.search) {
+      countQuery = applySearchFilter(countQuery, options.search, searchableColumns, combinedCondition);
+    }
+    
+    const [{ count: total }] = await countQuery;
     
     const pagination = buildPaginationMetadata(page, limit, total);
     

@@ -16,8 +16,9 @@ import { z } from "zod";
 
 // Crate Transaction Type Constants
 export const CRATE_TRANSACTION_TYPES = {
-  GIVEN: 'Issue',
-  RETURNED: 'Return'
+  GIVEN: 'Given',      // Crates given to retailer (from us) or given to vendor (from us)
+  RECEIVED: 'Received', // Crates received from vendor (to us)
+  RETURNED: 'Returned'  // Crates returned by retailer (to us) or returned to vendor (by us)
 } as const;
 
 export type CrateTransactionType = typeof CRATE_TRANSACTION_TYPES[keyof typeof CRATE_TRANSACTION_TYPES];
@@ -52,6 +53,7 @@ export const vendors = pgTable("vendors", {
   phone: text("phone"),
   address: text("address"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
+  crateBalance: integer("crate_balance").default(0), // Number of crates with vendor
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
@@ -313,8 +315,8 @@ export const salesInvoices = pgTable("sales_invoices", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0.00"),
   balanceAmount: decimal("balance_amount", { precision: 10, scale: 2 }).notNull(),
-  udhaaarAmount: decimal("udhaar_amount", { precision: 10, scale: 2 }).default("0.00"), // Credit amount
-  shortfallAmount: decimal("shortfall_amount", { precision: 10, scale: 2 }).default("0.00"), // Deficit amount
+  udhaaarAmount: decimal("udhaar_amount", { precision: 10, scale: 2 }).default("0.00"), // Outstanding amount retailer needs to pay
+  shortfallAmount: decimal("shortfall_amount", { precision: 10, scale: 2 }).default("0.00"), // Deficit when marked Paid (bidirectional with udhaaarAmount)
   status: text("status").notNull(), // Paid, Partially Paid, Unpaid
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -390,21 +392,48 @@ export const salesPayments = pgTable("sales_payments", {
 export const crateTransactions = pgTable("crate_transactions", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
-  retailerId: uuid("retailer_id").references(() => retailers.id).notNull(),
-  transactionType: text("transaction_type").notNull(), // Issue, Return
+  
+  // Party identification - either retailerId or vendorId must be set based on partyType
+  partyType: text("party_type").default('retailer').notNull(), // 'retailer' or 'vendor'
+  retailerId: uuid("retailer_id").references(() => retailers.id), // Nullable - set when partyType = 'retailer'
+  vendorId: uuid("vendor_id").references(() => vendors.id), // Nullable - set when partyType = 'vendor'
+  
+  // Transaction details
+  transactionType: text("transaction_type").notNull(), // Given, Received, Returned
   quantity: integer("quantity").notNull(), // Number of crates
-  depositAmount: decimal("deposit_amount", { precision: 8, scale: 2 }).default("0.00"),
   transactionDate: timestamp("transaction_date").notNull(),
   notes: text("notes"),
+  
+  // Invoice linking - optional, allows creating crate transactions during invoice creation
+  salesInvoiceId: uuid("sales_invoice_id").references(() => salesInvoices.id), // Links to sales invoice if created together
+  purchaseInvoiceId: uuid("purchase_invoice_id").references(() => purchaseInvoices.id), // Links to purchase invoice if created together
+  
   createdAt: timestamp("created_at").defaultNow(),
-  // TENANT CONSISTENCY INVARIANT: tenantId must match retailers.tenantId
+  // TENANT CONSISTENCY INVARIANT: tenantId must match retailers.tenantId (if retailerId set), vendors.tenantId (if vendorId set), salesInvoices.tenantId (if salesInvoiceId set), purchaseInvoices.tenantId (if purchaseInvoiceId set)
 }, (table) => ({
   crateTransactionsTenantIdx: index('idx_crate_transactions_tenant').on(table.tenantId),
+  crateTransactionsPartyTypeIdx: index('idx_crate_transactions_party_type').on(table.partyType),
+  
   // Comment 1: Composite foreign keys for tenant-scoped referential integrity
   fkCrateTransactionsRetailer: foreignKey({
     name: 'fk_crate_transactions_retailer_tenant',
     columns: [table.tenantId, table.retailerId],
     foreignColumns: [retailers.tenantId, retailers.id]
+  }),
+  fkCrateTransactionsVendor: foreignKey({
+    name: 'fk_crate_transactions_vendor_tenant',
+    columns: [table.tenantId, table.vendorId],
+    foreignColumns: [vendors.tenantId, vendors.id]
+  }),
+  fkCrateTransactionsSalesInvoice: foreignKey({
+    name: 'fk_crate_transactions_sales_invoice_tenant',
+    columns: [table.tenantId, table.salesInvoiceId],
+    foreignColumns: [salesInvoices.tenantId, salesInvoices.id]
+  }),
+  fkCrateTransactionsPurchaseInvoice: foreignKey({
+    name: 'fk_crate_transactions_purchase_invoice_tenant',
+    columns: [table.tenantId, table.purchaseInvoiceId],
+    foreignColumns: [purchaseInvoices.tenantId, purchaseInvoices.id]
   }),
 }));
 
@@ -599,6 +628,7 @@ export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
   balance: true,
+  crateBalance: true, // Add this line
   createdAt: true,
 });
 
@@ -698,14 +728,113 @@ export const insertSalesPaymentSchema = createInsertSchema(salesPayments, {
   createdAt: true,
 });
 
+export const insertVendorPaymentSchema = z.object({
+  vendorId: z.string().uuid(),
+  amount: z.string().refine((val) => parseFloat(val) > 0, "Amount must be greater than 0"),
+  paymentMode: z.enum(['Cash', 'Bank', 'UPI', 'Cheque']),
+  paymentDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+  bankAccountId: z.string().uuid().optional(),
+  chequeNumber: z.string().optional(),
+  upiReference: z.string().optional(),
+  notes: z.string().optional(),
+}).refine((data) => {
+  if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+    return false;
+  }
+  if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
+    return false;
+  }
+  if (data.paymentMode === 'UPI' && !data.upiReference) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Required fields missing for selected payment mode",
+});
+
+export const insertRetailerPaymentSchema = z.object({
+  retailerId: z.string().uuid(),
+  amount: z.string().refine((val) => parseFloat(val) > 0, "Amount must be greater than 0"),
+  paymentMode: z.enum(['Cash', 'Bank', 'UPI', 'Cheque', 'PaymentLink']),
+  paymentDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+  bankAccountId: z.string().uuid().optional(),
+  chequeNumber: z.string().optional(),
+  upiReference: z.string().optional(),
+  paymentLinkId: z.string().optional(),
+  notes: z.string().optional(),
+}).refine((data) => {
+  if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+    return false;
+  }
+  if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
+    return false;
+  }
+  if (data.paymentMode === 'UPI' && !data.upiReference) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Required fields missing for selected payment mode",
+});
+
+export type InsertVendorPayment = z.infer<typeof insertVendorPaymentSchema>;
+export type InsertRetailerPayment = z.infer<typeof insertRetailerPaymentSchema>;
+
+export type VendorPaymentDistributionResult = {
+  totalAmount: string;
+  distributedAmount: string;
+  remainingAmount: string;
+  paymentsCreated: Payment[];
+  invoicesUpdated: string[];
+  vendorBalanceAfter: string;
+};
+
+export type RetailerPaymentDistributionResult = {
+  totalAmount: string;
+  distributedAmount: string;
+  remainingAmount: string;
+  paymentsCreated: SalesPayment[];
+  invoicesUpdated: string[];
+  retailerBalanceAfter: string;
+};
+
 export const insertCrateTransactionSchema = createInsertSchema(crateTransactions, {
-  transactionType: z.enum([CRATE_TRANSACTION_TYPES.GIVEN, CRATE_TRANSACTION_TYPES.RETURNED]),
+  partyType: z.enum(['retailer', 'vendor'], {
+    required_error: "Party type is required",
+    invalid_type_error: "Party type must be 'retailer' or 'vendor'"
+  }),
+  transactionType: z.enum([CRATE_TRANSACTION_TYPES.GIVEN, CRATE_TRANSACTION_TYPES.RECEIVED, CRATE_TRANSACTION_TYPES.RETURNED], {
+    required_error: "Transaction type is required"
+  }),
   transactionDate: z.union([z.string(), z.date()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
   ),
+  quantity: z.number().int().positive("Quantity must be a positive integer"),
 }).omit({
   id: true,
   createdAt: true,
+}).refine((data) => {
+  // Ensure either retailerId or vendorId is provided based on partyType
+  if (data.partyType === 'retailer' && !data.retailerId) {
+    return false;
+  }
+  if (data.partyType === 'vendor' && !data.vendorId) {
+    return false;
+  }
+  // Ensure the opposite party ID is not set
+  if (data.partyType === 'retailer' && data.vendorId) {
+    return false;
+  }
+  if (data.partyType === 'vendor' && data.retailerId) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Party ID must match the party type",
 });
 
 export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
@@ -760,6 +889,10 @@ export type InsertVendor = z.infer<typeof insertVendorSchema>;
 
 export type Item = typeof items.$inferSelect;
 export type InsertItem = z.infer<typeof insertItemSchema>;
+
+export type ItemWithVendor = Item & {
+  vendor: Vendor | null;
+};
 
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
@@ -838,6 +971,7 @@ export type SalesInvoiceWithDetails = SalesInvoice & {
   retailer: Retailer;
   items: SalesInvoiceItem[];
   payments: SalesPayment[];
+  crateTransaction?: CrateTransaction;
 };
 
 export type SalesPaymentWithDetails = SalesPayment & {
@@ -853,6 +987,15 @@ export type ExpenseWithCategory = Expense & {
 
 export type CrateTransactionWithRetailer = CrateTransaction & {
   retailer: Retailer;
+};
+
+export type CrateTransactionWithVendor = CrateTransaction & {
+  vendor: Vendor;
+};
+
+export type CrateTransactionWithParty = CrateTransaction & {
+  retailer: Retailer | null;
+  vendor: Vendor | null;
 };
 
 export type WhatsAppCreditTransactionWithDetails = WhatsAppCreditTransaction & {

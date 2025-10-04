@@ -145,7 +145,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
     
     if (invoice) {
       // Set the outstanding amount as default
-      const outstandingAmount = (parseFloat(invoice.totalAmount) - parseFloat(invoice.paidAmount || "0")).toFixed(2);
+      const outstandingAmount = parseFloat(invoice.udhaaarAmount || "0").toFixed(2);
       form.setValue("amount", outstandingAmount);
     }
   };
@@ -164,7 +164,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
         form.setValue("retailerId", invoice.retailerId);
         form.setValue("invoiceId", preSelectedInvoiceId);
         
-        const outstandingAmount = (parseFloat(invoice.totalAmount) - parseFloat(invoice.paidAmount || "0")).toFixed(2);
+        const outstandingAmount = parseFloat(invoice.udhaaarAmount || "0").toFixed(2);
         form.setValue("amount", outstandingAmount);
       }
     }
@@ -219,8 +219,8 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
                       {availableInvoices?.map((invoice) => (
                         <SelectItem key={invoice.id} value={invoice.id}>
                           {invoice.invoiceNumber} - ₹{invoice.totalAmount} 
-                          {invoice.paidAmount && parseFloat(invoice.paidAmount) > 0 
-                            ? ` (Outstanding: ₹${(parseFloat(invoice.totalAmount) - parseFloat(invoice.paidAmount)).toFixed(2)})`
+                          {invoice.udhaaarAmount && parseFloat(invoice.udhaaarAmount) > 0 
+                            ? ` (Udhaar: ₹${parseFloat(invoice.udhaaarAmount || "0").toFixed(2)})`
                             : ""
                           }
                         </SelectItem>

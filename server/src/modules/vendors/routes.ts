@@ -55,5 +55,22 @@ export class VendorRouter extends BaseRouter {
       requireRole([UserRole.ADMIN]), 
       this.vendorController.delete.bind(this.vendorController)
     );
+
+    // POST /vendors/:id/payments - Record vendor payment
+    this.router.post("/vendors/:id/payments",
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      requireRole([UserRole.ADMIN, UserRole.OPERATOR]),
+      this.vendorController.recordPayment.bind(this.vendorController)
+    );
+
+    // GET /vendors/:id/outstanding-invoices - Get outstanding invoices
+    this.router.get("/vendors/:id/outstanding-invoices",
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      this.vendorController.getOutstandingInvoices.bind(this.vendorController)
+    );
   }
 }

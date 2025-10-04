@@ -10,8 +10,10 @@ const crateValidation = {
     page: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
     limit: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
     search: z.string().optional(),
-    type: z.enum(['given', 'returned']).optional(),
+    type: z.enum(['given', 'received', 'returned']).optional(),
+    partyType: z.enum(['retailer', 'vendor']).optional(),
     retailerId: z.string().uuid().optional(),
+    vendorId: z.string().uuid().optional(),
     dateFrom: z.string().optional().refine(val => {
       if (!val) return true;
       const date = new Date(val);
@@ -72,11 +74,29 @@ export class CrateController extends BaseController {
       }
 
       const transactions = await this.crateModel.getCrateTransactionsByRetailer(tenantId, retailerId);
-      // Strip retailer field to match original response format
-      const responseTransactions = transactions.map(({ retailer, ...tx }) => tx);
+      // Strip retailer and vendor fields to match original response format
+      const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
       res.json(responseTransactions);
     } catch (error) {
       this.handleError(res, error, 'Failed to fetch crate transactions for retailer');
+    }
+  }
+
+  async getByVendor(req: AuthenticatedRequest, res: Response) {
+    try {
+      const tenantId = req.tenantId!;
+      const { vendorId } = req.params;
+      
+      if (!vendorId) {
+        return res.status(400).json({ message: 'Vendor ID is required' });
+      }
+
+      const transactions = await this.crateModel.getCrateTransactionsByVendor(tenantId, vendorId);
+      // Strip retailer and vendor fields to match original response format
+      const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
+      res.json(responseTransactions);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to fetch crate transactions for vendor');
     }
   }
 
@@ -94,8 +114,8 @@ export class CrateController extends BaseController {
       
       const transaction = await this.crateModel.createCrateTransaction(tenantId, transactionData);
       
-      // Strip retailer field to match original response format
-      const { retailer, ...responseTx } = transaction;
+      // Strip retailer and vendor fields to match original response format
+      const { retailer, vendor, ...responseTx } = transaction;
       res.status(201).json(responseTx);
     } catch (error) {
       this.handleError(res, error, 'Failed to create crate transaction');

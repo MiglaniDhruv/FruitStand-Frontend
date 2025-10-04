@@ -27,7 +27,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { z } from "zod";
-import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package } from "lucide-react";
+import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search } from "lucide-react";
+import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 
 const retailerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -37,6 +38,13 @@ const retailerSchema = z.object({
 });
 
 type RetailerFormData = z.infer<typeof retailerSchema>;
+
+interface RetailerStats {
+  totalRetailers: number;
+  totalUdhaar: string;
+  totalShortfall: string;
+  totalCrates: number;
+}
 
 export default function RetailerManagement() {
   const [open, setOpen] = useState(false);
@@ -48,6 +56,9 @@ export default function RetailerManagement() {
     sortBy: "name",
     sortOrder: "asc"
   });
+  const [searchInput, setSearchInput] = useState("");
+  const [showRetailerPaymentModal, setShowRetailerPaymentModal] = useState(false);
+  const [selectedRetailerForPayment, setSelectedRetailerForPayment] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -73,6 +84,14 @@ export default function RetailerManagement() {
 
   });
 
+  const { data: statsData, isLoading: statsLoading } = useQuery<RetailerStats>({
+    queryKey: ["/api/retailers/stats"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/retailers/stats");
+      return response.json();
+    },
+  });
+
   const createRetailerMutation = useMutation({
     mutationFn: async (data: RetailerFormData) => {
       const response = await authenticatedApiRequest("POST", "/api/retailers", data);
@@ -84,6 +103,7 @@ export default function RetailerManagement() {
         description: "New retailer has been created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
       setOpen(false);
       form.reset();
     },
@@ -107,6 +127,7 @@ export default function RetailerManagement() {
         description: "Retailer has been updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
       setOpen(false);
       setEditingRetailer(null);
       form.reset();
@@ -130,6 +151,7 @@ export default function RetailerManagement() {
         description: "Retailer has been deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
     },
     onError: (error) => {
       toast({
@@ -155,6 +177,16 @@ export default function RetailerManagement() {
     if (confirm("Are you sure you want to delete this retailer?")) {
       deleteRetailerMutation.mutate(id);
     }
+  };
+
+  const handleRecordPayment = (retailer: any) => {
+    setSelectedRetailerForPayment(retailer);
+    setShowRetailerPaymentModal(true);
+  };
+
+  const handleCloseRetailerPaymentModal = () => {
+    setShowRetailerPaymentModal(false);
+    setSelectedRetailerForPayment(null);
   };
 
   const onSubmit = (data: RetailerFormData) => {
@@ -187,14 +219,17 @@ export default function RetailerManagement() {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
   };
 
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
+  };
+
   // Extract retailers and metadata from paginated result
   const retailers = retailersResult?.data || [];
   const paginationMetadata = retailersResult?.pagination;
 
-  // Calculate summary stats using server totals
-  const totalRetailers = paginationMetadata?.total || 0;
-  // Note: Balance aggregates removed as they would be misleading from current page only
-  // Consider adding /api/retailers/stats endpoint for accurate totals
+
 
   // Define table columns
   const columns = [
@@ -248,6 +283,15 @@ export default function RetailerManagement() {
       header: "Actions",
       cell: (value: string, row: any) => (
         <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleRecordPayment(row)}
+            title="Record Payment"
+            data-testid={`button-record-payment-retailer-${value}`}
+          >
+            <DollarSign className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -335,28 +379,82 @@ export default function RetailerManagement() {
           <div className="max-w-7xl mx-auto space-y-8">
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Retailers</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalRetailers}</div>
-                <p className="text-xs text-muted-foreground">Active retailers</p>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Retailers</p>
+                    <p className="text-2xl font-semibold text-foreground">{statsData?.totalRetailers || 0}</p>
+                    <p className="text-sm mt-1 text-purple-600">Active retailers</p>
+                  </div>
+                  <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                    <Users className="text-lg text-purple-600" />
+                  </div>
+                </div>
               </CardContent>
             </Card>
-            
-            {/* Balance aggregates removed - would be misleading from current page only */}
-            {/* Consider adding /api/retailers/stats endpoint for accurate totals */}
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Udhaar</p>
+                    <p className="text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalUdhaar || "0").toLocaleString("en-IN")}</p>
+                    <p className="text-sm mt-1 text-green-600">Outstanding credit</p>
+                  </div>
+                  <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="text-lg text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Shortfall</p>
+                    <p className="text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalShortfall || "0").toLocaleString("en-IN")}</p>
+                    <p className="text-sm mt-1 text-red-600">Pending shortfall</p>
+                  </div>
+                  <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
+                    <IndianRupee className="text-lg text-red-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Crates</p>
+                    <p className="text-2xl font-semibold text-foreground">{statsData?.totalCrates || 0}</p>
+                    <p className="text-sm mt-1 text-blue-600">Crates with retailers</p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                    <Package className="text-lg text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Retailers Table */}
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <CardTitle>Retailers</CardTitle>
-                <div className="flex items-center space-x-2">
+                <div className="relative flex-1 max-w-sm ml-4">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search retailers by name or contact person..."
+                    value={searchInput}
+                    onChange={handleSearchInputChange}
+                    className="pl-8"
+                    data-testid="input-search-retailers"
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -467,6 +565,13 @@ export default function RetailerManagement() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <RetailerPaymentForm
+        open={showRetailerPaymentModal}
+        onOpenChange={handleCloseRetailerPaymentModal}
+        retailerId={selectedRetailerForPayment?.id || ""}
+        retailerName={selectedRetailerForPayment?.name}
+      />
     </div>
   );
 }

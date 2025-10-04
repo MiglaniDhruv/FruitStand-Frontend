@@ -87,7 +87,7 @@ export class StockController extends BaseController {
         return this.sendValidationError(res, idValidation.error.errors);
       }
       
-      const stockData = insertStockSchema.partial().parse(req.body);
+      const stockData = insertStockSchema.partial().parse({ ...req.body, tenantId });
       const stock = await this.stockModel.updateStock(tenantId, idValidation.data, stockData);
       
       res.json(stock);
@@ -147,7 +147,7 @@ export class StockController extends BaseController {
     try {
       const tenantId = req.tenantId!;
       
-      const movementData = insertStockMovementSchema.parse(req.body);
+      const movementData = insertStockMovementSchema.parse({ ...req.body, tenantId });
       const movement = await this.stockModel.createStockMovement(tenantId, movementData);
       
       res.status(201).json(movement);

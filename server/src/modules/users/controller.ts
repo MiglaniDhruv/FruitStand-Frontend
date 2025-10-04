@@ -84,7 +84,7 @@ export class UserController extends BaseController {
   async create(req: AuthenticatedRequest, res: Response) {
     try {
       const tenantId = req.tenantId!;
-      const userData = insertUserSchema.parse(req.body);
+      const userData = insertUserSchema.parse({ ...req.body, tenantId });
       const user = await this.userModel.createUser(tenantId, userData);
       
       // Remove password from response
@@ -101,7 +101,7 @@ export class UserController extends BaseController {
   async update(req: AuthenticatedRequest, res: Response) {
     try {
       const tenantId = req.tenantId!;
-      const userData = insertUserSchema.partial().parse(req.body);
+      const userData = insertUserSchema.partial().parse({ ...req.body, tenantId });
       const user = await this.userModel.updateUser(tenantId, req.params.id, userData);
       
       if (!user) {

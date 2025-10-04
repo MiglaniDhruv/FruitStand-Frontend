@@ -387,7 +387,7 @@ export class WhatsAppController extends BaseController {
         
         referenceData = {
           invoiceNumber: invoice.invoiceNumber,
-          balanceAmount: invoice.balanceAmount
+          udhaaarAmount: invoice.udhaaarAmount
         };
         
       } else if (messageType === 'payment_notification') {

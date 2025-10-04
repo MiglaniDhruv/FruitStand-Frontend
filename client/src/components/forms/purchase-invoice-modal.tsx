@@ -31,7 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Package } from "lucide-react";
 
 const invoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
@@ -40,6 +40,20 @@ const invoiceItemSchema = z.object({
   boxes: z.string().min(1, "Boxes is required"),
   rate: z.string().min(1, "Rate is required"),
   amount: z.string(),
+});
+
+const crateTransactionSchema = z.object({
+  enabled: z.boolean().default(false),
+  quantity: z.number().min(1, "Quantity must be at least 1").optional(),
+}).refine((data) => {
+  // If enabled, quantity is required
+  if (data.enabled && !data.quantity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Quantity is required when crate transaction is enabled",
+  path: ["quantity"],
 });
 
 const invoiceSchema = z.object({
@@ -59,6 +73,7 @@ const invoiceSchema = z.object({
   totalSelling: z.string(),
   totalLessExpenses: z.string(),
   netAmount: z.string(),
+  crateTransaction: crateTransactionSchema.optional(),
 });
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
@@ -93,6 +108,10 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       totalSelling: "0",
       totalLessExpenses: "0",
       netAmount: "0",
+      crateTransaction: {
+        enabled: false,
+        quantity: undefined,
+      },
     },
   });
 
@@ -101,17 +120,34 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     name: "items",
   });
 
-  const { data: vendors } = useQuery<any[]>({
+  const { data: vendorsResult } = useQuery({
     queryKey: ["/api/vendors"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=100");
+      return response.json();
+    },
   });
 
-  const { data: items } = useQuery<any[]>({
+  const vendors = vendorsResult?.data || [];
+
+  const { data: itemsResult } = useQuery({
     queryKey: ["/api/items"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/items?limit=100");
+      return response.json();
+    },
   });
+
+  const items = itemsResult?.data || [];
 
   // Fetch available stock out entries for selected vendor
-  const { data: availableStockOutEntries } = useQuery<any[]>({
+  const { data: availableStockOutEntries } = useQuery({
     queryKey: ["/api/stock-movements/vendor", selectedVendorId, "available"],
+    queryFn: async () => {
+      if (!selectedVendorId) return [];
+      const response = await authenticatedApiRequest("GET", `/api/stock-movements/vendor/${selectedVendorId}/available`);
+      return response.json();
+    },
     enabled: !!selectedVendorId,
   });
 
@@ -128,10 +164,14 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     onSuccess: () => {
       toast({
         title: "Invoice created",
-        description: "Purchase invoice created successfully",
+        description: form.watch("crateTransaction.enabled")
+          ? "Purchase invoice and crate transaction created successfully"
+          : "Purchase invoice created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crate-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       onOpenChange(false);
       form.reset();
       setSelectedVendorId("");
@@ -167,6 +207,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
         itemId: string;
         totalWeight: number;
         totalCrates: number;
+        totalBoxes: number;
         totalValue: number; // For weighted average rate calculation
         rates: { rate: number; weight: number }[]; // For tracking individual rates and weights
       }>();
@@ -178,6 +219,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
           const itemId = entry.itemId;
           const weight = parseFloat(entry.quantityInKgs) || 0;
           const crates = parseFloat(entry.quantityInCrates) || 0;
+          const boxes = parseFloat(entry.quantityInBoxes) || 0;
           const rate = parseFloat(entry.rate) || 0;
           const value = weight * rate; // Total value for this entry
           
@@ -185,6 +227,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             const existing = itemMap.get(itemId)!;
             existing.totalWeight += weight;
             existing.totalCrates += crates;
+            existing.totalBoxes += boxes;
             existing.totalValue += value;
             existing.rates.push({ rate, weight });
           } else {
@@ -192,6 +235,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               itemId,
               totalWeight: weight,
               totalCrates: crates,
+              totalBoxes: boxes,
               totalValue: value,
               rates: [{ rate, weight }]
             });
@@ -208,7 +252,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
           itemId: item.itemId,
           weight: item.totalWeight.toString(),
           crates: item.totalCrates.toString(),
-          boxes: "0", // Default to 0 for boxes
+          boxes: item.totalBoxes.toString(),
           rate: averageRate.toFixed(2),
           amount: "0" // Will be calculated
         };
@@ -251,7 +295,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   // Calculate derived values
   const totalSelling = watchedItems.reduce((sum, item) => {
-    const itemDetails = items?.find(i => i.id === item.itemId);
+    const itemDetails = items?.find((i: any) => i.id === item.itemId);
     const quantity = getQuantityForCalculation(item, itemDetails);
     const rate = parseFloat(item.rate) || 0;
     return sum + (quantity * rate);
@@ -276,7 +320,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   useEffect(() => {
     // Update individual item amounts
     watchedItems.forEach((item, index) => {
-      const itemDetails = items?.find(i => i.id === item.itemId);
+      const itemDetails = items?.find((i: any) => i.id === item.itemId);
       const quantity = getQuantityForCalculation(item, itemDetails);
       const rate = parseFloat(item.rate) || 0;
       const amount = quantity * rate;
@@ -309,7 +353,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       totalSelling: parseFloat(data.totalSelling).toFixed(2),
       totalLessExpenses: parseFloat(data.totalLessExpenses).toFixed(2),
       netAmount: parseFloat(data.netAmount).toFixed(2),
-      balanceAmount: parseFloat(data.netAmount).toFixed(2), // Initially balance equals net amount
+      balanceAmount: parseFloat(data.netAmount).toFixed(2),
       status: "Unpaid",
     };
 
@@ -322,7 +366,27 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       amount: parseFloat(item.amount).toFixed(2),
     }));
 
-    createInvoiceMutation.mutate({ invoice, items });
+    // Build request data
+    const requestData: any = { invoice, items };
+
+    // Add crate transaction if enabled
+    if (data.crateTransaction?.enabled && data.crateTransaction.quantity) {
+      requestData.crateTransaction = {
+        partyType: 'vendor',
+        vendorId: data.vendorId,
+        transactionType: 'Received',
+        quantity: data.crateTransaction.quantity,
+        transactionDate: data.invoiceDate,
+        notes: `Crates received with invoice`,
+      };
+    }
+
+    createInvoiceMutation.mutate(requestData);
+  };
+
+  const getVendorName = (vendorId: string) => {
+    const vendor = vendors?.find((v: any) => v.id === vendorId);
+    return vendor?.name || "the selected vendor";
   };
 
   const addItem = () => {
@@ -394,7 +458,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                             <span className="font-medium">{entry.item.name} - {entry.item.quality}</span>
                             <br />
                             <span className="text-muted-foreground text-xs">
-                              {entry.quantityInKgs} Kgs, {entry.quantityInCrates} Crates | Rate: ₹{entry.rate || 'N/A'} | Date: {new Date(entry.movementDate).toLocaleDateString()}
+                              {entry.quantityInKgs} Kgs, {entry.quantityInCrates} Crates, {entry.quantityInBoxes || 0} Boxes | Rate: ₹{entry.rate || 'N/A'} | Date: {new Date(entry.movementDate).toLocaleDateString()}
                             </span>
                           </label>
                         </div>
@@ -781,6 +845,70 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                     </FormItem>
                   )}
                 />
+              </CardContent>
+            </Card>
+
+            {/* Crate Transaction Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-lg">Crate Transaction (Optional)</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="crateTransaction.enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-crate-transaction"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Record crate transaction with this invoice
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically track crates received from the vendor
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                
+                {form.watch("crateTransaction.enabled") && (
+                  <FormField
+                    control={form.control}
+                    name="crateTransaction.quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of Crates *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Enter number of crates"
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || undefined)
+                            }
+                            data-testid="input-crate-quantity"
+                          />
+                        </FormControl>
+                        <p className="text-sm text-muted-foreground">
+                          Crates will be marked as "Received" from {form.watch("vendorId") ? getVendorName(form.watch("vendorId")) : "the selected vendor"}
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </CardContent>
             </Card>
 

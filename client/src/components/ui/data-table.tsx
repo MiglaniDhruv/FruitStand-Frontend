@@ -8,6 +8,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { PaginationMetadata } from "@shared/schema";
 
@@ -68,6 +70,35 @@ export function DataTable<T>({
   pageSizeOptions,
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
+  const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
+  const [currentSortOrder, setCurrentSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (columnKey: string) => {
+    if (!onSortChange) return;
+    
+    let newSortOrder: 'asc' | 'desc';
+    
+    if (currentSortBy === columnKey) {
+      // Toggle between asc and desc for the same column
+      newSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, start with asc
+      newSortOrder = 'asc';
+    }
+    
+    setCurrentSortBy(columnKey);
+    setCurrentSortOrder(newSortOrder);
+    onSortChange(columnKey, newSortOrder);
+  };
+
+  const getSortIcon = (columnKey: string) => {
+    if (currentSortBy !== columnKey) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+    return currentSortOrder === 'asc' 
+      ? <ArrowUp className="ml-2 h-4 w-4" />
+      : <ArrowDown className="ml-2 h-4 w-4" />;
+  };
 
   // Helper function to get nested object values
   function getNestedValue(obj: any, path: string) {
@@ -186,7 +217,14 @@ export function DataTable<T>({
                 {enableRowSelection && <TableHead className="w-12" />}
                 {columns.map((column) => (
                   <TableHead key={column.accessorKey}>
-                    {column.header}
+                    {column.enableSorting ? (
+                      <div className="flex items-center">
+                        {column.header}
+                        <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      column.header
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -240,7 +278,19 @@ export function DataTable<T>({
               )}
               {columns.map((column) => (
                 <TableHead key={column.accessorKey}>
-                  {column.header}
+                  {column.enableSorting ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort(column.accessorKey)}
+                      className="-ml-4 h-auto p-2 hover:bg-transparent"
+                      data-testid={`sort-${column.accessorKey}`}
+                    >
+                      {column.header}
+                      {getSortIcon(column.accessorKey)}
+                    </Button>
+                  ) : (
+                    column.header
+                  )}
                 </TableHead>
               ))}
             </TableRow>

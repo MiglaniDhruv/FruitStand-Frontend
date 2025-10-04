@@ -32,7 +32,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Shield, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS, ROLE_PERMISSIONS, permissionService } from "@/lib/permissions";
@@ -72,6 +72,7 @@ export default function UserManagement() {
     sortBy: "username",
     sortOrder: "asc"
   });
+  const [searchInput, setSearchInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -191,6 +192,12 @@ export default function UserManagement() {
   
   const handleSortChange = (sortBy: string, sortOrder: string) => {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
   };
 
   const getRoleBadgeVariant = (role: string) => {
@@ -471,6 +478,16 @@ export default function UserManagement() {
                   <Users className="h-5 w-5" />
                   Organization Users
                 </CardTitle>
+                <div className="relative flex-1 max-w-sm ml-4">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users by username or name..."
+                    value={searchInput}
+                    onChange={handleSearchInputChange}
+                    className="pl-8"
+                    data-testid="input-search-users"
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent>

@@ -28,6 +28,14 @@ export class CrateRouter extends BaseRouter {
       this.crateController.getByRetailer.bind(this.crateController)
     );
 
+    // GET /crate-transactions/vendor/:vendorId - Get crate transactions by vendor
+    this.router.get('/crate-transactions/vendor/:vendorId', 
+      authenticateToken, 
+      validateTenant,
+      attachTenantContext,
+      this.crateController.getByVendor.bind(this.crateController)
+    );
+
     // POST /crate-transactions - Create a new crate transaction
     this.router.post('/crate-transactions', 
       authenticateToken, 

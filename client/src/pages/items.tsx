@@ -17,7 +17,7 @@ import { Search, Plus, Edit, Trash2 } from "lucide-react";
 import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { PaginationOptions, PaginatedResult, Item, Vendor } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/schema";
 
 export default function Items() {
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
@@ -27,14 +27,15 @@ export default function Items() {
     sortBy: "name",
     sortOrder: "asc"
   });
-  const [selectedVendor, setSelectedVendor] = useState("all");
+  const [searchInput, setSearchInput] = useState("");
+
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: itemsResult, isLoading } = useQuery<PaginatedResult<Item>>({
-    queryKey: ["/api/items", paginationOptions, selectedVendor],
+  const { data: itemsResult, isLoading } = useQuery<PaginatedResult<ItemWithVendor>>({
+    queryKey: ["/api/items", paginationOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
@@ -42,7 +43,7 @@ export default function Items() {
       if (paginationOptions.search) params.append('search', paginationOptions.search);
       if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
       if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
-      if (selectedVendor !== "all") params.append('vendorId', selectedVendor);
+
       
       const response = await authenticatedApiRequest("GET", `/api/items?${params.toString()}`);
       return response.json();
@@ -50,13 +51,7 @@ export default function Items() {
     placeholderData: keepPreviousData,
   });
 
-  const { data: vendors } = useQuery<PaginatedResult<Vendor>>({
-    queryKey: ["/api/vendors", { limit: 1000, page: 1 }],
-    queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=1000&page=1");
-      return response.json();
-    },
-  });
+
 
   const deleteItemMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -89,15 +84,18 @@ export default function Items() {
   const handleSearchChange = (search: string) => {
     setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
   };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
+  };
   
   const handleSortChange = (sortBy: string, sortOrder: string) => {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
   };
   
-  const handleVendorFilterChange = (vendorId: string) => {
-    setSelectedVendor(vendorId);
-    setPaginationOptions(prev => ({ ...prev, page: 1 })); // Reset to first page
-  };
+
 
   const handleEdit = (item: any) => {
     setEditingItem(item);
@@ -115,9 +113,8 @@ export default function Items() {
     setEditingItem(null);
   };
 
-  const getVendorName = (vendorId: string) => {
-    const vendor = (vendors?.data ?? []).find((v: any) => v.id === vendorId);
-    return vendor ? vendor.name : "Unknown Vendor";
+  const getVendorName = (item: ItemWithVendor) => {
+    return item.vendor ? item.vendor.name : "Unknown Vendor";
   };  // Define table columns
   const columns = [
     {
@@ -142,7 +139,7 @@ export default function Items() {
     {
       accessorKey: "vendorId",
       header: "Vendor",
-      cell: (value: string) => getVendorName(value),
+      cell: (value: string, row: ItemWithVendor) => getVendorName(row),
     },
     {
       accessorKey: "isActive",
@@ -207,22 +204,21 @@ export default function Items() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>All Items</CardTitle>
-                <div className="flex items-center space-x-4">
-                  <Select value={selectedVendor} onValueChange={handleVendorFilterChange}>
-                    <SelectTrigger className="w-48" data-testid="select-vendor-filter">
-                      <SelectValue placeholder="Filter by vendor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Vendors</SelectItem>
-                      {(vendors?.data ?? []).map((vendor: any) => (
-                        <SelectItem key={vendor.id} value={vendor.id}>
-                          {vendor.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>All Items</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search items by name or quality..."
+                      value={searchInput}
+                      onChange={handleSearchInputChange}
+                      className="pl-8"
+                      data-testid="input-search-items"
+                    />
+                  </div>
 
                 </div>
               </div>

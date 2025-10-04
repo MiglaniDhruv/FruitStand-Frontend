@@ -37,7 +37,8 @@ import {
   Store,
   Package,
   AlertCircle,
-  FileText
+  FileText,
+  Search
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -48,13 +49,17 @@ export default function Ledgers() {
     startDate: format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd")
   });
+  const [searchInput, setSearchInput] = useState("");
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
 
   // Fetch all data needed for ledgers
   const { data: purchaseInvoices = [] } = useQuery({
     queryKey: ["/api/purchase-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/purchase-invoices");
-      return response.json();
+      const result = await response.json();
+      // Handle both array and paginated response formats
+      return Array.isArray(result) ? result : (result.data || []);
     },
   });
 
@@ -62,7 +67,9 @@ export default function Ledgers() {
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-invoices");
-      return response.json();
+      const result = await response.json();
+      // Handle both array and paginated response formats
+      return Array.isArray(result) ? result : (result.data || []);
     },
   });
 
@@ -70,7 +77,9 @@ export default function Ledgers() {
     queryKey: ["/api/payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/payments");
-      return response.json();
+      const result = await response.json();
+      // Handle both array and paginated response formats
+      return Array.isArray(result) ? result : (result.data || []);
     },
   });
 
@@ -78,7 +87,9 @@ export default function Ledgers() {
     queryKey: ["/api/sales-payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-payments");
-      return response.json();
+      const result = await response.json();
+      // Handle both array and paginated response formats
+      return Array.isArray(result) ? result : (result.data || []);
     },
   });
 
@@ -135,11 +146,13 @@ export default function Ledgers() {
   };
 
   const getVendorName = (vendorId: string) => {
+    if (!Array.isArray(vendors)) return "Unknown Vendor";
     const vendor = vendors.find((v: any) => v.id === vendorId);
     return vendor?.name || "Unknown Vendor";
   };
 
   const getRetailerName = (retailerId: string) => {
+    if (!Array.isArray(retailers)) return "Unknown Retailer";
     const retailer = retailers.find((r: any) => r.id === retailerId);
     return retailer?.name || "Unknown Retailer";
   };
@@ -156,6 +169,12 @@ export default function Ledgers() {
 
   // Filter data by date range
   const filterByDate = (data: any[], dateField: string) => {
+    // Safety check: ensure data is an array
+    if (!Array.isArray(data)) {
+      console.warn('filterByDate received non-array data:', data);
+      return [];
+    }
+    
     return data.filter((item) => {
       // Safety check: ensure item and dateField exist
       if (!item || !item[dateField]) {
@@ -177,6 +196,93 @@ export default function Ledgers() {
         console.warn(`Error parsing date for field ${dateField}:`, item[dateField]);
         return false;
       }
+    });
+  };
+
+  // Filter handler functions
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+  };
+
+  const handleTransactionTypeChange = (value: string) => {
+    setTransactionTypeFilter(value);
+  };
+
+  // Filter functions for each ledger type
+  const filterCashbookEntries = (entries: any[]) => {
+    if (!searchInput && transactionTypeFilter === "all") return entries;
+    
+    return entries.filter(entry => {
+      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
+      const matchesType = transactionTypeFilter === "all" || entry.type === transactionTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  };
+
+  const filterVendorLedgerEntries = (entries: any[]) => {
+    if (!searchInput && transactionTypeFilter === "all") return entries;
+    
+    return entries.filter(entry => {
+      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
+      const matchesType = transactionTypeFilter === "all" || entry.type === transactionTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  };
+
+  const filterRetailerLedgerEntries = (entries: any[]) => {
+    if (!searchInput && transactionTypeFilter === "all") return entries;
+    
+    return entries.filter(entry => {
+      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
+      const matchesType = transactionTypeFilter === "all" || entry.type === transactionTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  };
+
+  const filterUdhaarBookEntries = (entries: any[]) => {
+    if (!searchInput) return entries;
+    
+    return entries.filter(entry => {
+      return entry.retailer?.name?.toLowerCase().includes(searchInput.toLowerCase());
+    });
+  };
+
+  const filterCrateLedgerEntries = (entries: any[]) => {
+    if (!searchInput && transactionTypeFilter === "all") return entries;
+    
+    return entries.filter(entry => {
+      let matchesSearch = true;
+      let matchesType = true;
+      
+      // Check if this is summary view (has retailer property) or detailed view (has transactionType property)
+      if (entry.retailer) {
+        // Summary view - only apply search filter, bypass transaction type filter
+        matchesSearch = !searchInput || entry.retailer.name?.toLowerCase().includes(searchInput.toLowerCase());
+        // For summary view, bypass transaction type filter since it doesn't apply to aggregated data
+        matchesType = true;
+      } else if (entry.transactionType) {
+        // Detailed view
+        matchesSearch = !searchInput || (entry.notes && entry.notes.toLowerCase().includes(searchInput.toLowerCase()));
+        
+        if (transactionTypeFilter !== "all") {
+          // Map UI filter values to crate transaction types
+          const typeMapping: { [key: string]: string } = {
+            "Receipt": "Returned",  // Crates returned = receipt of crates back
+            "Payment": "Given",     // Crates given = payment of crates out
+          };
+          
+          // Check if the filter maps to a crate transaction type, otherwise skip filtering
+          if (typeMapping[transactionTypeFilter]) {
+            matchesType = entry.transactionType === typeMapping[transactionTypeFilter];
+          } else {
+            // For transaction types that don't apply to crates (Sale, Purchase, etc.), show all
+            matchesType = true;
+          }
+        }
+      }
+      
+      return matchesSearch && matchesType;
     });
   };
 
@@ -234,38 +340,6 @@ export default function Ledgers() {
         type: "Expense",
       });
     });
-
-    // Crate deposit transactions (cash transactions)
-    filteredCrateTransactions
-      .filter((transaction: any) => parseFloat(transaction.depositAmount || "0") > 0)
-      .forEach((transaction: any) => {
-        const amount = parseFloat(transaction.depositAmount || "0");
-        const retailerName = getRetailerName(transaction.retailerId);
-        
-        if (transaction.transactionType === "Given") {
-          // Retailer pays deposit to business (cash inflow)
-          allEntries.push({
-            date: transaction.transactionDate,
-            description: `Crate deposit received from ${retailerName} - ${transaction.quantity} crates`,
-            paymentMode: "Cash",
-            bankAccount: "Cash",
-            inflow: amount,
-            outflow: 0,
-            type: "Crate Deposit",
-          });
-        } else if (transaction.transactionType === "Returned") {
-          // Business pays deposit back to retailer (cash outflow)
-          allEntries.push({
-            date: transaction.transactionDate,
-            description: `Crate deposit returned to ${retailerName} - ${transaction.quantity} crates`,
-            paymentMode: "Cash",
-            bankAccount: "Cash",
-            inflow: 0,
-            outflow: amount,
-            type: "Crate Deposit",
-          });
-        }
-      });
 
     // Sort entries by date (with validation)
     const sortedEntries = allEntries
@@ -447,45 +521,14 @@ export default function Ledgers() {
       });
     });
 
-    // Crate deposit transactions
-    const retailerCrateTransactions = filteredCrateTransactions.filter((transaction: any) => 
-      transaction.retailerId === selectedRetailer && parseFloat(transaction.depositAmount || "0") > 0
-    );
-    retailerCrateTransactions.forEach((transaction: any) => {
-      const amount = parseFloat(transaction.depositAmount || "0");
-      const retailerName = getRetailerName(transaction.retailerId);
-      
-      // "Given" transactions = retailer pays deposit (credit to business)
-      // "Returned" transactions = retailer gets deposit back (debit from business)
-      if (transaction.transactionType === "Given") {
-        runningBalance -= amount; // Credit to business (reduces retailer's debt)
-        entries.push({
-          date: transaction.transactionDate,
-          description: `Crate ${transaction.transactionType} - ${transaction.quantity} crates (Deposit: ₹${amount.toLocaleString('en-IN')})`,
-          debit: 0,
-          credit: amount,
-          balance: runningBalance,
-          type: "Crate Deposit",
-        });
-      } else if (transaction.transactionType === "Returned") {
-        runningBalance += amount; // Debit to business (increases retailer's receivable)
-        entries.push({
-          date: transaction.transactionDate,
-          description: `Crate ${transaction.transactionType} - ${transaction.quantity} crates (Deposit: ₹${amount.toLocaleString('en-IN')})`,
-          debit: amount,
-          credit: 0,
-          balance: runningBalance,
-          type: "Crate Deposit",
-        });
-      }
-    });
-
     return entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
   // 6. Udhaar Book - Retailer outstanding credit balances
   const getUdhaarBookEntries = () => {
     const retailerBalances: any[] = [];
+
+    if (!Array.isArray(retailers)) return retailerBalances;
 
     retailers.forEach((retailer: any) => {
       // Calculate total sales to this retailer
@@ -526,6 +569,8 @@ export default function Ledgers() {
     if (selectedRetailer === "all") {
       // Show summary for all retailers
       const retailerCrateBalances: any[] = [];
+
+      if (!Array.isArray(retailers)) return retailerCrateBalances;
 
       retailers.forEach((retailer: any) => {
         const retailerTransactions = filteredCrateTransactions.filter((t: any) => t.retailerId === retailer.id);
@@ -573,11 +618,11 @@ export default function Ledgers() {
     }
   };
 
-  const cashbookEntries = getCombinedCashbookEntries();
-  const vendorLedgerEntries = getVendorLedgerEntries();
-  const retailerLedgerEntries = getRetailerLedgerEntries();
-  const udhaarBookEntries = getUdhaarBookEntries();
-  const crateLedgerEntries = getCrateLedgerEntries();
+  const cashbookEntries = filterCashbookEntries(getCombinedCashbookEntries());
+  const vendorLedgerEntries = filterVendorLedgerEntries(getVendorLedgerEntries());
+  const retailerLedgerEntries = filterRetailerLedgerEntries(getRetailerLedgerEntries());
+  const udhaarBookEntries = filterUdhaarBookEntries(getUdhaarBookEntries());
+  const crateLedgerEntries = filterCrateLedgerEntries(getCrateLedgerEntries());
 
   // Define column configurations for all tables
   // 1. Cashbook columns
@@ -835,7 +880,32 @@ export default function Ledgers() {
                 Complete ledger management system for APMC operations
               </p>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by party name or description..."
+                  value={searchInput}
+                  onChange={handleSearchInputChange}
+                  className="pl-8"
+                  data-testid="input-search-ledgers"
+                />
+              </div>
+              <Select value={transactionTypeFilter} onValueChange={handleTransactionTypeChange}>
+                <SelectTrigger className="w-40" data-testid="select-transaction-type">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="Receipt">Receipt</SelectItem>
+                  <SelectItem value="Payment">Payment</SelectItem>
+                  <SelectItem value="Expense">Expense</SelectItem>
+                  <SelectItem value="Purchase">Purchase</SelectItem>
+                  <SelectItem value="Sale">Sale</SelectItem>
+                  <SelectItem value="Opening">Opening</SelectItem>
+                  <SelectItem value="Closing">Closing</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 type="date"
                 value={dateFilter.startDate}
@@ -1023,7 +1093,7 @@ export default function Ledgers() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Retailers</SelectItem>
-                        {retailers.map((retailer: any) => (
+                        {Array.isArray(retailers) && retailers.map((retailer: any) => (
                           <SelectItem key={retailer.id} value={retailer.id}>
                             {retailer.name}
                           </SelectItem>
@@ -1155,7 +1225,7 @@ export default function Ledgers() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Retailers</SelectItem>
-                        {retailers.map((retailer: any) => (
+                        {Array.isArray(retailers) && retailers.map((retailer: any) => (
                           <SelectItem key={retailer.id} value={retailer.id}>
                             {retailer.name}
                           </SelectItem>

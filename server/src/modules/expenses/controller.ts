@@ -47,7 +47,7 @@ export class ExpenseController extends BaseController {
     try {
       const tenantId = req.tenantId!;
       
-      const validation = insertExpenseCategorySchema.safeParse(req.body);
+      const validation = insertExpenseCategorySchema.safeParse({ ...req.body, tenantId });
       
       if (!validation.success) {
         return this.sendValidationError(res, validation.error.errors);
@@ -72,7 +72,7 @@ export class ExpenseController extends BaseController {
         return res.status(400).json({ message: 'Category ID is required' });
       }
 
-      const validation = insertExpenseCategorySchema.partial().safeParse(req.body);
+      const validation = insertExpenseCategorySchema.partial().safeParse({ ...req.body, tenantId });
       
       if (!validation.success) {
         return this.sendValidationError(res, validation.error.errors);
@@ -148,7 +148,7 @@ export class ExpenseController extends BaseController {
     try {
       const tenantId = req.tenantId!;
       
-      const validation = insertExpenseSchema.safeParse(req.body);
+      const validation = insertExpenseSchema.safeParse({ ...req.body, tenantId });
       
       if (!validation.success) {
         return this.sendValidationError(res, validation.error.errors);

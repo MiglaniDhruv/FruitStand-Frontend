@@ -2,15 +2,19 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { BaseController } from "../../utils/base";
 import { VendorModel } from "./model";
+import { PaymentModel } from "../payments/model";
 import { AuthenticatedRequest } from "../../types";
-import { insertVendorSchema } from "@shared/schema";
+import { insertVendorSchema, insertVendorPaymentSchema } from "@shared/schema";
+import { whatsAppService } from "../../services/whatsapp";
 
 export class VendorController extends BaseController {
   private vendorModel: VendorModel;
+  private paymentModel: PaymentModel;
 
   constructor() {
     super();
     this.vendorModel = new VendorModel();
+    this.paymentModel = new PaymentModel();
   }
 
   // Override to maintain legacy validation error message format
@@ -87,7 +91,7 @@ export class VendorController extends BaseController {
     try {
       if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
       const tenantId = req.tenantId;
-      const vendorData = insertVendorSchema.parse(req.body);
+      const vendorData = insertVendorSchema.parse({ ...req.body, tenantId });
       const vendor = await this.vendorModel.createVendor(tenantId, vendorData);
       
       res.status(201).json(vendor);
@@ -103,7 +107,7 @@ export class VendorController extends BaseController {
     try {
       if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
       const tenantId = req.tenantId;
-      const vendorData = insertVendorSchema.partial().parse(req.body);
+      const vendorData = insertVendorSchema.partial().parse({ ...req.body, tenantId });
       const vendor = await this.vendorModel.updateVendor(tenantId, req.params.id, vendorData);
       
       if (!vendor) {
@@ -130,6 +134,51 @@ export class VendorController extends BaseController {
       res.json({ message: "Vendor deleted successfully" });
     } catch (error) {
       return this.handleError(res, error, "Failed to delete vendor");
+    }
+  }
+
+  async recordPayment(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
+      const tenantId = req.tenantId;
+      const vendorId = req.params.id;
+
+      const validation = insertVendorPaymentSchema.safeParse(req.body);
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.issues);
+      }
+
+      const result = await this.paymentModel.recordVendorPayment(tenantId, vendorId, validation.data);
+
+      // Send WhatsApp notifications for each created payment
+      for (const payment of result.paymentsCreated) {
+        try {
+          await whatsAppService.sendPaymentNotification(tenantId, payment.id, 'purchase');
+        } catch (error) {
+          console.error('WhatsApp notification failed:', error);
+        }
+      }
+
+      res.status(201).json(result);
+    } catch (error) {
+      return this.handleError(res, error, "Failed to record vendor payment");
+    }
+  }
+
+  async getOutstandingInvoices(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
+      const tenantId = req.tenantId;
+      const vendorId = req.params.id;
+
+      if (!z.string().uuid().safeParse(vendorId).success) {
+        return res.status(400).json({ message: 'Invalid vendor ID' });
+      }
+
+      const invoices = await this.paymentModel.getOutstandingInvoicesForVendor(tenantId, vendorId);
+      res.json(invoices);
+    } catch (error) {
+      return this.handleError(res, error, "Failed to fetch outstanding invoices");
     }
   }
 }

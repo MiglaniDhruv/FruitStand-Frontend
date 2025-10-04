@@ -1,13 +1,19 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type PaginationOptions, type PaginatedResult, type SalesInvoiceWithDetails } from "@shared/schema";
+import {
+  type PaginationOptions,
+  type PaginatedResult,
+  type SalesInvoiceWithDetails,
+} from "@shared/schema";
+import { buildPaginationParams } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -35,13 +41,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { z } from "zod";
-import { Plus, FileText, IndianRupee, Users, TrendingUp, Minus, Eye } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  IndianRupee,
+  Users,
+  TrendingUp,
+  Minus,
+  Eye,
+  Trash2,
+  Package,
+  Search,
+} from "lucide-react";
 import { format } from "date-fns";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 
 const salesInvoiceSchema = z.object({
   retailerId: z.string().min(1, "Retailer is required"),
-  invoiceNumber: z.string().optional(),
   invoiceDate: z.string().min(1, "Invoice date is required"),
   totalAmount: z.number().min(0, "Total amount must be positive"),
   paidAmount: z.number().min(0, "Paid amount cannot be negative"),
@@ -59,9 +75,26 @@ const salesInvoiceItemSchema = z.object({
   amount: z.number().min(0, "Amount must be non-negative"),
 });
 
+const crateTransactionSchema = z.object({
+  enabled: z.boolean().default(false),
+  quantity: z.number().min(1, "Quantity must be at least 1").optional(),
+}).refine((data) => {
+  // If enabled, quantity is required
+  if (data.enabled && !data.quantity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Quantity is required when crate transaction is enabled",
+  path: ["quantity"],
+});
+
 const invoiceFormSchema = z.object({
   invoice: salesInvoiceSchema,
-  items: z.array(salesInvoiceItemSchema).min(1, "At least one item is required"),
+  items: z
+    .array(salesInvoiceItemSchema)
+    .min(1, "At least one item is required"),
+  crateTransaction: crateTransactionSchema.optional(),
 });
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
@@ -69,16 +102,46 @@ type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 export default function SalesInvoiceManagement() {
   const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
-  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
-    page: 1,
-    limit: 10,
-    search: "",
-    sortBy: "invoiceDate",
-    sortOrder: "desc",
-  });
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>(
+    {
+      page: 1,
+      limit: 10,
+      search: "",
+      sortBy: "invoiceDate",
+      sortOrder: "desc",
+    }
+  );
+  const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await authenticatedApiRequest("DELETE", `/api/sales-invoices/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invoice deleted",
+        description: "Sales invoice has been deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete invoice",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this sales invoice? This action cannot be undone.")) {
+      deleteInvoiceMutation.mutate(id);
+    }
+  };
+
   const [, setLocation] = useLocation();
   const { slug } = useTenantSlug();
 
@@ -87,7 +150,6 @@ export default function SalesInvoiceManagement() {
     defaultValues: {
       invoice: {
         retailerId: "",
-        invoiceNumber: "",
         invoiceDate: format(new Date(), "yyyy-MM-dd"),
         totalAmount: 0,
         paidAmount: 0,
@@ -105,6 +167,10 @@ export default function SalesInvoiceManagement() {
           amount: 0,
         },
       ],
+      crateTransaction: {
+        enabled: false,
+        quantity: undefined,
+      },
     },
   });
 
@@ -114,7 +180,12 @@ export default function SalesInvoiceManagement() {
   });
 
   // Queries
-  const { data: invoicesResult, isLoading, isError, error } = useQuery<PaginatedResult<SalesInvoiceWithDetails>>({
+  const {
+    data: invoicesResult,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<PaginatedResult<SalesInvoiceWithDetails>>({
     queryKey: ["/api/sales-invoices", paginationOptions, statusFilter],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -131,7 +202,10 @@ export default function SalesInvoiceManagement() {
         params.append("status", statusFilter);
       }
 
-      const response = await authenticatedApiRequest("GET", `/api/sales-invoices?${params.toString()}`);
+      const response = await authenticatedApiRequest(
+        "GET",
+        `/api/sales-invoices?${params.toString()}`
+      );
       return response.json();
     },
   });
@@ -139,15 +213,35 @@ export default function SalesInvoiceManagement() {
   const { data: retailersResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/retailers?limit=1000");
+      const params = buildPaginationParams({
+        limit: 100,
+        page: 1,
+        search: "",
+        sortBy: "name",
+        sortOrder: "asc",
+      });
+      const response = await authenticatedApiRequest(
+        "GET",
+        `/api/retailers?${params.toString()}`
+      );
       return response.json();
     },
   });
 
-  const { data: itemsResult } = useQuery<PaginatedResult<any>>({
+  const { data: itemsResult, isLoading: itemsLoading, error: itemsError } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/items"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/items?limit=1000");
+      const params = buildPaginationParams({
+        limit: 100,
+        page: 1,
+        search: "",
+        sortBy: "name",
+        sortOrder: "asc",
+      });
+      const response = await authenticatedApiRequest(
+        "GET",
+        `/api/items?${params.toString()}`
+      );
       return response.json();
     },
   });
@@ -155,31 +249,44 @@ export default function SalesInvoiceManagement() {
   const { data: stockResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/stock"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/stock?limit=1000");
+      const response = await authenticatedApiRequest(
+        "GET",
+        "/api/stock?limit=1000"
+      );
       return response.json();
     },
   });
 
   // Pagination handlers
   const handlePageChange = (page: number) => {
-    setPaginationOptions(prev => ({ ...prev, page }));
+    setPaginationOptions((prev) => ({ ...prev, page }));
   };
 
   const handlePageSizeChange = (limit: number) => {
-    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+    setPaginationOptions((prev) => ({ ...prev, limit, page: 1 }));
   };
 
   const handleSearchChange = (search: string) => {
-    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+    setPaginationOptions((prev) => ({ ...prev, search, page: 1 }));
   };
 
   const handleSortChange = (sortBy: string, sortOrder: string) => {
-    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+    setPaginationOptions((prev) => ({
+      ...prev,
+      sortBy,
+      sortOrder: sortOrder as "asc" | "desc",
+    }));
   };
 
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);
-    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+    setPaginationOptions((prev) => ({ ...prev, page: 1 }));
+  };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
   };
 
   const handleCreateNew = () => {
@@ -187,7 +294,6 @@ export default function SalesInvoiceManagement() {
     form.reset({
       invoice: {
         retailerId: "",
-        invoiceNumber: "",
         invoiceDate: format(new Date(), "yyyy-MM-dd"),
         totalAmount: 0,
         paidAmount: 0,
@@ -205,12 +311,16 @@ export default function SalesInvoiceManagement() {
           amount: 0,
         },
       ],
+      crateTransaction: {
+        enabled: false,
+        quantity: undefined,
+      },
     });
     setOpen(true);
   };
 
   const getQuantityForCalculation = (item: any) => {
-    return item.weight || (item.crates + item.boxes) || 1;
+    return item.weight || item.crates + item.boxes || 1;
   };
 
   const calculateItemAmount = (rate: number, item: any) => {
@@ -236,7 +346,9 @@ export default function SalesInvoiceManagement() {
   };
 
   const getRetailerName = (retailerId: string) => {
-    const retailer = retailersResult?.data?.find((r: any) => r.id === retailerId);
+    const retailer = retailersResult?.data?.find(
+      (r: any) => r.id === retailerId
+    );
     return retailer?.name || "Unknown Retailer";
   };
 
@@ -244,38 +356,68 @@ export default function SalesInvoiceManagement() {
     try {
       // Calculate totals
       const totalAmount = calculateTotalAmount();
-      const invoiceData = {
-        ...data.invoice,
-        totalAmount,
-        balanceAmount: totalAmount - data.invoice.paidAmount,
-        items: data.items.map(item => ({
+      const invoiceData: any = {
+        invoice: {
+          ...data.invoice,
+          totalAmount: totalAmount.toString(),
+        },
+        items: data.items.map((item) => ({
           ...item,
-          amount: calculateItemAmount(item.rate, item),
+          weight: item.weight.toString(),
+          crates: item.crates.toString(),
+          boxes: item.boxes.toString(),
+          rate: item.rate.toString(),
+          amount: calculateItemAmount(item.rate, item).toString(),
         })),
       };
 
-      const endpoint = editingInvoice ? `/api/sales-invoices/${editingInvoice.id}` : "/api/sales-invoices";
+      // Add crate transaction if enabled
+      if (data.crateTransaction?.enabled && data.crateTransaction.quantity) {
+        invoiceData.crateTransaction = {
+          partyType: 'retailer',
+          retailerId: data.invoice.retailerId,
+          transactionType: 'Given',
+          quantity: data.crateTransaction.quantity,
+          transactionDate: data.invoice.invoiceDate,
+          notes: `Crates given with invoice`,
+        };
+      }
+
+      const endpoint = editingInvoice
+        ? `/api/sales-invoices/${editingInvoice.id}`
+        : "/api/sales-invoices";
       const method = editingInvoice ? "PUT" : "POST";
 
-      const response = await authenticatedApiRequest(method, endpoint, invoiceData);
-      
+      const response = await authenticatedApiRequest(
+        method,
+        endpoint,
+        invoiceData
+      );
+
       if (!response.ok) {
         throw new Error("Failed to save invoice");
       }
 
       toast({
         title: editingInvoice ? "Invoice updated" : "Invoice created",
-        description: editingInvoice ? "Sales invoice has been updated successfully" : "Sales invoice has been created successfully",
+        description: editingInvoice
+          ? "Sales invoice has been updated successfully"
+          : data.crateTransaction?.enabled
+          ? "Sales invoice and crate transaction created successfully"
+          : "Sales invoice has been created successfully",
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crate-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
       setOpen(false);
       form.reset();
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save invoice",
+        description:
+          error instanceof Error ? error.message : "Failed to save invoice",
         variant: "destructive",
       });
     }
@@ -290,7 +432,9 @@ export default function SalesInvoiceManagement() {
     {
       accessorKey: "invoiceNumber",
       header: "Invoice Number",
-      cell: (value: string) => <div className="font-medium">{value || "AUTO"}</div>,
+      cell: (value: string) => (
+        <div className="font-medium">{value || "AUTO"}</div>
+      ),
     },
     {
       accessorKey: "retailer.name",
@@ -310,17 +454,29 @@ export default function SalesInvoiceManagement() {
     {
       accessorKey: "totalAmount",
       header: "Total Amount",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
     },
     {
       accessorKey: "paidAmount",
       header: "Paid Amount",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
     },
     {
-      accessorKey: "balanceAmount",
-      header: "Balance",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+      accessorKey: "udhaaarAmount",
+      header: "Udhaar",
+      cell: (value: string) => `₹${parseFloat(value).toLocaleString("en-IN")}`,
+    },
+    {
+      accessorKey: "shortfallAmount",
+      header: "Shortfall",
+      cell: (value: string) => {
+        const amount = parseFloat(value || "0");
+        return (
+          <span className={amount > 0 ? "text-red-600 font-medium" : ""}>
+            ₹{amount.toLocaleString("en-IN")}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "paymentStatus",
@@ -335,7 +491,7 @@ export default function SalesInvoiceManagement() {
       accessorKey: "id",
       header: "Actions",
       cell: (value: string, invoice: any) => (
-        <div className="flex space-x-2">
+        <div className="flex items-center space-x-1">
           <Button
             variant="ghost"
             size="icon"
@@ -344,6 +500,16 @@ export default function SalesInvoiceManagement() {
             title="View Details"
           >
             <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDelete(invoice.id)}
+            data-testid={`button-delete-${invoice.id}`}
+            title="Delete Invoice"
+            disabled={deleteInvoiceMutation.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -355,6 +521,12 @@ export default function SalesInvoiceManagement() {
   const retailers = retailersResult?.data || [];
   const items = itemsResult?.data || [];
   const paginationMetadata = invoicesResult?.pagination;
+
+  // Debug logs
+  console.log("Items loading:", itemsLoading);
+  console.log("Items error:", itemsError);
+  console.log("Items result:", itemsResult);
+  console.log("Items array:", items);
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
@@ -394,22 +566,37 @@ export default function SalesInvoiceManagement() {
         <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Sales Invoices</h2>
+            <h2 className="text-2xl font-bold text-red-600 mb-4">
+              Error Loading Sales Invoices
+            </h2>
             <p className="text-gray-600 mb-6">
-              {error instanceof Error ? error.message : "Failed to load sales invoices. Please try again."}
+              {error instanceof Error
+                ? error.message
+                : "Failed to load sales invoices. Please try again."}
             </p>
-            <Button onClick={() => window.location.reload()}>
-              Retry
-            </Button>
+            <Button onClick={() => window.location.reload()}>Retry</Button>
           </div>
         </div>
       </div>
     );
   }
 
-  const totalRevenue = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.totalAmount || "0"), 0);
-  const totalPaid = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.paidAmount || "0"), 0);
-  const totalPending = totalRevenue - totalPaid;
+  const totalRevenue = invoices.reduce(
+    (sum, invoice) => sum + parseFloat(invoice.totalAmount || "0"),
+    0
+  );
+  const totalPaid = invoices.reduce(
+    (sum, invoice) => sum + parseFloat(invoice.paidAmount || "0"),
+    0
+  );
+  const totalUdhaar = invoices.reduce(
+    (sum, invoice) => sum + parseFloat(invoice.udhaaarAmount || "0"),
+    0
+  );
+  const totalShortfall = invoices.reduce(
+    (sum, invoice) => sum + parseFloat(invoice.shortfallAmount || "0"),
+    0
+  );
   const totalInvoices = invoices.length;
 
   return (
@@ -421,12 +608,17 @@ export default function SalesInvoiceManagement() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Sales Invoices</h2>
+              <h2 className="text-2xl font-semibold text-foreground">
+                Sales Invoices
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Manage sales invoices and track payments
               </p>
             </div>
-            <Button onClick={handleCreateNew} data-testid="button-create-invoice">
+            <Button
+              onClick={handleCreateNew}
+              data-testid="button-create-invoice"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Create Invoice
             </Button>
@@ -435,37 +627,67 @@ export default function SalesInvoiceManagement() {
 
         {/* Summary Cards */}
         <div className="p-6 bg-muted/50">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Total Revenue
+                </CardTitle>
                 <IndianRupee className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+                <div className="text-2xl font-bold">
+                  ₹{totalRevenue.toLocaleString("en-IN")}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Total Paid
+                </CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString('en-IN')}</div>
+                <div className="text-2xl font-bold text-green-600">
+                  ₹{totalPaid.toLocaleString("en-IN")}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Udhaar Amount
+                </CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">₹{totalPending.toLocaleString('en-IN')}</div>
+                <div className="text-2xl font-bold text-orange-600">
+                  ₹{totalUdhaar.toLocaleString("en-IN")}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Total Shortfall
+                </CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  ₹{totalShortfall.toLocaleString("en-IN")}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Deficit from paid invoices
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Invoices
+                </CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -479,11 +701,29 @@ export default function SalesInvoiceManagement() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>All Invoices</CardTitle>
-                <div className="flex items-center space-x-4">
-                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-                    <SelectTrigger className="w-48" data-testid="select-status-filter">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>All Invoices</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search invoices by number or retailer..."
+                      value={searchInput}
+                      onChange={handleSearchInputChange}
+                      className="pl-8"
+                      data-testid="input-search-invoices"
+                    />
+                  </div>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                  >
+                    <SelectTrigger
+                      className="w-48"
+                      data-testid="select-status-filter"
+                    >
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -518,7 +758,9 @@ export default function SalesInvoiceManagement() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingInvoice ? "Edit" : "Create"} Sales Invoice</DialogTitle>
+            <DialogTitle>
+              {editingInvoice ? "Edit" : "Create"} Sales Invoice
+            </DialogTitle>
           </DialogHeader>
 
           <Form {...form}>
@@ -573,24 +815,6 @@ export default function SalesInvoiceManagement() {
 
                 <FormField
                   control={form.control}
-                  name="invoice.invoiceNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Invoice Number</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Leave empty for auto-generation"
-                          {...field}
-                          data-testid="input-invoice-number"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="invoice.paidAmount"
                   render={({ field }) => (
                     <FormItem>
@@ -602,7 +826,9 @@ export default function SalesInvoiceManagement() {
                           placeholder="Enter paid amount"
                           {...field}
                           value={field.value || ""}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            field.onChange(parseFloat(e.target.value) || 0)
+                          }
                           data-testid="input-paid-amount"
                         />
                       </FormControl>
@@ -619,14 +845,16 @@ export default function SalesInvoiceManagement() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => append({
-                      itemId: "",
-                      weight: 0,
-                      crates: 0,
-                      boxes: 0,
-                      rate: 0,
-                      amount: 0,
-                    })}
+                    onClick={() =>
+                      append({
+                        itemId: "",
+                        weight: 0,
+                        crates: 0,
+                        boxes: 0,
+                        rate: 0,
+                        amount: 0,
+                      })
+                    }
                     data-testid="button-add-item"
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -664,16 +892,32 @@ export default function SalesInvoiceManagement() {
                                 onValueChange={field.onChange}
                               >
                                 <FormControl>
-                                  <SelectTrigger data-testid={`select-item-${index}`}>
+                                  <SelectTrigger
+                                    data-testid={`select-item-${index}`}
+                                  >
                                     <SelectValue placeholder="Select item" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {items.map((item: any) => (
-                                    <SelectItem key={item.id} value={item.id}>
-                                      {item.name}
+                                  {itemsLoading ? (
+                                    <SelectItem value="loading" disabled>
+                                      Loading items...
                                     </SelectItem>
-                                  ))}
+                                  ) : itemsError ? (
+                                    <SelectItem value="error" disabled>
+                                      Error loading items
+                                    </SelectItem>
+                                  ) : items.length === 0 ? (
+                                    <SelectItem value="no-items" disabled>
+                                      No items available
+                                    </SelectItem>
+                                  ) : (
+                                    items.map((item: any) => (
+                                      <SelectItem key={item.id} value={item.id}>
+                                        {item.name}
+                                      </SelectItem>
+                                    ))
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -694,7 +938,11 @@ export default function SalesInvoiceManagement() {
                                   placeholder="0"
                                   {...field}
                                   value={field.value || ""}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
                                   data-testid={`input-weight-${index}`}
                                 />
                               </FormControl>
@@ -715,7 +963,11 @@ export default function SalesInvoiceManagement() {
                                   placeholder="0"
                                   {...field}
                                   value={field.value || ""}
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
                                   data-testid={`input-crates-${index}`}
                                 />
                               </FormControl>
@@ -736,7 +988,11 @@ export default function SalesInvoiceManagement() {
                                   placeholder="0"
                                   {...field}
                                   value={field.value || ""}
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
                                   data-testid={`input-boxes-${index}`}
                                 />
                               </FormControl>
@@ -758,7 +1014,11 @@ export default function SalesInvoiceManagement() {
                                   placeholder="0.00"
                                   {...field}
                                   value={field.value || ""}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
                                   data-testid={`input-rate-${index}`}
                                 />
                               </FormControl>
@@ -769,9 +1029,12 @@ export default function SalesInvoiceManagement() {
 
                         <div className="flex items-end">
                           <div className="text-sm">
-                            <div className="text-muted-foreground mb-1">Amount</div>
+                            <div className="text-muted-foreground mb-1">
+                              Amount
+                            </div>
                             <div className="font-medium">
-                              ₹{calculateItemAmount(
+                              ₹
+                              {calculateItemAmount(
                                 form.watch(`items.${index}.rate`),
                                 form.watch(`items.${index}`)
                               ).toFixed(2)}
@@ -782,7 +1045,11 @@ export default function SalesInvoiceManagement() {
 
                       {form.watch(`items.${index}.itemId`) && (
                         <div className="mt-2 text-sm text-muted-foreground">
-                          Available Stock: {getAvailableStock(form.watch(`items.${index}.itemId`))} units
+                          Available Stock:{" "}
+                          {getAvailableStock(
+                            form.watch(`items.${index}.itemId`)
+                          )}{" "}
+                          units
                         </div>
                       )}
                     </div>
@@ -796,6 +1063,67 @@ export default function SalesInvoiceManagement() {
                   <span>Total Amount:</span>
                   <span>₹{calculateTotalAmount().toFixed(2)}</span>
                 </div>
+              </div>
+
+              {/* Crate Transaction Section */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-lg font-medium">Crate Transaction (Optional)</h3>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="crateTransaction.enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-crate-transaction"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Record crate transaction with this invoice
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically track crates given to the retailer
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                
+                {form.watch("crateTransaction.enabled") && (
+                  <FormField
+                    control={form.control}
+                    name="crateTransaction.quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of Crates *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="Enter number of crates"
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || undefined)
+                            }
+                            data-testid="input-crate-quantity"
+                          />
+                        </FormControl>
+                        <p className="text-sm text-muted-foreground">
+                          Crates will be marked as "Given" to {form.watch("invoice.retailerId") ? getRetailerName(form.watch("invoice.retailerId")) : "the selected retailer"}
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <FormField

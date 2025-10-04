@@ -1,6 +1,6 @@
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, and, or, gt, asc } from 'drizzle-orm';
 import { db } from '../../../db';
-import { payments, purchaseInvoices, vendors, bankAccounts, type Payment, type InsertPayment, type PaymentWithDetails } from '@shared/schema';
+import { payments, purchaseInvoices, vendors, bankAccounts, cashbook, bankbook, type Payment, type InsertPayment, type PaymentWithDetails, type PurchaseInvoice, type VendorPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 
 export class PaymentModel {
@@ -142,5 +142,173 @@ export class PaymentModel {
       vendor,
       bankAccount: bankAccount || undefined
     };
+  }
+
+  async recordVendorPayment(
+    tenantId: string, 
+    vendorId: string, 
+    paymentData: { 
+      amount: string, 
+      paymentMode: string, 
+      paymentDate: Date, 
+      bankAccountId?: string, 
+      chequeNumber?: string, 
+      upiReference?: string, 
+      notes?: string 
+    }
+  ): Promise<VendorPaymentDistributionResult> {
+    return await db.transaction(async (tx) => {
+      // Validate vendor exists
+      const vendor = await tx.select().from(vendors)
+        .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)))
+        .limit(1);
+
+      if (vendor.length === 0) {
+        throw new Error('Vendor not found');
+      }
+
+      // Fetch outstanding invoices (FIFO)
+      const outstandingInvoices = await tx.select().from(purchaseInvoices)
+        .where(withTenant(purchaseInvoices, tenantId, and(
+          eq(purchaseInvoices.vendorId, vendorId),
+          or(
+            eq(purchaseInvoices.status, 'Unpaid'),
+            eq(purchaseInvoices.status, 'Partially Paid')
+          ),
+          gt(purchaseInvoices.balanceAmount, '0')
+        )))
+        .orderBy(asc(purchaseInvoices.invoiceDate), asc(purchaseInvoices.createdAt));
+
+      if (outstandingInvoices.length === 0) {
+        throw new Error('No outstanding invoices found for this vendor');
+      }
+
+      let remainingPaymentAmount = parseFloat(paymentData.amount);
+      const distributedAmount = parseFloat(paymentData.amount);
+      const paymentsCreated: Payment[] = [];
+      const invoicesUpdated: string[] = [];
+
+      // Distribute payment amount across invoices
+      for (const invoice of outstandingInvoices) {
+        if (remainingPaymentAmount <= 0) break;
+
+        const invoiceBalance = parseFloat(invoice.balanceAmount);
+        const allocation = Math.min(remainingPaymentAmount, invoiceBalance);
+
+        // Create payment record
+        const paymentInsert = ensureTenantInsert({
+          invoiceId: invoice.id,
+          vendorId: vendorId,
+          amount: allocation.toFixed(2),
+          paymentMode: paymentData.paymentMode,
+          paymentDate: paymentData.paymentDate,
+          bankAccountId: paymentData.bankAccountId,
+          chequeNumber: paymentData.chequeNumber,
+          upiReference: paymentData.upiReference,
+          notes: paymentData.notes,
+        }, tenantId);
+
+        const [createdPayment] = await tx.insert(payments).values(paymentInsert).returning();
+        paymentsCreated.push(createdPayment);
+
+        // Update invoice
+        const newPaidAmount = parseFloat(invoice.paidAmount || '0') + allocation;
+        const newBalanceAmount = parseFloat(invoice.balanceAmount) - allocation;
+        let newStatus = invoice.status;
+
+        // Use epsilon threshold to handle floating-point precision issues
+        const epsilon = 0.005; // Half a cent
+        if (Math.abs(newBalanceAmount) < epsilon) {
+          newStatus = 'Paid';
+        } else if (newPaidAmount > 0) {
+          newStatus = 'Partially Paid';
+        } else {
+          newStatus = 'Unpaid';
+        }
+
+        await tx.update(purchaseInvoices)
+          .set({
+            paidAmount: newPaidAmount.toFixed(2),
+            balanceAmount: newBalanceAmount.toFixed(2),
+            status: newStatus
+          })
+          .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoice.id)));
+
+        invoicesUpdated.push(invoice.id);
+        remainingPaymentAmount -= allocation;
+      }
+
+      // Update vendor balance
+      const newVendorBalance = parseFloat(vendor[0].balance || '0') - (distributedAmount - remainingPaymentAmount);
+      await tx.update(vendors)
+        .set({ balance: newVendorBalance.toFixed(2) })
+        .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)));
+
+      // Create cashbook/bankbook entry
+      if (paymentsCreated.length > 0) {
+        if (paymentData.paymentMode === 'Cash') {
+          // Get current cashbook balance
+          const lastCashEntry = await tx.select().from(cashbook)
+            .where(withTenant(cashbook, tenantId))
+            .orderBy(desc(cashbook.createdAt))
+            .limit(1);
+
+          const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
+          const newBalance = currentBalance - (distributedAmount - remainingPaymentAmount);
+
+          await tx.insert(cashbook).values(ensureTenantInsert({
+            date: paymentData.paymentDate,
+            description: `Vendor Payment - ${vendor[0].name}`,
+            outflow: (distributedAmount - remainingPaymentAmount).toFixed(2),
+            inflow: '0.00',
+            balance: newBalance.toFixed(2),
+            referenceType: 'Payment',
+            referenceId: paymentsCreated[0].id,
+          }, tenantId));
+        } else if (paymentData.paymentMode === 'Bank' && paymentData.bankAccountId) {
+          // Get current bank balance
+          const lastBankEntry = await tx.select().from(bankbook)
+            .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, paymentData.bankAccountId)))
+            .orderBy(desc(bankbook.createdAt))
+            .limit(1);
+
+          const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+          const newBalance = currentBalance - (distributedAmount - remainingPaymentAmount);
+
+          await tx.insert(bankbook).values(ensureTenantInsert({
+            bankAccountId: paymentData.bankAccountId,
+            date: paymentData.paymentDate,
+            description: `Vendor Payment - ${vendor[0].name}`,
+            credit: (distributedAmount - remainingPaymentAmount).toFixed(2),
+            debit: '0.00',
+            balance: newBalance.toFixed(2),
+            referenceType: 'Payment',
+            referenceId: paymentsCreated[0].id,
+          }, tenantId));
+        }
+      }
+
+      return {
+        totalAmount: paymentData.amount,
+        distributedAmount: (distributedAmount - remainingPaymentAmount).toFixed(2),
+        remainingAmount: remainingPaymentAmount.toFixed(2),
+        paymentsCreated,
+        invoicesUpdated,
+        vendorBalanceAfter: newVendorBalance.toFixed(2),
+      };
+    });
+  }
+
+  async getOutstandingInvoicesForVendor(tenantId: string, vendorId: string): Promise<PurchaseInvoice[]> {
+    return await db.select().from(purchaseInvoices)
+      .where(withTenant(purchaseInvoices, tenantId, and(
+        eq(purchaseInvoices.vendorId, vendorId),
+        or(
+          eq(purchaseInvoices.status, 'Unpaid'),
+          eq(purchaseInvoices.status, 'Partially Paid')
+        ),
+        gt(purchaseInvoices.balanceAmount, '0')
+      )))
+      .orderBy(asc(purchaseInvoices.invoiceDate));
   }
 }

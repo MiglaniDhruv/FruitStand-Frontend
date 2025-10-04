@@ -30,6 +30,7 @@ import { TenantLandingRedirect } from "@/components/tenant/tenant-landing-redire
 import { TenantLogin } from "@/components/tenant/tenant-login";
 import { TenantProtectedRoute } from "@/components/tenant/tenant-protected-route";
 import { TenantSlugProvider } from "@/contexts/tenant-slug-context";
+import { NavigationRefreshHandler } from "@/components/NavigationRefreshHandler";
 
 function Router() {
   return (
@@ -239,6 +240,7 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <NavigationRefreshHandler />
       <AuthProvider>
         <TooltipProvider>
           <Toaster />

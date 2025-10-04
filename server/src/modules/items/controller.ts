@@ -112,7 +112,7 @@ export class ItemController extends BaseController {
   async create(req: AuthenticatedRequest, res: Response) {
     try {
       const tenantId = req.tenantId!;
-      const itemData = insertItemSchema.parse(req.body);
+      const itemData = insertItemSchema.parse({ ...req.body, tenantId });
       const item = await this.itemModel.createItem(tenantId, itemData);
       
       res.status(201).json(item);
@@ -134,7 +134,7 @@ export class ItemController extends BaseController {
         return this.sendValidationError(res, idValidation.error.errors);
       }
       
-      const itemData = insertItemSchema.partial().parse(req.body);
+      const itemData = insertItemSchema.partial().parse({ ...req.body, tenantId });
       const item = await this.itemModel.updateItem(tenantId, idValidation.data, itemData);
       
       if (!item) {

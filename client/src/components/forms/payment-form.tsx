@@ -73,17 +73,33 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
 
   const watchedPaymentMode = form.watch("paymentMode");
 
-  const { data: vendors } = useQuery<any[]>({
+  const { data: vendorsResult } = useQuery({
     queryKey: ["/api/vendors"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=100");
+      return response.json();
+    },
   });
 
-  const { data: invoices } = useQuery<any[]>({
+  const { data: invoicesResult } = useQuery({
     queryKey: ["/api/purchase-invoices"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/purchase-invoices?limit=100");
+      return response.json();
+    },
   });
 
-  const { data: bankAccounts } = useQuery<any[]>({
+  const { data: bankAccountsResult } = useQuery({
     queryKey: ["/api/bank-accounts"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
+      return response.json();
+    },
   });
+
+  const vendors = vendorsResult?.data || [];
+  const invoices = invoicesResult?.data || [];
+  const bankAccounts = bankAccountsResult || [];
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {

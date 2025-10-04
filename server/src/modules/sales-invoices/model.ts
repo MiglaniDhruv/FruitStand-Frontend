@@ -1,9 +1,11 @@
-import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count } from 'drizzle-orm';
+import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count, sql, sum } from 'drizzle-orm';
 import { db } from '../../../db';
-import { salesInvoices, salesInvoiceItems, retailers, salesPayments, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink } from '@shared/schema';
+import { salesInvoices, salesInvoiceItems, retailers, salesPayments, invoiceShareLinks, stockMovements, crateTransactions, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type InsertCrateTransaction, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { InvoiceShareLinkModel } from '../invoice-share-links/model';
+import { CrateModel } from '../crates/model';
+import { StockModel } from '../stock/model';
 
 // Local type that allows null retailers for legacy compatibility
 type SalesInvoiceWithNullableRetailer = SalesInvoice & {
@@ -14,6 +16,8 @@ type SalesInvoiceWithNullableRetailer = SalesInvoice & {
 
 export class SalesInvoiceModel {
   private shareModel = new InvoiceShareLinkModel();
+  private crateModel = new CrateModel();
+  private stockModel = new StockModel();
 
   async createShareLink(tenantId: string, invoiceId: string): Promise<InvoiceShareLink> {
     // Verify the invoice exists and belongs to this tenant
@@ -101,7 +105,7 @@ export class SalesInvoiceModel {
     return { ...invoice, retailer, items: itemsList, payments: paymentsList };
   }
 
-  async createSalesInvoice(tenantId: string, invoiceData: InsertSalesInvoice, itemsData: InsertSalesInvoiceItem[]): Promise<SalesInvoiceWithDetails> {
+  async createSalesInvoice(tenantId: string, invoiceData: InsertSalesInvoice, itemsData: InsertSalesInvoiceItem[], crateTransactionData?: InsertCrateTransaction): Promise<SalesInvoiceWithDetails> {
     return await db.transaction(async (tx) => {
       // Generate invoice number with SI prefix + compact timestamp suffix
       const invoiceNumber = `SI${String(Date.now()).slice(-6)}`;
@@ -109,6 +113,7 @@ export class SalesInvoiceModel {
       const invoiceWithTenant = ensureTenantInsert({
         ...invoiceData,
         invoiceNumber,
+        udhaaarAmount: invoiceData.totalAmount,
         balanceAmount: invoiceData.totalAmount,
         status: 'Unpaid'
       }, tenantId);
@@ -121,14 +126,53 @@ export class SalesInvoiceModel {
       
       const createdItems = await tx.insert(salesInvoiceItems).values(itemsWithInvoiceId).returning();
       
+      // Create stock OUT movements for each item
+      for (const item of createdItems) {
+        const movementData = {
+          tenantId,
+          itemId: item.itemId,
+          movementType: 'OUT' as const,
+          quantityInCrates: item.crates || '0',
+          quantityInBoxes: item.boxes || '0',
+          quantityInKgs: item.weight,
+          rate: item.rate,
+          referenceType: 'SALES_INVOICE' as const,
+          referenceId: invoice.id,
+          referenceNumber: invoice.invoiceNumber,
+          retailerId: invoice.retailerId,
+          movementDate: invoice.invoiceDate,
+          notes: 'Auto-generated from sales invoice'
+        };
+        
+        await this.stockModel.createStockMovement(tenantId, movementData, tx);
+      }
+      
       const [retailer] = await tx.select().from(retailers)
         .where(withTenant(retailers, tenantId, eq(retailers.id, invoice.retailerId)));
       
       if (!retailer) {
         throw new Error('Invoice retailer not found');
       }
+
+      // Update retailer's udhaaarBalance by the invoice's totalAmount
+      const newUdhaaarBalance = parseFloat(retailer.udhaaarBalance || '0') + parseFloat(invoice.totalAmount);
+      await tx.update(retailers)
+        .set({ udhaaarBalance: newUdhaaarBalance.toFixed(2) })
+        .where(withTenant(retailers, tenantId, eq(retailers.id, invoice.retailerId)));
+
+      // Update retailer object with fresh udhaaar balance
+      retailer.udhaaarBalance = newUdhaaarBalance.toFixed(2);
+
+      // Create crate transaction if provided
+      let crateTransaction: CrateTransaction | undefined;
+      if (crateTransactionData) {
+        crateTransaction = await this.crateModel.createCrateTransaction(tenantId, {
+          ...crateTransactionData,
+          salesInvoiceId: invoice.id
+        }, tx);
+      }
       
-      return { ...invoice, retailer, items: createdItems, payments: [] };
+      return { ...invoice, retailer, items: createdItems, payments: [], crateTransaction };
     });
   }
 
@@ -150,36 +194,203 @@ export class SalesInvoiceModel {
         throw new Error('Retailer not found');
       }
       
-      // Calculate shortfall amount from balance amount
-      const shortfallAmount = parseFloat(invoice.balanceAmount);
+      // Calculate shortfall amount from udhaaar amount
+      const shortfallAmount = parseFloat(invoice.udhaaarAmount || '0');
       
       // Update invoice with paid status and amounts
       const [updatedInvoice] = await tx.update(salesInvoices)
         .set({ 
           status: 'Paid',
           paidAmount: invoice.totalAmount,
-          balanceAmount: '0.00',
-          shortfallAmount: shortfallAmount.toString()
+          udhaaarAmount: '0.00',
+          shortfallAmount: shortfallAmount.toFixed(2)
         })
         .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)))
         .returning();
       
-      // Update retailer shortfall balance if there's a shortfall
-      let updatedRetailer = retailer;
-      if (shortfallAmount > 0) {
-        const newShortfallBalance = parseFloat(retailer.shortfallBalance || '0') + shortfallAmount;
-        
-        [updatedRetailer] = await tx.update(retailers)
-          .set({ shortfallBalance: newShortfallBalance.toString() })
-          .where(withTenant(retailers, tenantId, eq(retailers.id, retailer.id)))
-          .returning();
-      }
+      // Update retailer balances - decrease udhaaarBalance and increase shortfallBalance
+      const newUdhaaarBalance = Math.max(0, parseFloat(retailer.udhaaarBalance || '0') - parseFloat(invoice.udhaaarAmount || '0'));
+      const newShortfallBalance = parseFloat(retailer.shortfallBalance || '0') + shortfallAmount;
+      
+      const [updatedRetailer] = await tx.update(retailers)
+        .set({ 
+          shortfallBalance: newShortfallBalance.toFixed(2),
+          udhaaarBalance: newUdhaaarBalance.toFixed(2)
+        })
+        .where(withTenant(retailers, tenantId, eq(retailers.id, retailer.id)))
+        .returning();
       
       return {
         invoice: updatedInvoice,
         shortfallAdded: shortfallAmount.toString(),
         retailer: updatedRetailer
       };
+    });
+  }
+
+  async revertInvoiceStatus(tenantId: string, invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallReverted: string; retailer: any }> {
+    return await db.transaction(async (tx) => {
+      // Get the invoice with tenant filtering
+      const [invoice] = await tx.select().from(salesInvoices)
+        .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)));
+      
+      if (!invoice) {
+        throw new Error('Invoice not found');
+      }
+      
+      // Validate invoice status
+      if (invoice.status !== 'Paid') {
+        throw new Error('Can only revert invoices with Paid status');
+      }
+      
+      // Get the retailer with tenant filtering
+      const [retailer] = await tx.select().from(retailers)
+        .where(withTenant(retailers, tenantId, eq(retailers.id, invoice.retailerId)));
+      
+      if (!retailer) {
+        throw new Error('Retailer not found');
+      }
+      
+      // Calculate amounts to transfer
+      const shortfallToRevert = parseFloat(invoice.shortfallAmount || '0');
+      const newUdhaaarAmount = parseFloat(invoice.udhaaarAmount || '0') + shortfallToRevert;
+      
+      // Recalculate the true paidAmount by summing actual payments for this invoice
+      const paymentsResult = await tx.select({ 
+        totalPaid: sum(salesPayments.amount) 
+      })
+      .from(salesPayments)
+      .where(withTenant(salesPayments, tenantId, eq(salesPayments.invoiceId, invoiceId)));
+      
+      const truePaidAmount = parseFloat(paymentsResult[0]?.totalPaid || '0');
+      
+      // Recalculate invoice status using the same logic as payment distribution
+      const epsilon = 0.005; // Half a cent for floating-point precision
+      let newStatus: string;
+      
+      if (Math.abs(newUdhaaarAmount) < epsilon) {
+        newStatus = 'Paid';
+      } else if (truePaidAmount > 0) {
+        newStatus = 'Partially Paid';
+      } else {
+        newStatus = 'Unpaid';
+      }
+      
+      // Update the invoice
+      const [updatedInvoice] = await tx.update(salesInvoices)
+        .set({
+          udhaaarAmount: newUdhaaarAmount.toFixed(2),
+          paidAmount: truePaidAmount.toFixed(2),
+          shortfallAmount: '0.00',
+          status: newStatus as any
+        })
+        .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)))
+        .returning();
+      
+      // Update retailer balances - increase udhaaarBalance and decrease shortfallBalance
+      let updatedRetailer = retailer;
+      if (shortfallToRevert > 0) {
+        const newUdhaaarBalance = parseFloat(retailer.udhaaarBalance || '0') + shortfallToRevert;
+        const newShortfallBalance = Math.max(0, parseFloat(retailer.shortfallBalance || '0') - shortfallToRevert);
+        [updatedRetailer] = await tx.update(retailers)
+          .set({ 
+            shortfallBalance: newShortfallBalance.toFixed(2),
+            udhaaarBalance: newUdhaaarBalance.toFixed(2)
+          })
+          .where(withTenant(retailers, tenantId, eq(retailers.id, retailer.id)))
+          .returning();
+      }
+      
+      return { 
+        invoice: updatedInvoice, 
+        shortfallReverted: shortfallToRevert.toFixed(2), 
+        retailer: updatedRetailer 
+      };
+    });
+  }
+
+  async deleteSalesInvoice(tenantId: string, id: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      // First, get the invoice and retailer to check for shortfall amount that needs to be reversed
+      const [invoice] = await tx.select().from(salesInvoices)
+        .where(and(
+          withTenant(salesInvoices, tenantId),
+          eq(salesInvoices.id, id)
+        ));
+      
+      if (!invoice) {
+        return false;
+      }
+      
+      let retailer = null;
+      if (parseFloat(invoice.shortfallAmount || '0') > 0 || parseFloat(invoice.udhaaarAmount || '0') > 0) {
+        [retailer] = await tx.select().from(retailers)
+          .where(and(
+            withTenant(retailers, tenantId),
+            eq(retailers.id, invoice.retailerId)
+          ));
+      }
+      
+      // Delete related records in cascade order (children first, then parent)
+      
+      // Delete invoice share links
+      await tx.delete(invoiceShareLinks)
+        .where(and(
+          withTenant(invoiceShareLinks, tenantId),
+          eq(invoiceShareLinks.invoiceId, id),
+          eq(invoiceShareLinks.invoiceType, 'sales')
+        ));
+      
+      // Delete stock movements
+      await tx.delete(stockMovements)
+        .where(and(
+          withTenant(stockMovements, tenantId),
+          eq(stockMovements.referenceType, 'SALES_INVOICE'),
+          eq(stockMovements.referenceId, id)
+        ));
+      
+      // Delete sales payments
+      await tx.delete(salesPayments)
+        .where(and(
+          withTenant(salesPayments, tenantId),
+          eq(salesPayments.invoiceId, id)
+        ));
+      
+      // Delete sales invoice items
+      await tx.delete(salesInvoiceItems)
+        .where(and(
+          withTenant(salesInvoiceItems, tenantId),
+          eq(salesInvoiceItems.invoiceId, id)
+        ));
+      
+      // Update retailer balances to reverse changes made during invoice lifecycle
+      if (retailer) {
+        const shortfallAmount = parseFloat(invoice.shortfallAmount || '0');
+        const udhaaarAmount = parseFloat(invoice.udhaaarAmount || '0');
+        
+        const newShortfallBalance = Math.max(0, parseFloat(retailer.shortfallBalance || '0') - shortfallAmount);
+        const newUdhaaarBalance = Math.max(0, parseFloat(retailer.udhaaarBalance || '0') - udhaaarAmount);
+        
+        await tx.update(retailers)
+          .set({ 
+            shortfallBalance: newShortfallBalance.toFixed(2),
+            udhaaarBalance: newUdhaaarBalance.toFixed(2)
+          })
+          .where(and(
+            withTenant(retailers, tenantId),
+            eq(retailers.id, retailer.id)
+          ));
+      }
+      
+      // Finally delete the sales invoice itself
+      const [deletedInvoice] = await tx.delete(salesInvoices)
+        .where(and(
+          withTenant(salesInvoices, tenantId),
+          eq(salesInvoices.id, id)
+        ))
+        .returning();
+      
+      return !!deletedInvoice;
     });
   }
 
