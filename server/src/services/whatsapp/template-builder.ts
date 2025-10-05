@@ -7,6 +7,13 @@ export interface SalesInvoiceVariables {
   invoiceDate: string;
   totalAmount: string;
   udhaaarAmount: string;
+  businessName?: string;
+  businessPhone?: string;
+  businessAddress?: string;
+  contactPerson?: string;
+  retailerAddress?: string;
+  address?: string;
+  invoiceUrl?: string;
 }
 
 export interface PurchaseInvoiceVariables {
@@ -15,6 +22,13 @@ export interface PurchaseInvoiceVariables {
   invoiceDate: string;
   netAmount: string;
   balanceAmount: string;
+  businessName?: string;
+  businessPhone?: string;
+  businessAddress?: string;
+  contactPerson?: string;
+  vendorAddress?: string;
+  address?: string;
+  invoiceUrl?: string;
 }
 
 export interface PaymentReminderVariables {
@@ -22,6 +36,13 @@ export interface PaymentReminderVariables {
   invoiceNumber: string;
   udhaaarAmount: string;
   dueDate: string;
+  businessName?: string;
+  businessPhone?: string;
+  businessAddress?: string;
+  contactPerson?: string;
+  recipientAddress?: string;
+  address?: string;
+  invoiceUrl?: string;
 }
 
 export interface PaymentNotificationVariables {
@@ -30,6 +51,13 @@ export interface PaymentNotificationVariables {
   paymentAmount: string;
   paymentDate: string;
   paymentMode: string;
+  businessName?: string;
+  businessPhone?: string;
+  businessAddress?: string;
+  contactPerson?: string;
+  recipientAddress?: string;
+  address?: string;
+  invoiceUrl?: string;
 }
 
 // Formatting helpers
@@ -48,31 +76,70 @@ export function truncateText(text: string, maxLength: number = 50): string {
   return text.substring(0, maxLength - 3) + '...';
 }
 
+export function formatAddress(address: string | null | undefined, maxLength: number = 100): string | undefined {
+  if (!address) return undefined;
+  
+  // Replace newline characters with spaces
+  let formatted = address.replace(/\r\n|\r|\n/g, ' ');
+  
+  // Replace multiple consecutive spaces with single space
+  formatted = formatted.replace(/\s+/g, ' ');
+  
+  // Trim whitespace
+  formatted = formatted.trim();
+  
+  // Return undefined if the normalized address is empty
+  if (!formatted) return undefined;
+  
+  // Truncate if needed
+  if (formatted.length > maxLength) {
+    formatted = formatted.substring(0, maxLength - 3) + '...';
+  }
+  
+  return formatted;
+}
+
 // Builder functions
-export function buildSalesInvoiceVariables(invoice: any, retailer: any): SalesInvoiceVariables {
+export function buildSalesInvoiceVariables(invoice: any, retailer: any, tenant?: any, invoiceUrl?: string): SalesInvoiceVariables {
   return {
     retailerName: truncateText(retailer.name || 'Customer'),
     invoiceNumber: invoice.invoiceNumber || '',
     invoiceDate: formatDate(invoice.invoiceDate),
     totalAmount: formatCurrency(invoice.totalAmount || '0'),
-    udhaaarAmount: formatCurrency(invoice.udhaaarAmount || '0')
+    udhaaarAmount: formatCurrency(invoice.udhaaarAmount || '0'),
+    businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
+    businessPhone: tenant?.settings?.phone || undefined,
+    businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
+    contactPerson: retailer?.contactPerson ? truncateText(retailer.contactPerson, 50) : undefined,
+    retailerAddress: retailer?.address ? formatAddress(retailer.address) : undefined,
+    address: retailer?.address ? formatAddress(retailer.address) : undefined,
+    invoiceUrl
   };
 }
 
-export function buildPurchaseInvoiceVariables(invoice: any, vendor: any): PurchaseInvoiceVariables {
+export function buildPurchaseInvoiceVariables(invoice: any, vendor: any, tenant?: any, invoiceUrl?: string): PurchaseInvoiceVariables {
   return {
     vendorName: truncateText(vendor.name || 'Vendor'),
     invoiceNumber: invoice.invoiceNumber || '',
     invoiceDate: formatDate(invoice.invoiceDate),
     netAmount: formatCurrency(invoice.netAmount || '0'),
-    balanceAmount: formatCurrency(invoice.balanceAmount || '0')
+    balanceAmount: formatCurrency(invoice.balanceAmount || '0'),
+    businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
+    businessPhone: tenant?.settings?.phone || undefined,
+    businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
+    contactPerson: vendor?.contactPerson ? truncateText(vendor.contactPerson, 50) : undefined,
+    vendorAddress: vendor?.address ? formatAddress(vendor.address) : undefined,
+    address: vendor?.address ? formatAddress(vendor.address) : undefined,
+    invoiceUrl
   };
 }
 
 export function buildPaymentReminderVariables(
   invoice: any, 
   recipient: any, 
-  recipientType: 'vendor' | 'retailer'
+  recipientType: 'vendor' | 'retailer',
+  tenant?: any,
+  invoiceUrl?: string
 ): PaymentReminderVariables {
   // Calculate due date (assume 7 days from invoice date if not specified)
   const invoiceDate = new Date(invoice.invoiceDate);
@@ -83,20 +150,36 @@ export function buildPaymentReminderVariables(
     recipientName: truncateText(recipient.name || (recipientType === 'vendor' ? 'Vendor' : 'Customer')),
     invoiceNumber: invoice.invoiceNumber || '',
     udhaaarAmount: formatCurrency(recipientType === 'vendor' ? (invoice.balanceAmount || '0') : (invoice.udhaaarAmount || '0')),
-    dueDate: formatDate(dueDate)
+    dueDate: formatDate(dueDate),
+    businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
+    businessPhone: tenant?.settings?.phone || undefined,
+    businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
+    contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
+    recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
+    address: recipient?.address ? formatAddress(recipient.address) : undefined,
+    invoiceUrl
   };
 }
 
 export function buildPaymentNotificationVariables(
   payment: any, 
   invoice: any, 
-  recipient: any
+  recipient: any,
+  tenant?: any,
+  invoiceUrl?: string
 ): PaymentNotificationVariables {
   return {
     recipientName: truncateText(recipient.name || 'Customer'),
     invoiceNumber: invoice.invoiceNumber || '',
     paymentAmount: formatCurrency(payment.amount || '0'),
     paymentDate: formatDate(payment.paymentDate),
-    paymentMode: payment.paymentMode || 'Cash'
+    paymentMode: payment.paymentMode || 'Cash',
+    businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
+    businessPhone: tenant?.settings?.phone || undefined,
+    businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
+    contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
+    recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
+    address: recipient?.address ? formatAddress(recipient.address) : undefined,
+    invoiceUrl
   };
 }

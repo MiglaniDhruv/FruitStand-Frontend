@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
-import { PaginationOptions, PaginatedResult, StockWithItem } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, StockWithItem, ItemWithVendor } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -93,7 +93,7 @@ export default function Stock() {
     enabled: !!selectedItem?.itemId,
   });
 
-  const { data: items } = useQuery<any[]>({
+  const { data: items, isError: itemsError } = useQuery<ItemWithVendor[]>({
     queryKey: ["/api/items"],
   });
 
@@ -369,9 +369,9 @@ export default function Stock() {
     setManualEntry({ ...manualEntry, lineItems: updatedLineItems });
   };
 
-  const filteredItems = items?.filter((item: any) => 
+  const filteredItems = (items && Array.isArray(items) ? items : []).filter((item: ItemWithVendor) => 
     !manualEntry.vendorId || item.vendorId === manualEntry.vendorId
-  ) || [];
+  );
 
   if (isError) {
     return (
@@ -836,7 +836,7 @@ export default function Stock() {
                               <SelectValue placeholder="Select item" />
                             </SelectTrigger>
                             <SelectContent>
-                              {filteredItems?.map((item: any) => (
+                              {filteredItems?.map((item: ItemWithVendor) => (
                                 <SelectItem key={item.id} value={item.id}>
                                   {item.name} - {item.quality}
                                 </SelectItem>
@@ -942,7 +942,7 @@ export default function Stock() {
                   <SelectValue placeholder="Select an item" />
                 </SelectTrigger>
                 <SelectContent>
-                  {items?.map((item: any) => (
+                  {(items && Array.isArray(items) ? items : []).map((item: ItemWithVendor) => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.name} - {item.quality} ({item.vendor?.name || 'Unknown Vendor'})
                     </SelectItem>

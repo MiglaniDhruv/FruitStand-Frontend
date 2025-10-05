@@ -51,6 +51,7 @@ interface DataTableProps<T> {
   onSearchChange?: (search: string) => void;
   onSortChange?: (sortBy: string, sortOrder: string) => void;
   pageSizeOptions?: number[];
+  emptyMessage?: string;
 }
 
 export function DataTable<T>({
@@ -68,6 +69,7 @@ export function DataTable<T>({
   rowKey = "id",
   isLoading = false,
   pageSizeOptions,
+  emptyMessage = "No results.",
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
   const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
@@ -300,9 +302,9 @@ export function DataTable<T>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length + (enableRowSelection ? 1 : 0)}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-muted-foreground"
                 >
-                  No results.
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
             ) : (

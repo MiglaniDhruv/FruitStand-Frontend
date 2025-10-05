@@ -38,19 +38,32 @@ export class PurchaseInvoiceModel {
     const vendorIds = Array.from(vendorIdsSet);
     const invoiceIds = invoices.map(inv => inv.id);
     
-    const [vendorsData, itemsData] = await Promise.all([
+    const [vendorsData, itemsDataWithDetails] = await Promise.all([
       vendorIds.length > 0 ? db.select().from(vendors).where(withTenant(vendors, tenantId, inArray(vendors.id, vendorIds))) : [],
-      invoiceIds.length > 0 ? db.select().from(invoiceItems).where(withTenant(invoiceItems, tenantId, inArray(invoiceItems.invoiceId, invoiceIds))) : []
+      invoiceIds.length > 0 ? db.select({
+        invoiceItem: invoiceItems,
+        item: items
+      })
+      .from(invoiceItems)
+      .innerJoin(items, eq(invoiceItems.itemId, items.id))
+      .where(withTenant(invoiceItems, tenantId, inArray(invoiceItems.invoiceId, invoiceIds))) : []
     ]);
     
     // Create lookup maps
     const vendorMap = new Map(vendorsData.map(v => [v.id, v]));
     const itemsMap = new Map<string, any[]>();
-    itemsData.forEach(item => {
-      if (!itemsMap.has(item.invoiceId)) {
-        itemsMap.set(item.invoiceId, []);
+    itemsDataWithDetails.forEach(({ invoiceItem, item }) => {
+      if (!itemsMap.has(invoiceItem.invoiceId)) {
+        itemsMap.set(invoiceItem.invoiceId, []);
       }
-      itemsMap.get(item.invoiceId)!.push(item);
+      // Map the results to include item details in the invoice item objects
+      itemsMap.get(invoiceItem.invoiceId)!.push({
+        ...invoiceItem,
+        item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+        itemName: item.name,
+        itemQuality: item.quality,
+        itemUnit: item.unit
+      });
     });
     
     // Assemble final data - filter out invoices without vendors to maintain type integrity
@@ -84,8 +97,23 @@ export class PurchaseInvoiceModel {
       throw new Error('Invoice vendor not found');
     }
     
-    const itemsList = await db.select().from(invoiceItems)
-      .where(withTenant(invoiceItems, tenantId, eq(invoiceItems.invoiceId, invoice.id)));
+    // Join with items table to get item details including name, quality, and unit
+    const itemsListWithDetails = await db.select({
+      invoiceItem: invoiceItems,
+      item: items
+    })
+    .from(invoiceItems)
+    .innerJoin(items, eq(invoiceItems.itemId, items.id))
+    .where(withTenant(invoiceItems, tenantId, eq(invoiceItems.invoiceId, invoice.id)));
+
+    // Map the results to include item details in the invoice item objects
+    const itemsList = itemsListWithDetails.map(({ invoiceItem, item }) => ({
+      ...invoiceItem,
+      item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+      itemName: item.name,
+      itemQuality: item.quality,
+      itemUnit: item.unit
+    }));
 
     return { ...invoice, vendor, items: itemsList };
   }
@@ -340,19 +368,32 @@ export class PurchaseInvoiceModel {
     const vendorIds = Array.from(vendorIdsSet);
     const invoiceIds = invoicesData.map(inv => inv.id);
     
-    const [vendorsData, itemsData] = await Promise.all([
+    const [vendorsData, itemsDataWithDetails] = await Promise.all([
       vendorIds.length > 0 ? db.select().from(vendors).where(withTenant(vendors, tenantId, inArray(vendors.id, vendorIds))) : [],
-      invoiceIds.length > 0 ? db.select().from(invoiceItems).where(withTenant(invoiceItems, tenantId, inArray(invoiceItems.invoiceId, invoiceIds))) : []
+      invoiceIds.length > 0 ? db.select({
+        invoiceItem: invoiceItems,
+        item: items
+      })
+      .from(invoiceItems)
+      .innerJoin(items, eq(invoiceItems.itemId, items.id))
+      .where(withTenant(invoiceItems, tenantId, inArray(invoiceItems.invoiceId, invoiceIds))) : []
     ]);
     
     // Create lookup maps
     const vendorMap = new Map(vendorsData.map(v => [v.id, v]));
     const itemsMap = new Map<string, any[]>();
-    itemsData.forEach(item => {
-      if (!itemsMap.has(item.invoiceId)) {
-        itemsMap.set(item.invoiceId, []);
+    itemsDataWithDetails.forEach(({ invoiceItem, item }) => {
+      if (!itemsMap.has(invoiceItem.invoiceId)) {
+        itemsMap.set(invoiceItem.invoiceId, []);
       }
-      itemsMap.get(item.invoiceId)!.push(item);
+      // Map the results to include item details in the invoice item objects
+      itemsMap.get(invoiceItem.invoiceId)!.push({
+        ...invoiceItem,
+        item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+        itemName: item.name,
+        itemQuality: item.quality,
+        itemUnit: item.unit
+      });
     });
     
     // Assemble final data - filter out invoices without vendors to maintain type integrity

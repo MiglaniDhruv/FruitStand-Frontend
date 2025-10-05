@@ -19,36 +19,61 @@ import { useTenant } from "@/hooks/use-tenant";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@/lib/permissions";
+import { TenantSettings } from "@shared/schema";
 import { 
   Settings, 
   Building2, 
-  Bell, 
-  Shield, 
-  Database,
+  MessageSquare,
   Save,
   Loader2
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<TenantSettings>({
     companyName: "",
     address: "",
     phone: "",
     email: "",
     commissionRate: "5",
-    notifications: true,
-    emailAlerts: true,
-    smsAlerts: false,
     currency: "INR",
     dateFormat: "DD/MM/YYYY",
-    autoBackup: true,
-    backupFrequency: "daily",
+    whatsapp: {
+      enabled: false,
+      creditBalance: 0,
+      lowCreditThreshold: 50,
+      scheduler: {
+        enabled: true,
+        preferredSendHour: 9,
+        reminderFrequency: 'daily',
+        sendOnWeekends: true
+      }
+    }
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [liveCreditBalance, setLiveCreditBalance] = useState<number | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
 
   const { toast } = useToast();
   const { tenant, isLoading } = useTenant();
+
+  // Fetch live credit balance
+  const fetchCreditBalance = async () => {
+    if (!settings.whatsapp?.enabled) return;
+    
+    setCreditLoading(true);
+    try {
+      const response = await authenticatedApiRequest("GET", "/api/whatsapp/credits");
+      const result = await response.json();
+      if (result.success) {
+        setLiveCreditBalance(result.data.balance);
+      }
+    } catch (error) {
+      console.error("Failed to fetch credit balance:", error);
+    } finally {
+      setCreditLoading(false);
+    }
+  };
 
   // Load tenant settings on component mount
   useEffect(() => {
@@ -67,13 +92,19 @@ export default function SettingsPage() {
           phone: tenantSettings.phone || "",
           email: tenantSettings.email || "",
           commissionRate: tenantSettings.commissionRate || "5",
-          notifications: tenantSettings.notifications ?? true,
-          emailAlerts: tenantSettings.emailAlerts ?? true,
-          smsAlerts: tenantSettings.smsAlerts ?? false,
           currency: tenantSettings.currency || "INR",
           dateFormat: tenantSettings.dateFormat || "DD/MM/YYYY",
-          autoBackup: tenantSettings.autoBackup ?? true,
-          backupFrequency: tenantSettings.backupFrequency || "daily",
+          whatsapp: {
+            enabled: tenantSettings.whatsapp?.enabled ?? false,
+            creditBalance: tenantSettings.whatsapp?.creditBalance ?? 0,
+            lowCreditThreshold: tenantSettings.whatsapp?.lowCreditThreshold ?? 50,
+            scheduler: {
+              enabled: tenantSettings.whatsapp?.scheduler?.enabled ?? true,
+              preferredSendHour: tenantSettings.whatsapp?.scheduler?.preferredSendHour ?? 9,
+              reminderFrequency: tenantSettings.whatsapp?.scheduler?.reminderFrequency || 'daily',
+              sendOnWeekends: tenantSettings.whatsapp?.scheduler?.sendOnWeekends ?? true
+            }
+          }
         });
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -92,10 +123,21 @@ export default function SettingsPage() {
     }
   }, [tenant, isLoading, toast]);
 
+  // Fetch credit balance when WhatsApp is enabled
+  useEffect(() => {
+    if (settings.whatsapp?.enabled) {
+      fetchCreditBalance();
+    }
+  }, [settings.whatsapp?.enabled]);
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await authenticatedApiRequest("PUT", "/api/tenants/current/settings", settings);
+      // Defense-in-depth: Clone and strip creditBalance before sending
+      const payload = JSON.parse(JSON.stringify(settings));
+      if (payload.whatsapp) delete payload.whatsapp.creditBalance;
+      
+      await authenticatedApiRequest("PUT", "/api/tenants/current/settings", payload);
       toast({
         title: "Settings saved",
         description: "Organization settings have been updated successfully",
@@ -117,6 +159,45 @@ export default function SettingsPage() {
       ...prev,
       [key]: value
     }));
+  };
+
+  const handleWhatsAppSettingChange = (key: string, value: any) => {
+    const defaultWhatsApp = {
+      enabled: false,
+      creditBalance: 0,
+      lowCreditThreshold: 50,
+      scheduler: {
+        enabled: true,
+        preferredSendHour: 9,
+        reminderFrequency: 'daily' as const,
+        sendOnWeekends: true
+      }
+    };
+
+    if (key.startsWith('scheduler.')) {
+      const schedulerKey = key.replace('scheduler.', '');
+      setSettings(prev => ({
+        ...prev,
+        whatsapp: {
+          ...defaultWhatsApp,
+          ...prev.whatsapp,
+          scheduler: {
+            ...defaultWhatsApp.scheduler,
+            ...prev.whatsapp?.scheduler,
+            [schedulerKey]: value
+          }
+        }
+      }));
+    } else {
+      setSettings(prev => ({
+        ...prev,
+        whatsapp: {
+          ...defaultWhatsApp,
+          ...prev.whatsapp,
+          [key]: value
+        }
+      }));
+    }
   };
 
   return (
@@ -268,105 +349,140 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Notifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Notifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>System Notifications</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receive notifications for system events
-                  </p>
+          {/* WhatsApp Management */}
+          <PermissionGuard permission={PERMISSIONS.MANAGE_SETTINGS}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  WhatsApp Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Enable WhatsApp Section */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Enable WhatsApp Integration</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable WhatsApp messaging for invoices and payment reminders
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.whatsapp?.enabled ?? false}
+                    onCheckedChange={(checked) => handleWhatsAppSettingChange("enabled", checked)}
+                    data-testid="switch-whatsapp-enabled"
+                  />
                 </div>
-                <Switch
-                  checked={settings.notifications}
-                  onCheckedChange={(checked) => handleSettingChange("notifications", checked)}
-                  data-testid="switch-notifications"
-                />
-              </div>
-              
-              <Separator />
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Email Alerts</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Send alerts to email for important events
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.emailAlerts}
-                  onCheckedChange={(checked) => handleSettingChange("emailAlerts", checked)}
-                  data-testid="switch-email-alerts"
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>SMS Alerts</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Send SMS for critical notifications
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.smsAlerts}
-                  onCheckedChange={(checked) => handleSettingChange("smsAlerts", checked)}
-                  data-testid="switch-sms-alerts"
-                />
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Data & Backup */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-                Data & Backup
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Automatic Backup</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Automatically backup system data
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.autoBackup}
-                  onCheckedChange={(checked) => handleSettingChange("autoBackup", checked)}
-                  data-testid="switch-auto-backup"
-                />
-              </div>
-              
-              {settings.autoBackup && (
-                <div className="space-y-2">
-                  <Label htmlFor="backupFrequency">Backup Frequency</Label>
-                  <Select 
-                    value={settings.backupFrequency} 
-                    onValueChange={(value) => handleSettingChange("backupFrequency", value)}
-                  >
-                    <SelectTrigger data-testid="select-backup-frequency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hourly">Hourly</SelectItem>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {settings.whatsapp?.enabled && (
+                  <>
+                    <Separator />
+                    
+                    {/* Credit Information Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="creditBalance">Credit Balance (Read-only)</Label>
+                        <Input
+                          id="creditBalance"
+                          type="number"
+                          value={liveCreditBalance !== null ? liveCreditBalance : (settings.whatsapp?.creditBalance ?? 0)}
+                          disabled
+                          data-testid="input-credit-balance"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {creditLoading ? "Loading current balance..." : "Credits are managed through transactions"}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lowCreditThreshold">Low Credit Threshold</Label>
+                        <Input
+                          id="lowCreditThreshold"
+                          type="number"
+                          min="1"
+                          value={settings.whatsapp?.lowCreditThreshold ?? 50}
+                          onChange={(e) => {
+                            const value = e.currentTarget.valueAsNumber;
+                            if (!isNaN(value) && value >= 1) {
+                              handleWhatsAppSettingChange("lowCreditThreshold", value);
+                            }
+                          }}
+                          data-testid="input-low-credit-threshold"
+                        />
+                      </div>
+                    </div>
+
+                    <Separator />
+                    
+                    {/* Scheduler Settings Section */}
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">Automatic Reminder Scheduler</Label>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Enable Automatic Reminders</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Automatically send payment reminders to vendors and retailers
+                          </p>
+                        </div>
+                        <Switch
+                          checked={settings.whatsapp?.scheduler?.enabled ?? true}
+                          onCheckedChange={(checked) => handleWhatsAppSettingChange("scheduler.enabled", checked)}
+                          data-testid="switch-scheduler-enabled"
+                        />
+                      </div>
+
+                      {settings.whatsapp?.scheduler?.enabled && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="preferredSendHour">Preferred Send Hour (0-23)</Label>
+                            <Input
+                              id="preferredSendHour"
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={settings.whatsapp?.scheduler?.preferredSendHour ?? 9}
+                              onChange={(e) => {
+                                const value = e.currentTarget.valueAsNumber;
+                                if (!isNaN(value) && value >= 0 && value <= 23) {
+                                  handleWhatsAppSettingChange("scheduler.preferredSendHour", value);
+                                }
+                              }}
+                              data-testid="input-preferred-hour"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="reminderFrequency">Reminder Frequency</Label>
+                            <Select 
+                              value={settings.whatsapp?.scheduler?.reminderFrequency ?? 'daily'} 
+                              onValueChange={(value) => handleWhatsAppSettingChange("scheduler.reminderFrequency", value)}
+                            >
+                              <SelectTrigger data-testid="select-reminder-frequency">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Send on Weekends</Label>
+                            </div>
+                            <Switch
+                              checked={settings.whatsapp?.scheduler?.sendOnWeekends ?? true}
+                              onCheckedChange={(checked) => handleWhatsAppSettingChange("scheduler.sendOnWeekends", checked)}
+                              data-testid="switch-send-weekends"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </PermissionGuard>
           </>
           )}
         </main>

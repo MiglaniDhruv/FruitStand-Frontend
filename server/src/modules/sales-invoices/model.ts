@@ -1,6 +1,6 @@
 import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count, sql, sum } from 'drizzle-orm';
 import { db } from '../../../db';
-import { salesInvoices, salesInvoiceItems, retailers, salesPayments, invoiceShareLinks, stockMovements, crateTransactions, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type InsertCrateTransaction, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
+import { salesInvoices, salesInvoiceItems, retailers, salesPayments, invoiceShareLinks, stockMovements, crateTransactions, items, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type InsertCrateTransaction, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { InvoiceShareLinkModel } from '../invoice-share-links/model';
@@ -43,9 +43,15 @@ export class SalesInvoiceModel {
     const retailerIds = Array.from(retailerIdsSet);
     const invoiceIds = invoices.map(inv => inv.id);
     
-    const [retailersData, itemsData, paymentsData] = await Promise.all([
+    const [retailersData, itemsDataWithDetails, paymentsData] = await Promise.all([
       retailerIds.length > 0 ? db.select().from(retailers).where(withTenant(retailers, tenantId, inArray(retailers.id, retailerIds))) : [],
-      invoiceIds.length > 0 ? db.select().from(salesInvoiceItems).where(withTenant(salesInvoiceItems, tenantId, inArray(salesInvoiceItems.invoiceId, invoiceIds))) : [],
+      invoiceIds.length > 0 ? db.select({
+        invoiceItem: salesInvoiceItems,
+        item: items
+      })
+      .from(salesInvoiceItems)
+      .innerJoin(items, eq(salesInvoiceItems.itemId, items.id))
+      .where(withTenant(salesInvoiceItems, tenantId, inArray(salesInvoiceItems.invoiceId, invoiceIds))) : [],
       invoiceIds.length > 0 ? db.select().from(salesPayments).where(withTenant(salesPayments, tenantId, inArray(salesPayments.invoiceId, invoiceIds))) : []
     ]);
     
@@ -54,11 +60,18 @@ export class SalesInvoiceModel {
     const itemsMap = new Map<string, any[]>();
     const paymentsMap = new Map<string, any[]>();
     
-    itemsData.forEach(item => {
-      if (!itemsMap.has(item.invoiceId)) {
-        itemsMap.set(item.invoiceId, []);
+    itemsDataWithDetails.forEach(({ invoiceItem, item }) => {
+      if (!itemsMap.has(invoiceItem.invoiceId)) {
+        itemsMap.set(invoiceItem.invoiceId, []);
       }
-      itemsMap.get(item.invoiceId)!.push(item);
+      // Map the results to include item details in the invoice item objects
+      itemsMap.get(invoiceItem.invoiceId)!.push({
+        ...invoiceItem,
+        item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+        itemName: item.name,
+        itemQuality: item.quality,
+        itemUnit: item.unit
+      });
     });
     
     paymentsData.forEach(payment => {
@@ -97,8 +110,24 @@ export class SalesInvoiceModel {
       throw new Error('Invoice retailer not found');
     }
     
-    const itemsList = await db.select().from(salesInvoiceItems)
-      .where(withTenant(salesInvoiceItems, tenantId, eq(salesInvoiceItems.invoiceId, invoice.id)));
+    // Join with items table to get item details including name, quality, and unit
+    const itemsListWithDetails = await db.select({
+      invoiceItem: salesInvoiceItems,
+      item: items
+    })
+    .from(salesInvoiceItems)
+    .innerJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .where(withTenant(salesInvoiceItems, tenantId, eq(salesInvoiceItems.invoiceId, invoice.id)));
+
+    // Map the results to include item details in the invoice item objects
+    const itemsList = itemsListWithDetails.map(({ invoiceItem, item }) => ({
+      ...invoiceItem,
+      item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+      itemName: item.name,
+      itemQuality: item.quality,
+      itemUnit: item.unit
+    }));
+    
     const paymentsList = await db.select().from(salesPayments)
       .where(withTenant(salesPayments, tenantId, eq(salesPayments.invoiceId, invoice.id)));
 
@@ -497,9 +526,15 @@ export class SalesInvoiceModel {
     const retailerIds = Array.from(retailerIdsSet);
     const invoiceIds = invoicesData.map(inv => inv.id);
     
-    const [retailersData, itemsData, paymentsData] = await Promise.all([
+    const [retailersData, itemsDataWithDetails, paymentsData] = await Promise.all([
       retailerIds.length > 0 ? db.select().from(retailers).where(withTenant(retailers, tenantId, inArray(retailers.id, retailerIds))) : [],
-      invoiceIds.length > 0 ? db.select().from(salesInvoiceItems).where(withTenant(salesInvoiceItems, tenantId, inArray(salesInvoiceItems.invoiceId, invoiceIds))) : [],
+      invoiceIds.length > 0 ? db.select({
+        invoiceItem: salesInvoiceItems,
+        item: items
+      })
+      .from(salesInvoiceItems)
+      .innerJoin(items, eq(salesInvoiceItems.itemId, items.id))
+      .where(withTenant(salesInvoiceItems, tenantId, inArray(salesInvoiceItems.invoiceId, invoiceIds))) : [],
       invoiceIds.length > 0 ? db.select().from(salesPayments).where(withTenant(salesPayments, tenantId, inArray(salesPayments.invoiceId, invoiceIds))) : []
     ]);
     
@@ -508,11 +543,18 @@ export class SalesInvoiceModel {
     const itemsMap = new Map<string, any[]>();
     const paymentsMap = new Map<string, any[]>();
     
-    itemsData.forEach(item => {
-      if (!itemsMap.has(item.invoiceId)) {
-        itemsMap.set(item.invoiceId, []);
+    itemsDataWithDetails.forEach(({ invoiceItem, item }) => {
+      if (!itemsMap.has(invoiceItem.invoiceId)) {
+        itemsMap.set(invoiceItem.invoiceId, []);
       }
-      itemsMap.get(item.invoiceId)!.push(item);
+      // Map the results to include item details in the invoice item objects
+      itemsMap.get(invoiceItem.invoiceId)!.push({
+        ...invoiceItem,
+        item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+        itemName: item.name,
+        itemQuality: item.quality,
+        itemUnit: item.unit
+      });
     });
     
     paymentsData.forEach(payment => {

@@ -32,14 +32,57 @@ export class TenantModel {
    */
   static async getTenantSettings(tenantId: string): Promise<any> {
     const result = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-    return result[0]?.settings || {};
+    const settings = result[0]?.settings || {};
+    
+    // Defense-in-depth: Strip legacy WhatsApp credentials from reads to ensure clients never receive them
+    if ((settings as any).whatsapp) {
+      const { accountSid, authToken, phoneNumber, ...cleanWhatsApp } = (settings as any).whatsapp;
+      (settings as any).whatsapp = cleanWhatsApp;
+    }
+    
+    return settings;
   }
 
   /**
-   * Update tenant settings
+   * Deep merge two objects
    */
-  static async updateTenantSettings(tenantId: string, settings: any): Promise<Tenant | null> {
-    const result = await db.update(tenants).set({ settings }).where(eq(tenants.id, tenantId)).returning();
+  private static deepMerge(target: any, source: any): any {
+    if (source === null || source === undefined) return target;
+    if (target === null || target === undefined) return source;
+    
+    const result = { ...target };
+    
+    for (const key in source) {
+      if (source.hasOwnProperty(key)) {
+        if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
+          result[key] = this.deepMerge(target[key] || {}, source[key]);
+        } else {
+          result[key] = source[key];
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Update tenant settings with deep merge
+   */
+  static async updateTenantSettings(tenantId: string, newSettings: any): Promise<Tenant | null> {
+    // Get current settings
+    const currentSettings = await this.getTenantSettings(tenantId);
+    
+    // Deep merge new settings with current settings
+    const mergedSettings = this.deepMerge(currentSettings, newSettings);
+    
+    // Strip legacy WhatsApp credentials after merge to ensure they don't persist
+    if (mergedSettings.whatsapp) {
+      delete mergedSettings.whatsapp.accountSid;
+      delete mergedSettings.whatsapp.authToken;
+      delete mergedSettings.whatsapp.phoneNumber;
+    }
+    
+    const result = await db.update(tenants).set({ settings: mergedSettings }).where(eq(tenants.id, tenantId)).returning();
     return result[0] || null;
   }
 
@@ -67,7 +110,12 @@ export class TenantModel {
       }
     };
 
-    return settings.whatsapp || defaultWhatsAppSettings;
+    const whatsappSettings = (settings as any).whatsapp || defaultWhatsAppSettings;
+    
+    // Additional defense: Ensure legacy credentials are never returned even if they somehow exist
+    const { accountSid, authToken, phoneNumber, ...cleanWhatsAppSettings } = whatsappSettings;
+    
+    return cleanWhatsAppSettings;
   }
 
   /**

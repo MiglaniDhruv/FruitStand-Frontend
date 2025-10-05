@@ -479,7 +479,7 @@ export default function SalesInvoiceManagement() {
       },
     },
     {
-      accessorKey: "paymentStatus",
+      accessorKey: "status",
       header: "Payment Status",
       cell: (value: string) => (
         <Badge className={getPaymentStatusColor(value)} variant="secondary">

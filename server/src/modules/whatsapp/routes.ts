@@ -93,5 +93,15 @@ export class WhatsAppRouter extends BaseRouter {
       '/whatsapp/webhook',
       this.whatsAppController.handleWebhook
     );
+
+    // GET /whatsapp/credits - Get current credit balance
+    this.router.get(
+      '/whatsapp/credits',
+      authenticateToken,
+      validateTenant,
+      attachTenantContext,
+      requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS]),
+      this.whatsAppController.getCreditBalance
+    );
   }
 }

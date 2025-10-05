@@ -1,3 +1,8 @@
+import { TenantSettings } from "@shared/schema";
+
+// Re-export TenantSettings from shared schema to centralize type definitions
+export { TenantSettings };
+
 export interface TenantInfo {
   id: string;
   name: string;
@@ -5,51 +10,6 @@ export interface TenantInfo {
   isActive: boolean;
   settings: TenantSettings;
   createdAt: string;
-}
-
-export interface TenantSettings {
-  // Company Information
-  companyName?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  
-  branding?: {
-    logoUrl?: string;
-    favicon?: string;
-  };
-  businessRules?: {
-    commissionRates?: Record<string, number>;
-    taxSettings?: Record<string, any>;
-  };
-  uiPreferences?: {
-    theme?: string;
-    dateFormat?: string;
-    currency?: string;
-  };
-  support?: {
-    email?: string;
-    phone?: string;
-  };
-  whatsapp?: {
-    enabled?: boolean;
-    accountSid?: string;
-    authToken?: string;
-    phoneNumber?: string;
-    creditBalance?: number;
-    lowCreditThreshold?: number;
-    scheduler?: {
-      enabled?: boolean;
-      preferredSendHour?: number;
-      reminderFrequency?: 'daily' | 'weekly' | 'monthly';
-      sendOnWeekends?: boolean;
-    };
-    defaultTemplates?: {
-      paymentReminder?: string;
-      invoiceNotification?: string;
-      welcomeMessage?: string;
-    };
-  };
 }
 
 export interface TenantContext {

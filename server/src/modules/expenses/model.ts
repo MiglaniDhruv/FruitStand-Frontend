@@ -1,7 +1,14 @@
-import { eq, desc, asc, inArray } from 'drizzle-orm';
+import { eq, desc, asc, inArray, and, count } from 'drizzle-orm';
 import { db } from '../../../db';
-import { expenseCategories, expenses, bankAccounts, type ExpenseCategory, type InsertExpenseCategory, type Expense, type InsertExpense, type ExpenseWithCategory } from '@shared/schema';
+import { expenseCategories, expenses, bankAccounts, type ExpenseCategory, type InsertExpenseCategory, type Expense, type InsertExpense, type ExpenseWithCategory, type PaginationOptions, type PaginatedResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
+import { 
+  normalizePaginationOptions, 
+  buildPaginationMetadata, 
+  applySorting, 
+  applySearchFilter,
+  withTenantPagination 
+} from '../../utils/pagination';
 
 export class ExpenseModel {
   async getExpenseCategories(tenantId: string): Promise<ExpenseCategory[]> {
@@ -70,6 +77,96 @@ export class ExpenseModel {
     }));
 
     return result;
+  }
+
+  async getExpensesPaginated(
+    tenantId: string, 
+    options: PaginationOptions,
+    categoryId?: string,
+    paymentMode?: string
+  ): Promise<PaginatedResult<ExpenseWithCategory>> {
+    const { page, limit, offset, tenantCondition } = withTenantPagination(expenses, tenantId, options);
+    
+    // Define table columns for sorting and searching
+    const tableColumns = {
+      paymentDate: expenses.paymentDate,
+      description: expenses.description,
+      amount: expenses.amount,
+      paymentMode: expenses.paymentMode,
+      createdAt: expenses.createdAt
+    };
+    
+    const searchableColumns = [expenses.description];
+    
+    // Build conditions
+    let conditions = [tenantCondition];
+    
+    if (categoryId) {
+      conditions.push(eq(expenses.categoryId, categoryId));
+    }
+    
+    if (paymentMode) {
+      conditions.push(eq(expenses.paymentMode, paymentMode));
+    }
+    
+    const combinedCondition = and(...conditions);
+    
+    // Build base query
+    let query = db.select().from(expenses).where(combinedCondition);
+    
+    // Apply search filter
+    if (options.search) {
+      query = applySearchFilter(query, options.search, searchableColumns, combinedCondition);
+    }
+    
+    // Apply sorting (default to paymentDate desc)
+    query = applySorting(query, options.sortBy || 'paymentDate', options.sortOrder || 'desc', tableColumns);
+    
+    // Execute paginated query
+    const expensesData = await query.limit(limit).offset(offset);
+    
+    // Get total count with same filters
+    let countQuery = db.select({ count: count() }).from(expenses).where(combinedCondition);
+    
+    if (options.search) {
+      countQuery = applySearchFilter(countQuery, options.search, searchableColumns, combinedCondition);
+    }
+    
+    const [{ count: total }] = await countQuery;
+    
+    if (expensesData.length === 0) {
+      return {
+        data: [],
+        pagination: buildPaginationMetadata(page, limit, total)
+      };
+    }
+
+    // Batch fetch related data
+    const categoryIds = expensesData.map(e => e.categoryId);
+    const bankAccountIds = expensesData
+      .map(e => e.bankAccountId)
+      .filter(id => id !== null) as string[];
+
+    const [categoriesData, bankAccountsData] = await Promise.all([
+      categoryIds.length > 0 ? db.select().from(expenseCategories).where(withTenant(expenseCategories, tenantId, inArray(expenseCategories.id, categoryIds))) : [],
+      bankAccountIds.length > 0 ? db.select().from(bankAccounts).where(withTenant(bankAccounts, tenantId, inArray(bankAccounts.id, bankAccountIds))) : []
+    ]);
+
+    // Create lookup maps
+    const categoryMap = new Map(categoriesData.map(c => [c.id, c]));
+    const bankAccountMap = new Map(bankAccountsData.map(b => [b.id, b]));
+
+    // Assemble final data
+    const result = expensesData.map(expense => ({
+      ...expense,
+      category: categoryMap.get(expense.categoryId) || null,
+      bankAccount: expense.bankAccountId ? (bankAccountMap.get(expense.bankAccountId) || null) : null
+    }));
+
+    return {
+      data: result,
+      pagination: buildPaginationMetadata(page, limit, total)
+    };
   }
 
   async getExpense(tenantId: string, id: string): Promise<ExpenseWithCategory | undefined> {

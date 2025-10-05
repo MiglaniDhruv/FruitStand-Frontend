@@ -1019,7 +1019,7 @@ export default function Ledgers() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Vendors</SelectItem>
-                        {vendors.map((vendor: any) => (
+                        {(vendors && Array.isArray(vendors) ? vendors : []).map((vendor: any) => (
                           <SelectItem key={vendor.id} value={vendor.id}>
                             {vendor.name}
                           </SelectItem>

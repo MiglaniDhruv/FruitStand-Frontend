@@ -104,7 +104,8 @@ export class CrateController extends BaseController {
     try {
       const tenantId = req.tenantId!;
       
-      const validation = insertCrateTransactionSchema.safeParse(req.body);
+      // Inject tenantId into request body before validation
+      const validation = insertCrateTransactionSchema.safeParse({ ...req.body, tenantId });
       
       if (!validation.success) {
         return this.sendValidationError(res, validation.error.errors);

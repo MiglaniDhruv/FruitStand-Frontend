@@ -87,7 +87,7 @@ export default function CrateManagement() {
     page: 1,
     limit: 10,
     search: "",
-    sortBy: "transactionDate",
+    sortBy: "",
     sortOrder: "desc",
   });
   const [selectedRetailer, setSelectedRetailer] = useState("all");
@@ -151,7 +151,7 @@ export default function CrateManagement() {
   const { data: vendorsResult } = useQuery<PaginatedResult<any>>({
     queryKey: ["/api/vendors"],
     queryFn: async () => {
-      const params = buildPaginationParams({ page: 1, limit: 1000 }); // Fetch all vendors
+      const params = buildPaginationParams(paginationOptions); // Fetch all vendors
       const response = await authenticatedApiRequest("GET", `/api/vendors?${params.toString()}`);
       return response.json();
     },

@@ -189,6 +189,248 @@ PUT /api/{tenant-slug}/payments/{id}
 - **Crate Transactions**: 1-6 lending/return records with ₹10 per crate deposit tracking
 - **Financial Books**: Comprehensive cashbook and bankbook entries with running balances and transaction history
 
+## WhatsApp Integration
+
+### Overview
+
+The system supports automated WhatsApp notifications via Twilio for enhanced customer and vendor communication. Four message types are supported:
+
+- **Sales Invoice**: Notify retailers about new invoices with amount details
+- **Purchase Invoice**: Inform vendors about invoice generation and payment terms
+- **Payment Reminder**: Send automated reminders for outstanding payments
+- **Payment Notification**: Confirm payment received with transaction details
+
+All messages include professional business branding with your company name, contact details, and addresses when configured in tenant settings.
+
+### Template Configuration
+
+Templates must be created and approved in Twilio Console before use. Each template supports rich variable substitution for personalized messaging.
+
+**Important Notes about Template Variables:**
+- Twilio placeholder positions are fixed ({{1}}, {{2}}, etc.) and cannot be removed conditionally
+- The system passes empty strings for optional values when data is missing
+- Template phrasing should avoid dangling separators when optional fields are empty
+- Consider separate lines for contact person and phone instead of combined formats
+
+#### Sales Invoice Template
+```
+🧾 *Invoice Generated - {{1}}*
+
+Hi {{2}}, 
+
+Your invoice {{3}} dated {{4}} has been generated.
+
+💰 *Amount Details:*
+• Total Amount: {{5}}
+• Outstanding: {{6}}
+
+Contact Person: {{7}}
+Phone: {{8}}
+Address: {{9}}
+
+For any queries, please contact us.
+
+Thanks,
+{{1}}
+```
+
+**Variable Mapping:**
+| Position | Variable | Description | Example |
+|----------|----------|-------------|---------|
+| {{1}} | businessName | Your business name | "Mumbai Fruit Market" |
+| {{2}} | retailerName | Customer name | "ABC Retailers" |
+| {{3}} | invoiceNumber | Invoice number | "INV-2024-001" |
+| {{4}} | invoiceDate | Invoice date | "15 Oct 2024" |
+| {{5}} | totalAmount | Total invoice amount | "₹25,450.00" |
+| {{6}} | udhaaarAmount | Outstanding amount | "₹15,270.00" |
+| {{7}} | contactPerson | Retailer contact person | "Mr. Sharma" |
+| {{8}} | businessPhone | Your business phone | "+91 98765 43210" |
+| {{9}} | retailerAddress | Retailer address (alias: address) | "456 Retail St, Mumbai" |
+
+#### Purchase Invoice Template
+```
+📋 *Purchase Invoice - {{1}}*
+
+Dear {{2}},
+
+Your invoice {{3}} dated {{4}} has been processed.
+
+💰 *Payment Details:*
+• Net Amount: {{5}}
+• Balance Due: {{6}}
+
+Contact Person: {{7}}
+Phone: {{8}}
+Address: {{9}}
+
+Payment will be processed as per terms.
+
+Best regards,
+{{1}}
+```
+
+**Variable Mapping:**
+| Position | Variable | Description | Example |
+|----------|----------|-------------|---------|
+| {{1}} | businessName | Your business name | "Mumbai Fruit Market" |
+| {{2}} | vendorName | Vendor name | "Fresh Fruits Supplier" |
+| {{3}} | invoiceNumber | Invoice number | "PI-2024-001" |
+| {{4}} | invoiceDate | Invoice date | "15 Oct 2024" |
+| {{5}} | netAmount | Net payable amount | "₹18,750.00" |
+| {{6}} | balanceAmount | Outstanding balance | "₹12,500.00" |
+| {{7}} | contactPerson | Vendor contact person | "Mr. Patel" |
+| {{8}} | businessPhone | Your business phone | "+91 98765 43210" |
+| {{9}} | vendorAddress | Vendor address (alias: address) | "789 Vendor St, Pune" |
+
+#### Payment Reminder Template
+```
+⏰ *Payment Reminder - {{1}}*
+
+Dear {{2}},
+
+This is a friendly reminder for invoice {{3}}.
+
+💰 *Outstanding Amount: {{4}}*
+📅 Due Date: {{5}}
+
+Contact Person: {{6}}
+Phone: {{7}}
+Address: {{8}}
+
+Please arrange payment at your earliest convenience.
+
+Thanks,
+{{1}}
+```
+
+**Variable Mapping:**
+| Position | Variable | Description | Example |
+|----------|----------|-------------|---------|
+| {{1}} | businessName | Your business name | "Mumbai Fruit Market" |
+| {{2}} | recipientName | Customer/vendor name | "ABC Retailers" |
+| {{3}} | invoiceNumber | Invoice number | "INV-2024-001" |
+| {{4}} | udhaaarAmount | Outstanding amount | "₹15,270.00" |
+| {{5}} | dueDate | Payment due date | "22 Oct 2024" |
+| {{6}} | contactPerson | Recipient contact person | "Mr. Sharma" |
+| {{7}} | businessPhone | Your business phone | "+91 98765 43210" |
+| {{8}} | recipientAddress | Recipient address (alias: address) | "456 Client St, Mumbai" |
+
+#### Payment Notification Template
+```
+✅ *Payment Received - {{1}}*
+
+Dear {{2}},
+
+We confirm receipt of your payment for invoice {{3}}.
+
+💰 *Payment Details:*
+• Amount: {{4}}
+• Date: {{5}}
+• Mode: {{6}}
+
+Contact Person: {{7}}
+Phone: {{8}}
+Address: {{9}}
+
+Thank you for your business!
+
+Best regards,
+{{1}}
+```
+
+**Variable Mapping:**
+| Position | Variable | Description | Example |
+|----------|----------|-------------|---------|
+| {{1}} | businessName | Your business name | "Mumbai Fruit Market" |
+| {{2}} | recipientName | Customer/vendor name | "ABC Retailers" |
+| {{3}} | invoiceNumber | Invoice number | "INV-2024-001" |
+| {{4}} | paymentAmount | Payment amount | "₹10,000.00" |
+| {{5}} | paymentDate | Payment date | "20 Oct 2024" |
+| {{6}} | paymentMode | Payment method | "Bank Transfer" |
+| {{7}} | contactPerson | Recipient contact person | "Mr. Sharma" |
+| {{8}} | businessPhone | Your business phone | "+91 98765 43210" |
+| {{9}} | recipientAddress | Recipient address (alias: address) | "456 Client St, Mumbai" |
+
+### Template Variables Reference
+
+| Category | Variable | Type | Format | Required | Description |
+|----------|----------|------|--------|----------|-------------|
+| **Tenant Details** | businessName | String | Max 50 chars | Optional | Your business name from tenant settings |
+| | businessPhone | String | E.164 format | Optional | Your contact phone from tenant settings |
+| | businessAddress | String | Max 100 chars | Optional | Your business address (normalized) |
+| **Invoice Details** | invoiceNumber | String | - | Yes | Invoice identifier |
+| | invoiceDate | String | dd MMM yyyy | Yes | Invoice creation date |
+| | totalAmount | String | ₹X,XXX.XX | Yes | Sales invoice total |
+| | udhaaarAmount | String | ₹X,XXX.XX | Yes | Outstanding amount |
+| | netAmount | String | ₹X,XXX.XX | Yes | Purchase invoice net amount |
+| | balanceAmount | String | ₹X,XXX.XX | Yes | Purchase invoice balance |
+| **Payment Details** | paymentAmount | String | ₹X,XXX.XX | Yes | Payment amount received |
+| | paymentDate | String | dd MMM yyyy | Yes | Payment transaction date |
+| | paymentMode | String | - | Yes | Payment method used |
+| | dueDate | String | dd MMM yyyy | Yes | Payment due date |
+| **Contact Details** | contactPerson | String | Max 50 chars | Optional | Vendor/retailer contact person |
+| | retailerAddress | String | Max 100 chars | Optional | Retailer address (normalized) |
+| | vendorAddress | String | Max 100 chars | Optional | Vendor address (normalized) |
+| | recipientAddress | String | Max 100 chars | Optional | Recipient address (normalized) |
+| | address | String | Max 100 chars | Optional | Generic address field |
+
+### Setup Instructions
+
+1. **Create Twilio Account**
+   - Sign up at [Twilio Console](https://console.twilio.com)
+   - Verify your account and get Account SID & Auth Token
+
+2. **Set up WhatsApp Business**
+   - Request WhatsApp Business API access through Twilio
+   - Complete business verification process
+   - Get approved WhatsApp sender number
+
+3. **Create Message Templates**
+   - Go to Messaging > Content Templates in Twilio Console
+   - Create templates using the formats above
+   - Submit for WhatsApp approval (may take 24-48 hours)
+   - Copy ContentSid values once approved
+
+4. **Configure Environment Variables**
+   - Add Twilio credentials to `.env` file
+   - Set template ContentSids for each message type
+   - Ensure WhatsApp sender number includes `whatsapp:` prefix
+
+5. **Configure Tenant Settings**
+   - Access Settings page in the application
+   - Enable WhatsApp integration
+   - Add business phone and address for branding
+   - Configure scheduler preferences if needed
+
+6. **Test Configuration**
+   - Start with Twilio sandbox for testing
+   - Send test messages to verify templates work
+   - Test with and without optional fields (contact person, addresses)
+   - Verify variable substitution and formatting
+
+### Variable Formatting
+
+The system automatically formats variables for optimal WhatsApp display:
+
+- **Currency**: All amounts formatted as ₹X,XXX.XX (Indian Rupee with thousand separators)
+- **Dates**: Formatted as "dd MMM yyyy" (e.g., "15 Oct 2024")
+- **Addresses**: Multi-line addresses normalized to single line, maximum 100 characters
+- **Names**: Truncated to 50 characters maximum with "..." suffix if needed
+- **Optional Fields**: Only included in messages when data is available in the database
+
+**Address Normalization:**
+- Newlines replaced with spaces
+- Multiple spaces collapsed to single space
+- Whitespace trimmed
+- Truncated with "..." if over 100 characters
+
+**Text Truncation:**
+- Business names and contact persons: 50 character limit
+- Addresses: 100 character limit
+- Graceful truncation with "..." indicator
+
+For technical implementation details, see `server/src/services/whatsapp/template-builder.ts`.
+
 ## Testing Different Scenarios
 
 ### Established Business (Mumbai Fruits)

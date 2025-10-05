@@ -14,6 +14,7 @@ import {
   payments,
   salesPayments,
   tenants,
+  items,
   PublicInvoiceData
 } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope.js';
@@ -167,10 +168,14 @@ export class InvoiceShareLinkModel {
           )
           .limit(1);
 
-        // Fetch items
-        const items = await db
-          .select()
+        // Fetch items with item details
+        const itemsWithDetails = await db
+          .select({
+            invoiceItem: invoiceItems,
+            item: items
+          })
           .from(invoiceItems)
+          .innerJoin(items, eq(invoiceItems.itemId, items.id))
           .where(
             withTenant(
               invoiceItems,
@@ -178,6 +183,15 @@ export class InvoiceShareLinkModel {
               eq(invoiceItems.invoiceId, invoiceId)
             )
           );
+
+        // Map the results to include item details in the invoice item objects
+        const itemsData = itemsWithDetails.map(({ invoiceItem, item }) => ({
+          ...invoiceItem,
+          item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+          itemName: item.name,
+          itemQuality: item.quality,
+          itemUnit: item.unit
+        }));
 
         // Fetch payments
         const paymentsData = await db
@@ -193,7 +207,7 @@ export class InvoiceShareLinkModel {
 
         return {
           invoice,
-          items,
+          items: itemsData,
           payments: paymentsData,
           vendor: vendorResults[0] || undefined,
           tenant: {
@@ -236,10 +250,14 @@ export class InvoiceShareLinkModel {
           )
           .limit(1);
 
-        // Fetch items
-        const items = await db
-          .select()
+        // Fetch items with item details
+        const itemsWithDetails = await db
+          .select({
+            invoiceItem: salesInvoiceItems,
+            item: items
+          })
           .from(salesInvoiceItems)
+          .innerJoin(items, eq(salesInvoiceItems.itemId, items.id))
           .where(
             withTenant(
               salesInvoiceItems,
@@ -247,6 +265,15 @@ export class InvoiceShareLinkModel {
               eq(salesInvoiceItems.invoiceId, invoiceId)
             )
           );
+
+        // Map the results to include item details in the invoice item objects
+        const itemsData = itemsWithDetails.map(({ invoiceItem, item }) => ({
+          ...invoiceItem,
+          item: `${item.name} - ${item.quality}`, // Format as "Name - Quality"
+          itemName: item.name,
+          itemQuality: item.quality,
+          itemUnit: item.unit
+        }));
 
         // Fetch sales payments
         const paymentsData = await db
@@ -262,7 +289,7 @@ export class InvoiceShareLinkModel {
 
         return {
           invoice,
-          items,
+          items: itemsData,
           payments: paymentsData,
           retailer: retailerResults[0] || undefined,
           tenant: {

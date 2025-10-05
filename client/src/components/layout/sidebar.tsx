@@ -60,16 +60,16 @@ const getNavigationItems = (slug: string) => [
     permission: PERMISSIONS.VIEW_STOCK,
   },
   {
-    title: "Purchase Invoices",
-    href: `/${slug}/purchase-invoices`,
-    icon: DollarSign,
-    permission: PERMISSIONS.VIEW_PURCHASE_INVOICES,
-  },
-  {
     title: "Sales Invoices",
     href: `/${slug}/sales-invoices`,
     icon: Receipt,
     permission: PERMISSIONS.VIEW_PURCHASE_INVOICES, // Using existing permission for now
+  },
+  {
+    title: "Purchase Invoices",
+    href: `/${slug}/purchase-invoices`,
+    icon: DollarSign,
+    permission: PERMISSIONS.VIEW_PURCHASE_INVOICES,
   },
   {
     title: "Expenses",
@@ -95,17 +95,17 @@ const getNavigationItems = (slug: string) => [
     icon: BarChart3,
     permission: PERMISSIONS.VIEW_REPORTS,
   },
+    {
+    title: "WhatsApp Logs",
+    href: `/${slug}/whatsapp-logs`,
+    icon: MessageSquare,
+    permission: PERMISSIONS.VIEW_WHATSAPP_LOGS,
+  },
   {
     title: "User Management",
     href: `/${slug}/users`,
     icon: Users,
     permission: PERMISSIONS.VIEW_USERS,
-  },
-  {
-    title: "WhatsApp Logs",
-    href: `/${slug}/whatsapp-logs`,
-    icon: MessageSquare,
-    permission: PERMISSIONS.VIEW_WHATSAPP_LOGS,
   },
   {
     title: "Settings",
@@ -115,17 +115,15 @@ const getNavigationItems = (slug: string) => [
   },
 ];
 
-
-
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const currentUser = authService.getCurrentUser();
   const { tenant } = useTenant();
-  
+
   // Get tenant slug from context
   const { slug: tenantSlug } = useTenantSlug();
-  
+
   const navigationItems = getNavigationItems(tenantSlug);
 
   const handleLogout = () => {
@@ -134,7 +132,7 @@ export default function Sidebar() {
       title: "Logged out",
       description: "You have been successfully logged out",
     });
-    
+
     // Always redirect to tenant login page
     if (tenantSlug) {
       setLocation(`/${tenantSlug}/login`);
@@ -171,18 +169,16 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-medium">{currentUser?.name}</p>
-            <p className="text-xs text-muted-foreground">{permissionService.getRoleInfo().label}</p>
+            <p className="text-xs text-muted-foreground">
+              {permissionService.getRoleInfo().label}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Tenant Info */}
       <div className="p-4 border-b border-border">
-        <TenantInfo 
-          compact={true} 
-          showStatus={false} 
-          showSwitcher={false} 
-        />
+        <TenantInfo compact={true} showStatus={false} showSwitcher={false} />
       </div>
 
       {/* Low Credit Warning */}
@@ -203,9 +199,12 @@ export default function Sidebar() {
                       "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
                       isActive
                         ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
                     )}
-                    data-testid={`link-${item.href.replace(/^\/.*?\//, "").replace("/", "") || "dashboard"}`}
+                    data-testid={`link-${
+                      item.href.replace(/^\/.*?\//, "").replace("/", "") ||
+                      "dashboard"
+                    }`}
                   >
                     <item.icon className="w-5 h-5 mr-3" />
                     {item.title}

@@ -116,8 +116,16 @@ export class ExpenseController extends BaseController {
   async getAllExpenses(req: AuthenticatedRequest, res: Response) {
     try {
       const tenantId = req.tenantId!;
-      const expenses = await this.expenseModel.getExpenses(tenantId);
-      res.json(expenses);
+      
+      // Get pagination options from query parameters
+      const opts = this.getPaginationOptions(req.query);
+      
+      // Get filter parameters
+      const categoryId = req.query.categoryId as string | undefined;
+      const paymentMode = req.query.paymentMode as string | undefined;
+      
+      const result = await this.expenseModel.getExpensesPaginated(tenantId, opts, categoryId, paymentMode);
+      res.json(result);
     } catch (error) {
       this.handleError(res, error, 'Failed to fetch expenses');
     }

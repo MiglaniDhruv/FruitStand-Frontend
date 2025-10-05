@@ -116,7 +116,19 @@ export class TenantController extends BaseController {
         });
       }
 
-      const validatedSettings = validation.data;
+      // Sanitize validated settings to prevent creditBalance updates and strip legacy credentials
+      const validatedSettings = { ...validation.data } as any;
+      if (validatedSettings.whatsapp) {
+        // Prevent creditBalance updates
+        if ('creditBalance' in validatedSettings.whatsapp) {
+          delete validatedSettings.whatsapp.creditBalance;
+        }
+        // Strip legacy credential keys to reduce risk
+        delete validatedSettings.whatsapp.accountSid;
+        delete validatedSettings.whatsapp.authToken;
+        delete validatedSettings.whatsapp.phoneNumber;
+      }
+      
       const updatedTenant = await TenantModel.updateTenantSettings(req.tenantId, validatedSettings);
       
       if (!updatedTenant) {

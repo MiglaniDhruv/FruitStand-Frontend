@@ -132,6 +132,11 @@ export default function Reports() {
 
   // Filter data by date range
   const filterByDate = (data: any[], dateField: string) => {
+    // Ensure data is an array
+    if (!data || !Array.isArray(data)) {
+      return [];
+    }
+    
     const startDate = parseISO(filters.startDate);
     const endDate = parseISO(filters.endDate);
     
@@ -242,7 +247,7 @@ export default function Reports() {
 
   // Recent activity (last 7 days)
   const sevenDaysAgo = subDays(new Date(), 7);
-  const recentPurchases = purchaseInvoices.filter((inv: any) => {
+  const recentPurchases = (Array.isArray(purchaseInvoices) ? purchaseInvoices : []).filter((inv: any) => {
     try {
       if (!inv.invoiceDate) return false;
       return isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() });
@@ -250,7 +255,7 @@ export default function Reports() {
       return false;
     }
   }).length;
-  const recentSales = salesInvoices.filter((inv: any) => {
+  const recentSales = (Array.isArray(salesInvoices) ? salesInvoices : []).filter((inv: any) => {
     try {
       if (!inv.invoiceDate) return false;
       return isWithinInterval(parseISO(inv.invoiceDate), { start: sevenDaysAgo, end: new Date() });
@@ -258,7 +263,7 @@ export default function Reports() {
       return false;
     }
   }).length;
-  const recentExpenses = expenses.filter((exp: any) => {
+  const recentExpenses = (Array.isArray(expenses) ? expenses : []).filter((exp: any) => {
     try {
       const dateField = exp.expenseDate || exp.paymentDate;
       if (!dateField) return false;

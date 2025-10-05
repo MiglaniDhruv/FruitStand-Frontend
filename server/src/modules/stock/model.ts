@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, or, count, ilike, lte, inArray, isNull } from "drizzle-orm";
+import { eq, desc, asc, and, or, count, ilike, lte, inArray, isNull, ne } from "drizzle-orm";
 import { 
   stock,
   stockMovements,
@@ -237,6 +237,7 @@ export class StockModel {
 
   async getAvailableStockOutEntriesByVendor(tenantId: string, vendorId: string): Promise<any[]> {
     // Get stock movements of type "OUT" for items owned by the vendor
+    // Exclude wastage entries as they should not be included in purchase invoices
     const movements = await db.select().from(stockMovements)
       .innerJoin(items, eq(stockMovements.itemId, items.id))
       .where(
@@ -245,7 +246,8 @@ export class StockModel {
           withTenant(items, tenantId),
           eq(items.vendorId, vendorId),
           eq(stockMovements.movementType, "OUT"),
-          isNull(stockMovements.purchaseInvoiceId)
+          isNull(stockMovements.purchaseInvoiceId),
+          ne(stockMovements.referenceType, "WASTAGE") // Exclude wastage entries
         )
       )
       .orderBy(desc(stockMovements.createdAt));

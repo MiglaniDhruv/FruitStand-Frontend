@@ -21,10 +21,16 @@ import {
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
 
 export class ItemModel {
-  async getItems(tenantId: string): Promise<Item[]> {
-    return await db.select().from(items)
+  async getItems(tenantId: string): Promise<ItemWithVendor[]> {
+    const results = await db.select({ item: items, vendor: vendors }).from(items)
+      .leftJoin(vendors, and(eq(items.vendorId, vendors.id), eq(vendors.tenantId, tenantId)))
       .where(withTenant(items, tenantId, eq(items.isActive, true)))
       .orderBy(asc(items.name));
+    
+    return results.map(record => ({
+      ...record.item,
+      vendor: record.vendor
+    }));
   }
 
   async getItemsByVendor(tenantId: string, vendorId: string): Promise<Item[]> {

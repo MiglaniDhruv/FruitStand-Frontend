@@ -6,7 +6,10 @@ const { validateRequest } = twilio;
 import { BaseController } from '../../utils/base.js';
 import { AuthenticatedRequest } from '../../types/index.js';
 import { WhatsAppMessageModel } from './model.js';
+import { WhatsAppCreditModel } from './credit-model.js';
 import { whatsAppService } from '../../services/whatsapp/index.js';
+import { InvoiceShareLinkModel } from '../invoice-share-links/model.js';
+import { TenantModel } from '../tenants/model.js';
 
 export class WhatsAppController extends BaseController {
   private whatsAppMessageModel: WhatsAppMessageModel;
@@ -303,8 +306,33 @@ export class WhatsAppController extends BaseController {
           throw new Error('Retailer information not found for invoice');
         }
         
+        // Fetch tenant details with graceful fallback
+        let tenant = null;
+        try {
+          tenant = await TenantModel.getTenant(tenantId);
+        } catch (error) {
+          console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+        }
+        
+        // Create or get share link for invoice
+        let invoiceUrl: string | undefined;
+        try {
+          const invoiceShareLinkModel = new InvoiceShareLinkModel();
+          const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, 'sales');
+          
+          const baseUrl = process.env.BASE_URL;
+          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
+            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
+          } else {
+            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
+          }
+        } catch (error) {
+          console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+        }
+        
         const { buildSalesInvoiceVariables } = await import('../../services/whatsapp/template-builder.js');
-        templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer);
+        templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceUrl);
         
         recipientInfo = {
           name: invoice.retailer.name,
@@ -331,8 +359,33 @@ export class WhatsAppController extends BaseController {
           throw new Error('Vendor information not found for invoice');
         }
         
+        // Fetch tenant details with graceful fallback
+        let tenant = null;
+        try {
+          tenant = await TenantModel.getTenant(tenantId);
+        } catch (error) {
+          console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+        }
+        
+        // Create or get share link for invoice
+        let invoiceUrl: string | undefined;
+        try {
+          const invoiceShareLinkModel = new InvoiceShareLinkModel();
+          const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, 'purchase');
+          
+          const baseUrl = process.env.BASE_URL;
+          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
+            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
+          } else {
+            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
+          }
+        } catch (error) {
+          console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+        }
+        
         const { buildPurchaseInvoiceVariables } = await import('../../services/whatsapp/template-builder.js');
-        templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor);
+        templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceUrl);
         
         recipientInfo = {
           name: invoice.vendor.name,
@@ -376,8 +429,34 @@ export class WhatsAppController extends BaseController {
           throw new Error(`${recipientType} information not found for invoice`);
         }
         
+        // Fetch tenant details with graceful fallback
+        let tenant = null;
+        try {
+          tenant = await TenantModel.getTenant(tenantId);
+        } catch (error) {
+          console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+        }
+        
+        // Create or get share link for invoice
+        let invoiceUrl: string | undefined;
+        try {
+          const invoiceShareLinkModel = new InvoiceShareLinkModel();
+          const shareInvoiceType = invoiceType === 'sales' ? 'sales' : 'purchase';
+          const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, shareInvoiceType);
+          
+          const baseUrl = process.env.BASE_URL;
+          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
+            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
+          } else {
+            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
+          }
+        } catch (error) {
+          console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+        }
+        
         const { buildPaymentReminderVariables } = await import('../../services/whatsapp/template-builder.js');
-        templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType);
+        templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceUrl);
         
         recipientInfo = {
           name: recipient.name,
@@ -425,8 +504,34 @@ export class WhatsAppController extends BaseController {
           throw new Error(`${recipientType} information not found for payment`);
         }
         
+        // Fetch tenant details with graceful fallback
+        let tenant = null;
+        try {
+          tenant = await TenantModel.getTenant(tenantId);
+        } catch (error) {
+          console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+        }
+        
+        // Create or get share link for invoice
+        let invoiceUrl: string | undefined;
+        try {
+          const invoiceShareLinkModel = new InvoiceShareLinkModel();
+          const shareInvoiceType = paymentType === 'sales' ? 'sales' : 'purchase';
+          const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, invoice.id, shareInvoiceType);
+          
+          const baseUrl = process.env.BASE_URL;
+          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
+            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
+          } else {
+            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
+          }
+        } catch (error) {
+          console.warn(`Warning: Failed to create share link for invoice ${invoice.id}:`, error);
+        }
+        
         const { buildPaymentNotificationVariables } = await import('../../services/whatsapp/template-builder.js');
-        templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient);
+        templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceUrl);
         
         recipientInfo = {
           name: recipient.name,
@@ -611,6 +716,41 @@ export class WhatsAppController extends BaseController {
       res.status(500).json({
         success: false,
         message: 'Internal server error'
+      });
+    }
+  };
+
+  /**
+   * GET /whatsapp/credits - Get current credit balance
+   */
+  getCreditBalance = async (req: any, res: any) => {
+    try {
+      const tenantId = req.tenantContext?.tenantId;
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tenant context not found'
+        });
+      }
+
+      const creditModel = new WhatsAppCreditModel();
+      const balance = await creditModel.getCreditBalance(tenantId);
+      const checkResult = await creditModel.checkCreditAvailability(tenantId, 1);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          balance,
+          lowCreditWarning: checkResult.lowCreditWarning,
+          threshold: checkResult.threshold
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error fetching credit balance:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch credit balance'
       });
     }
   };

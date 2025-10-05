@@ -43,8 +43,8 @@ export class SalesInvoiceRouter extends BaseRouter {
       this.salesInvoiceController.createSalesInvoice.bind(this.salesInvoiceController)
     );
 
-    // POST /sales-invoices/:id/mark-paid - Mark sales invoice as paid
-    this.router.post('/sales-invoices/:id/mark-paid', 
+    // PUT /sales-invoices/:id/mark-paid - Mark sales invoice as paid
+    this.router.put('/sales-invoices/:id/mark-paid', 
       authenticateToken,
       validateTenant,
       attachTenantContext,

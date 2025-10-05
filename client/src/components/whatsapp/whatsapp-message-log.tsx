@@ -239,23 +239,7 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
     );
   }
 
-  if (!data?.data || data.data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-32 text-center">
-        <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
-        <p className="text-sm text-muted-foreground">
-          {paginationOptions.search || statusFilter !== 'all' || messageTypeFilter !== 'all'
-            ? 'No messages match your filters'
-            : 'No WhatsApp messages sent yet. Each message costs 1 credit.'}
-        </p>
-        {(paginationOptions.search || statusFilter !== 'all' || messageTypeFilter !== 'all') && (
-          <Button variant="outline" size="sm" onClick={clearFilters} className="mt-2">
-            Clear filters
-          </Button>
-        )}
-      </div>
-    );
-  }
+  // Don't return early for empty data - let the DataTable handle it
 
   const content = (
     <div className="space-y-4">
@@ -310,7 +294,7 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
                 <p className="text-sm font-medium">Total Credits Used</p>
                 <p className="text-2xl font-bold">{totalCreditsUsed}</p>
                 <p className="text-xs text-muted-foreground">
-                  {data.data.length} message{data.data.length !== 1 ? 's' : ''} sent
+                  {(data?.data?.length || 0)} message{(data?.data?.length || 0) !== 1 ? 's' : ''} sent
                 </p>
               </div>
             </div>
@@ -320,10 +304,23 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
       
       <DataTable
         columns={columns}
-        data={data.data}
-        paginationMetadata={data.pagination}
+        data={data?.data || []}
+        paginationMetadata={data?.pagination}
         onPageChange={handlePageChange}
+        emptyMessage={
+          paginationOptions.search || statusFilter !== 'all' || messageTypeFilter !== 'all'
+            ? 'No messages match your filters'
+            : 'No WhatsApp messages sent yet'
+        }
       />
+      
+      {(!data?.data || data.data.length === 0) && (paginationOptions.search || statusFilter !== 'all' || messageTypeFilter !== 'all') && (
+        <div className="text-center py-2">
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      )}
       
       {compact && (
         <div className="flex justify-center">

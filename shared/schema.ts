@@ -599,10 +599,7 @@ export const tenantSettingsSchema = z.object({
   // WhatsApp Settings
   whatsapp: z.object({
     enabled: z.boolean().default(false),
-    accountSid: z.string().optional(),
-    authToken: z.string().optional(),
-    phoneNumber: phoneNumberSchema.optional(),
-    creditBalance: z.number().int().min(0).default(0),
+    creditBalance: z.number().int().min(0).default(0), // Note: Updates to this field are ignored by the settings controller
     lowCreditThreshold: z.number().int().min(0).default(50),
     scheduler: z.object({
       enabled: z.boolean().default(true), // Enable/disable automatic payment reminders

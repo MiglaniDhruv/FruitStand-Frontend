@@ -17,6 +17,7 @@ import { SalesInvoiceModel } from '../../modules/sales-invoices/model.js';
 import { PurchaseInvoiceModel } from '../../modules/purchase-invoices/model.js';
 import { PaymentModel } from '../../modules/payments/model.js';
 import { SalesPaymentModel } from '../../modules/sales-payments/model.js';
+import { InvoiceShareLinkModel } from '../../modules/invoice-share-links/model.js';
 
 interface CreditCheck {
   allowed: boolean;
@@ -39,6 +40,48 @@ interface SendMessageParams {
 }
 
 export class WhatsAppService {
+  /**
+   * Validate and construct invoice URL from share link token
+   */
+  private constructInvoiceUrl(token: string): string | undefined {
+    try {
+      const baseUrl = process.env.BASE_URL;
+      
+      if (!baseUrl) {
+        console.warn('BASE_URL environment variable not configured - invoice URLs will not be included');
+        return undefined;
+      }
+      
+      // Basic URL validation
+      if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+        console.warn('BASE_URL must start with http:// or https:// - invoice URLs will not be included');
+        return undefined;
+      }
+      
+      // Remove trailing slash if present
+      const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+      
+      return `${normalizedBaseUrl}/api/public/invoices/${token}`;
+    } catch (error) {
+      console.warn('Error constructing invoice URL:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Create or get share link and construct invoice URL
+   */
+  private async createInvoiceShareLink(tenantId: string, invoiceId: string, invoiceType: 'sales' | 'purchase'): Promise<string | undefined> {
+    try {
+      const invoiceShareLinkModel = new InvoiceShareLinkModel();
+      const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, invoiceId, invoiceType);
+      return this.constructInvoiceUrl(shareLink.token);
+    } catch (error) {
+      console.warn(`Warning: Failed to create share link for invoice ${invoiceId}:`, error);
+      return undefined;
+    }
+  }
+
   /**
    * Check if tenant can send messages based on credits
    */
@@ -195,6 +238,12 @@ export class WhatsAppService {
    * Send sales invoice to retailer
    */
   async sendSalesInvoice(tenantId: string, invoiceId: string): Promise<any> {
+    // Check tenant credits early to avoid extra queries
+    const creditCheck = await this.checkTenantCredits(tenantId);
+    if (!creditCheck.allowed) {
+      throw new Error(creditCheck.reason || 'Insufficient WhatsApp credits');
+    }
+
     // Fetch invoice with retailer data
     const salesInvoiceModel = new SalesInvoiceModel();
     const invoice = await salesInvoiceModel.getSalesInvoice(tenantId, invoiceId);
@@ -212,8 +261,19 @@ export class WhatsAppService {
       throw new Error(`Invalid phone number for retailer: ${invoice.retailer.phone || 'not provided'}`);
     }
 
+    // Fetch tenant details with graceful fallback
+    let tenant = null;
+    try {
+      tenant = await TenantModel.getTenant(tenantId);
+    } catch (error) {
+      console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+    }
+
+    // Create or get share link for invoice
+    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, 'sales');
+
     // Build template variables
-    const templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer);
+    const templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceUrl);
 
     // Send message
     return await this.sendMessage({
@@ -233,6 +293,12 @@ export class WhatsAppService {
    * Send purchase invoice to vendor
    */
   async sendPurchaseInvoice(tenantId: string, invoiceId: string): Promise<any> {
+    // Check tenant credits early to avoid extra queries
+    const creditCheck = await this.checkTenantCredits(tenantId);
+    if (!creditCheck.allowed) {
+      throw new Error(creditCheck.reason || 'Insufficient WhatsApp credits');
+    }
+
     // Fetch invoice with vendor data
     const purchaseInvoiceModel = new PurchaseInvoiceModel();
     const invoice = await purchaseInvoiceModel.getPurchaseInvoice(tenantId, invoiceId);
@@ -250,8 +316,19 @@ export class WhatsAppService {
       throw new Error(`Invalid phone number for vendor: ${invoice.vendor.phone || 'not provided'}`);
     }
 
+    // Fetch tenant details with graceful fallback
+    let tenant = null;
+    try {
+      tenant = await TenantModel.getTenant(tenantId);
+    } catch (error) {
+      console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+    }
+
+    // Create or get share link for invoice
+    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, 'purchase');
+
     // Build template variables
-    const templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor);
+    const templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceUrl);
 
     // Send message
     return await this.sendMessage({
@@ -271,6 +348,12 @@ export class WhatsAppService {
    * Send payment reminder
    */
   async sendPaymentReminder(tenantId: string, invoiceId: string, invoiceType: 'sales' | 'purchase'): Promise<any> {
+    // Check tenant credits early to avoid extra queries
+    const creditCheck = await this.checkTenantCredits(tenantId);
+    if (!creditCheck.allowed) {
+      throw new Error(creditCheck.reason || 'Insufficient WhatsApp credits');
+    }
+
     let invoice: any;
     let recipient: any;
     let recipientType: 'vendor' | 'retailer';
@@ -300,8 +383,20 @@ export class WhatsAppService {
       throw new Error(`Invalid phone number for ${recipientType}: ${recipient.phone || 'not provided'}`);
     }
 
+    // Fetch tenant details with graceful fallback
+    let tenant = null;
+    try {
+      tenant = await TenantModel.getTenant(tenantId);
+    } catch (error) {
+      console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+    }
+
+    // Create or get share link for invoice
+    const shareInvoiceType = invoiceType === 'sales' ? 'sales' : 'purchase';
+    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, shareInvoiceType);
+
     // Build template variables
-    const templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType);
+    const templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceUrl);
 
     // Send message
     return await this.sendMessage({
@@ -321,6 +416,12 @@ export class WhatsAppService {
    * Send payment notification
    */
   async sendPaymentNotification(tenantId: string, paymentId: string, paymentType: 'sales' | 'purchase'): Promise<any> {
+    // Check tenant credits early to avoid extra queries
+    const creditCheck = await this.checkTenantCredits(tenantId);
+    if (!creditCheck.allowed) {
+      throw new Error(creditCheck.reason || 'Insufficient WhatsApp credits');
+    }
+
     // For simplicity, we'll get the payment by getting all payments and finding the one we need
     // This could be optimized later by adding single payment fetch methods to the models
     
@@ -358,8 +459,20 @@ export class WhatsAppService {
       throw new Error(`Invalid phone number for ${recipientType}: ${recipient.phone || 'not provided'}`);
     }
 
+    // Fetch tenant details with graceful fallback
+    let tenant = null;
+    try {
+      tenant = await TenantModel.getTenant(tenantId);
+    } catch (error) {
+      console.warn(`Warning: Failed to fetch tenant details for ${tenantId}:`, error);
+    }
+
+    // Create or get share link for invoice
+    const shareInvoiceType = paymentType === 'sales' ? 'sales' : 'purchase';
+    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoice.id, shareInvoiceType);
+
     // Build template variables
-    const templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient);
+    const templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceUrl);
 
     // Send message
     return await this.sendMessage({
