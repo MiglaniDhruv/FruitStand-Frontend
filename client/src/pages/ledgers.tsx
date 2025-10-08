@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { logApiError } from "@/lib/error-logger";
 import { 
   Download, 
   Book, 
@@ -54,7 +53,7 @@ export default function Ledgers() {
   const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
 
   // Fetch all data needed for ledgers
-  const { data: purchaseInvoices = [], isLoading: purchaseInvoicesLoading, isError: purchaseInvoicesError, error: purchaseInvoicesErrorMsg } = useQuery({
+  const { data: purchaseInvoices = [] } = useQuery({
     queryKey: ["/api/purchase-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/purchase-invoices");
@@ -64,7 +63,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: salesInvoices = [], isLoading: salesInvoicesLoading, isError: salesInvoicesError, error: salesInvoicesErrorMsg } = useQuery({
+  const { data: salesInvoices = [] } = useQuery({
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-invoices");
@@ -74,7 +73,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: payments = [], isLoading: paymentsLoading, isError: paymentsError, error: paymentsErrorMsg } = useQuery({
+  const { data: payments = [] } = useQuery({
     queryKey: ["/api/payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/payments");
@@ -84,7 +83,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: salesPayments = [], isLoading: salesPaymentsLoading, isError: salesPaymentsError, error: salesPaymentsErrorMsg } = useQuery({
+  const { data: salesPayments = [] } = useQuery({
     queryKey: ["/api/sales-payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-payments");
@@ -94,7 +93,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: expenses = [], isLoading: expensesLoading, isError: expensesError, error: expensesErrorMsg } = useQuery({
+  const { data: expenses = [] } = useQuery({
     queryKey: ["/api/expenses"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expenses");
@@ -102,7 +101,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: crateTransactions = [], isLoading: crateTransactionsLoading, isError: crateTransactionsError, error: crateTransactionsErrorMsg } = useQuery({
+  const { data: crateTransactions = [] } = useQuery({
     queryKey: ["/api/crate-transactions"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/crate-transactions");
@@ -110,7 +109,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: vendors = [], isLoading: vendorsLoading, isError: vendorsError, error: vendorsErrorMsg } = useQuery({
+  const { data: vendors = [] } = useQuery({
     queryKey: ["/api/vendors"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/vendors");
@@ -118,7 +117,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: retailers = [], isLoading: retailersLoading, isError: retailersError, error: retailersErrorMsg } = useQuery({
+  const { data: retailers = [] } = useQuery({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/retailers");
@@ -126,7 +125,7 @@ export default function Ledgers() {
     },
   });
 
-  const { data: bankAccounts = [], isLoading: bankAccountsLoading, isError: bankAccountsError, error: bankAccountsErrorMsg } = useQuery({
+  const { data: bankAccounts = [] } = useQuery({
     queryKey: ["/api/bank-accounts"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
@@ -134,58 +133,13 @@ export default function Ledgers() {
     },
   });
 
-  const { data: expenseCategories = [], isLoading: expenseCategoriesLoading, isError: expenseCategoriesError, error: expenseCategoriesErrorMsg } = useQuery({
+  const { data: expenseCategories = [] } = useQuery({
     queryKey: ["/api/expense-categories"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expense-categories");
       return response.json();
     },
   });
-
-  const anyLoading = purchaseInvoicesLoading || salesInvoicesLoading || paymentsLoading || salesPaymentsLoading || expensesLoading || crateTransactionsLoading || vendorsLoading || retailersLoading || bankAccountsLoading || expenseCategoriesLoading;
-  const hasError = purchaseInvoicesError || salesInvoicesError || paymentsError || salesPaymentsError || expensesError || crateTransactionsError || vendorsError || retailersError || bankAccountsError || expenseCategoriesError;
-  const errorMessage = purchaseInvoicesErrorMsg || salesInvoicesErrorMsg || paymentsErrorMsg || salesPaymentsErrorMsg || expensesErrorMsg || crateTransactionsErrorMsg || vendorsErrorMsg || retailersErrorMsg || bankAccountsErrorMsg || expenseCategoriesErrorMsg;
-
-  if (anyLoading) {
-    return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (hasError) {
-    return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Ledger Data</h2>
-            <p className="text-gray-600 max-w-md">
-              {errorMessage instanceof Error ? errorMessage.message : "Failed to load ledger data. Please try again."}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const formatCurrency = (amount: string | number) => {
     return `₹${parseFloat(amount.toString()).toLocaleString('en-IN')}`;

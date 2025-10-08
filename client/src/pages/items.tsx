@@ -18,9 +18,6 @@ import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/schema";
-import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
-
-type StatusFilter = "all" | "true" | "false";
 
 export default function Items() {
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
@@ -31,15 +28,14 @@ export default function Items() {
     sortOrder: "asc"
   });
   const [searchInput, setSearchInput] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: itemsResult, isLoading, isError, error } = useQuery<PaginatedResult<ItemWithVendor>>({
-    queryKey: ["/api/items", paginationOptions, statusFilter],
+  const { data: itemsResult, isLoading } = useQuery<PaginatedResult<ItemWithVendor>>({
+    queryKey: ["/api/items", paginationOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
@@ -48,10 +44,6 @@ export default function Items() {
       if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
       if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
 
-      // Only add isActive filter if it's not "all"
-      if (statusFilter !== "all") {
-        params.append("isActive", statusFilter);
-      }
       
       const response = await authenticatedApiRequest("GET", `/api/items?${params.toString()}`);
       return response.json();
@@ -73,7 +65,6 @@ export default function Items() {
       queryClient.invalidateQueries({ queryKey: ["/api/items"] });
     },
     onError: (error) => {
-      logMutationError(error, 'deleteItem');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete item",
@@ -104,72 +95,26 @@ export default function Items() {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
   };
   
-  const handleStatusFilterChange = (status: StatusFilter) => {
-    setStatusFilter(status);
-    setPaginationOptions(prev => ({ ...prev, page: 1 }));
-  };
 
 
   const handleEdit = (item: any) => {
-    try {
-      if (!item) {
-        throw new Error('Invalid item data');
-      }
-      setEditingItem(item);
-      setShowForm(true);
-    } catch (error) {
-      logEventHandlerError(error, 'handleEdit', { itemId: item?.id });
-      toast({
-        title: "Error",
-        description: "Failed to open item for editing",
-        variant: "destructive",
-      });
-    }
+    setEditingItem(item);
+    setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      if (!id) {
-        throw new Error('Invalid item ID');
-      }
-      
-      if (confirm("Are you sure you want to delete this item?")) {
-        await deleteItemMutation.mutateAsync(id);
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { itemId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete item",
-        variant: "destructive",
-      });
+    if (confirm("Are you sure you want to delete this item?")) {
+      deleteItemMutation.mutate(id);
     }
   };
 
   const handleCloseForm = () => {
-    try {
-      setShowForm(false);
-      setEditingItem(null);
-    } catch (error) {
-      logEventHandlerError(error, 'handleCloseForm');
-      toast({
-        title: "Error",
-        description: "Failed to close form",
-        variant: "destructive",
-      });
-    }
+    setShowForm(false);
+    setEditingItem(null);
   };
 
   const getVendorName = (item: ItemWithVendor) => {
-    try {
-      if (!item) {
-        return "Unknown Item";
-      }
-      return item.vendor ? item.vendor.name : "Unknown Vendor";
-    } catch (error) {
-      logEventHandlerError(error, 'getVendorName', { itemId: item?.id });
-      return "Error Loading Vendor";
-    }
+    return item.vendor ? item.vendor.name : "Unknown Vendor";
   };  // Define table columns
   const columns = [
     {
@@ -234,48 +179,6 @@ export default function Items() {
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
-          <div className="p-6">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Items</h2>
-            <p className="text-gray-600 max-w-md">
-              {error instanceof Error ? error.message : "Failed to load items. Please try again."}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen">
       <Sidebar />
@@ -316,22 +219,6 @@ export default function Items() {
                       data-testid="input-search-items"
                     />
                   </div>
-                  <Select
-                    value={statusFilter}
-                    onValueChange={handleStatusFilterChange}
-                  >
-                    <SelectTrigger
-                      className="w-48"
-                      data-testid="select-status-filter"
-                    >
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Items</SelectItem>
-                      <SelectItem value="true">Active</SelectItem>
-                      <SelectItem value="false">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
 
                 </div>
               </div>

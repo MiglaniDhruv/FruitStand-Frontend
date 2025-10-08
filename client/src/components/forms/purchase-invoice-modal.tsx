@@ -31,9 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Plus, Trash2, Package } from "lucide-react";
 
 const invoiceItemSchema = z.object({
   itemId: z.string().min(1, "Item is required"),
@@ -90,8 +88,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const queryClient = useQueryClient();
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [selectedStockOutEntries, setSelectedStockOutEntries] = useState<string[]>([]);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [calculationError, setCalculationError] = useState<string | null>(null);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -119,20 +115,12 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     },
   });
 
-  // Clear errors when modal opens/closes
-  useEffect(() => {
-    if (open) {
-      setSubmissionError(null);
-      setCalculationError(null);
-    }
-  }, [open]);
-
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
 
-  const { data: vendorsResult, isError: vendorsError, error: vendorsErrorMessage } = useQuery({
+  const { data: vendorsResult } = useQuery({
     queryKey: ["/api/vendors"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/vendors?limit=100");
@@ -142,7 +130,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   const vendors = vendorsResult?.data || [];
 
-  const { data: itemsResult, isError: itemsError, error: itemsErrorMessage } = useQuery({
+  const { data: itemsResult } = useQuery({
     queryKey: ["/api/items"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/items?limit=100");
@@ -153,7 +141,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const items = itemsResult?.data || [];
 
   // Fetch available stock out entries for selected vendor
-  const { data: availableStockOutEntries, isError: stockOutError, error: stockOutErrorMessage } = useQuery({
+  const { data: availableStockOutEntries } = useQuery({
     queryKey: ["/api/stock-movements/vendor", selectedVendorId, "available"],
     queryFn: async () => {
       if (!selectedVendorId) return [];
@@ -174,8 +162,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       return response.json();
     },
     onSuccess: () => {
-      setSubmissionError(null);
-      setCalculationError(null);
       toast({
         title: "Invoice created",
         description: form.watch("crateTransaction.enabled")
@@ -192,21 +178,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       setSelectedStockOutEntries([]);
     },
     onError: (error) => {
-      let errorMessage = "Failed to create invoice";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-        // Parse specific error types
-        if (error.message.includes('validation')) {
-          errorMessage = "Validation error: Please check all required fields";
-        } else if (error.message.includes('network')) {
-          errorMessage = "Network error: Please check your connection and try again";
-        }
-      }
-      setSubmissionError(errorMessage);
-      console.error('Invoice creation error:', error);
       toast({
         title: "Error",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : "Failed to create invoice",
         variant: "destructive",
       });
     },
@@ -221,15 +195,14 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   // Handle stock out entry selection toggle
   const handleStockOutEntryToggle = (entryId: string) => {
-    try {
-      const newSelectedEntries = selectedStockOutEntries.includes(entryId)
-        ? selectedStockOutEntries.filter(id => id !== entryId)
-        : [...selectedStockOutEntries, entryId];
-      
-      setSelectedStockOutEntries(newSelectedEntries);
-      
-      // Aggregate data from all selected entries
-      if (newSelectedEntries.length > 0) {
+    const newSelectedEntries = selectedStockOutEntries.includes(entryId)
+      ? selectedStockOutEntries.filter(id => id !== entryId)
+      : [...selectedStockOutEntries, entryId];
+    
+    setSelectedStockOutEntries(newSelectedEntries);
+    
+    // Aggregate data from all selected entries
+    if (newSelectedEntries.length > 0) {
       const itemMap = new Map<string, {
         itemId: string;
         totalWeight: number;
@@ -290,10 +263,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       // Reset to single empty item when no entries selected
       form.setValue("items", [{ itemId: "", weight: "", crates: "", boxes: "", rate: "", amount: "0" }]);
     }
-    } catch (error) {
-      console.error('Stock out entry aggregation error:', error);
-      setSubmissionError('Error processing stock out entries. Please try again.');
-    }
   };
 
   // Watch form fields for calculations
@@ -349,130 +318,70 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   // Update calculated fields when dependent values change
   useEffect(() => {
-    try {
-      setCalculationError(null);
-      // Update individual item amounts
-      watchedItems.forEach((item, index) => {
-        const itemDetails = items?.find((i: any) => i.id === item.itemId);
-        const quantity = getQuantityForCalculation(item, itemDetails);
-        const rate = parseFloat(item.rate) || 0;
-        if (isNaN(rate)) {
-          throw new Error(`Invalid rate for item at position ${index + 1}`);
-        }
-        const amount = quantity * rate;
-        if (isNaN(amount)) {
-          throw new Error(`Error calculating amount for item at position ${index + 1}`);
-        }
-        if (parseFloat(item.amount) !== amount) {
-          form.setValue(`items.${index}.amount`, amount.toFixed(2));
-        }
-      });
-
-      // Validate totals
-      if (isNaN(totalExpense) || isNaN(totalSelling) || isNaN(totalLessExpenses) || isNaN(netAmount)) {
-        throw new Error('Error calculating invoice totals');
+    // Update individual item amounts
+    watchedItems.forEach((item, index) => {
+      const itemDetails = items?.find((i: any) => i.id === item.itemId);
+      const quantity = getQuantityForCalculation(item, itemDetails);
+      const rate = parseFloat(item.rate) || 0;
+      const amount = quantity * rate;
+      if (parseFloat(item.amount) !== amount) {
+        form.setValue(`items.${index}.amount`, amount.toFixed(2));
       }
+    });
 
-      // Update totals
-      form.setValue("totalExpense", totalExpense.toFixed(2));
-      form.setValue("totalSelling", totalSelling.toFixed(2));
-      form.setValue("totalLessExpenses", totalLessExpenses.toFixed(2));
-      form.setValue("netAmount", netAmount.toFixed(2));
-    } catch (error) {
-      console.error('Calculation error:', error);
-      setCalculationError('Error calculating totals. Please check your inputs.');
-    }
+    // Update totals
+    form.setValue("totalExpense", totalExpense.toFixed(2));
+    form.setValue("totalSelling", totalSelling.toFixed(2));
+    form.setValue("totalLessExpenses", totalLessExpenses.toFixed(2));
+    form.setValue("netAmount", netAmount.toFixed(2));
   }, [form, watchedItems, items, totalExpense, totalSelling, totalLessExpenses, netAmount]);
 
-  const onSubmit = async (data: InvoiceFormData) => {
-    try {
-      setSubmissionError(null);
-      
-      // Validate invoice data
-      if (data.items.length === 0) {
-        throw new Error('At least one item is required');
-      }
-      
-      // Validate all items have required fields
-      for (let i = 0; i < data.items.length; i++) {
-        const item = data.items[i];
-        if (!item.itemId || !item.rate) {
-          throw new Error(`Item at position ${i + 1} is missing required fields`);
-        }
-      }
-      
-      // Validate crate transaction if enabled
-      if (data.crateTransaction?.enabled && !data.crateTransaction.quantity) {
-        throw new Error('Crate quantity is required when crate transaction is enabled');
-      }
-      
-      // Build invoice data with validation
-      const invoice = {
+  const onSubmit = (data: InvoiceFormData) => {
+    const invoice = {
+      vendorId: data.vendorId,
+      invoiceDate: data.invoiceDate,
+      commission: commissionAmount.toFixed(2),
+      labour: parseFloat(data.labour).toFixed(2),
+      truckFreight: parseFloat(data.truckFreight).toFixed(2),
+      crateFreight: parseFloat(data.crateFreight).toFixed(2),
+      postExpenses: parseFloat(data.postExpenses).toFixed(2),
+      draftExpenses: parseFloat(data.draftExpenses).toFixed(2),
+      vatav: parseFloat(data.vatav).toFixed(2),
+      otherExpenses: parseFloat(data.otherExpenses).toFixed(2),
+      advance: parseFloat(data.advance).toFixed(2),
+      totalExpense: parseFloat(data.totalExpense).toFixed(2),
+      totalSelling: parseFloat(data.totalSelling).toFixed(2),
+      totalLessExpenses: parseFloat(data.totalLessExpenses).toFixed(2),
+      netAmount: parseFloat(data.netAmount).toFixed(2),
+      balanceAmount: parseFloat(data.netAmount).toFixed(2),
+      status: "Unpaid",
+    };
+
+    const items = data.items.map(item => ({
+      itemId: item.itemId,
+      weight: parseFloat(item.weight || "0").toFixed(2),
+      crates: parseFloat(item.crates || "0").toFixed(2),
+      boxes: parseFloat(item.boxes || "0").toFixed(2),
+      rate: parseFloat(item.rate).toFixed(2),
+      amount: parseFloat(item.amount).toFixed(2),
+    }));
+
+    // Build request data
+    const requestData: any = { invoice, items };
+
+    // Add crate transaction if enabled
+    if (data.crateTransaction?.enabled && data.crateTransaction.quantity) {
+      requestData.crateTransaction = {
+        partyType: 'vendor',
         vendorId: data.vendorId,
-        invoiceDate: data.invoiceDate,
-        commission: commissionAmount.toFixed(2),
-        labour: parseFloat(data.labour).toFixed(2),
-        truckFreight: parseFloat(data.truckFreight).toFixed(2),
-        crateFreight: parseFloat(data.crateFreight).toFixed(2),
-        postExpenses: parseFloat(data.postExpenses).toFixed(2),
-        draftExpenses: parseFloat(data.draftExpenses).toFixed(2),
-        vatav: parseFloat(data.vatav).toFixed(2),
-        otherExpenses: parseFloat(data.otherExpenses).toFixed(2),
-        advance: parseFloat(data.advance).toFixed(2),
-        totalExpense: parseFloat(data.totalExpense).toFixed(2),
-        totalSelling: parseFloat(data.totalSelling).toFixed(2),
-        totalLessExpenses: parseFloat(data.totalLessExpenses).toFixed(2),
-        netAmount: parseFloat(data.netAmount).toFixed(2),
-        balanceAmount: parseFloat(data.netAmount).toFixed(2),
-        status: "Unpaid",
+        transactionType: 'Received',
+        quantity: data.crateTransaction.quantity,
+        transactionDate: data.invoiceDate,
+        notes: `Crates received with invoice`,
       };
-
-      const items = data.items.map((item, index) => {
-        const weight = parseFloat(item.weight || "0");
-        const crates = parseFloat(item.crates || "0");
-        const boxes = parseFloat(item.boxes || "0");
-        const rate = parseFloat(item.rate);
-        const amount = parseFloat(item.amount);
-        
-        if (isNaN(rate) || isNaN(amount)) {
-          throw new Error(`Invalid numeric values in item at position ${index + 1}`);
-        }
-        
-        return {
-          itemId: item.itemId,
-          weight: weight.toFixed(2),
-          crates: crates.toFixed(2),
-          boxes: boxes.toFixed(2),
-          rate: rate.toFixed(2),
-          amount: amount.toFixed(2),
-        };
-      });
-
-      // Build request data
-      const requestData: any = { invoice, items };
-
-      // Add crate transaction if enabled
-      if (data.crateTransaction?.enabled && data.crateTransaction.quantity) {
-        requestData.crateTransaction = {
-          partyType: 'vendor',
-          vendorId: data.vendorId,
-          transactionType: 'Received',
-          quantity: data.crateTransaction.quantity,
-          transactionDate: data.invoiceDate,
-          notes: `Crates received with invoice`,
-        };
-      }
-
-      createInvoiceMutation.mutate(requestData);
-    } catch (error) {
-      console.error('Form submission error:', error);
-      setSubmissionError(error instanceof Error ? error.message : 'An unexpected error occurred');
-      toast({
-        title: "Submission Error",
-        description: error instanceof Error ? error.message : "Failed to submit invoice. Please try again.",
-        variant: "destructive",
-      });
     }
+
+    createInvoiceMutation.mutate(requestData);
   };
 
   const getVendorName = (vendorId: string) => {
@@ -493,31 +402,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <ErrorBoundary 
-          resetKeys={[open ? 1 : 0]}
-          fallback={({ error, resetError }) => (
-            <div className="p-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Failed to load form</AlertTitle>
-                <AlertDescription className="mt-2 space-y-2">
-                  <p>An error occurred while loading the purchase invoice form.</p>
-                  <div className="flex gap-2">
-                    <Button onClick={resetError} size="sm">
-                      Try Again
-                    </Button>
-                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
-                      Close
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-        >
-          <DialogHeader>
-            <DialogTitle>Create Purchase Invoice</DialogTitle>
-          </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Create Purchase Invoice</DialogTitle>
+        </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -1105,51 +992,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               </CardContent>
             </Card>
 
-            {/* Query Error Displays */}
-            {(vendorsError || itemsError || stockOutError) && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Warning: Some data failed to load. {vendorsError && "Vendors, "}{itemsError && "Items, "}{stockOutError && "Stock entries, "}
-                  This may affect form functionality.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Calculation Error Display */}
-            {calculationError && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  <span>{calculationError}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCalculationError(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Submission Error Display */}
-            {submissionError && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  <span>{submissionError}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSubmissionError(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {/* Form Actions */}
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
@@ -1170,7 +1012,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             </div>
           </form>
         </Form>
-        </ErrorBoundary>
       </DialogContent>
     </Dialog>
   );

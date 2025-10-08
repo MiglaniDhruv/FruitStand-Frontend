@@ -1,11 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle, AlertTriangle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { format } from "date-fns";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 
 export default function RecentPayments() {
   const { data: payments, isLoading } = useQuery<any[]>({
@@ -13,26 +10,7 @@ export default function RecentPayments() {
   });
 
   return (
-    <ErrorBoundary 
-      resetKeys={payments ? [payments.length, payments[0]?.id, payments[payments.length - 1]?.id].filter(Boolean) : []}
-      fallback={({ error, resetError }) => (
-        <Card>
-          <CardContent className="p-6">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Failed to load recent payments</AlertTitle>
-              <AlertDescription className="mt-2 space-y-2">
-                <p>An error occurred while loading recent payments.</p>
-                <Button onClick={resetError} size="sm">
-                  Try Again
-                </Button>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      )}
-    >
-      <Card>
+    <Card>
       <CardHeader>
         <CardTitle>Recent Payments</CardTitle>
       </CardHeader>
@@ -87,6 +65,5 @@ export default function RecentPayments() {
         </div>
       </CardContent>
     </Card>
-    </ErrorBoundary>
   );
 }

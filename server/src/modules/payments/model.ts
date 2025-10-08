@@ -2,7 +2,6 @@ import { eq, desc, inArray, and, or, gt, asc } from 'drizzle-orm';
 import { db } from '../../../db';
 import { payments, purchaseInvoices, vendors, bankAccounts, cashbook, bankbook, type Payment, type InsertPayment, type PaymentWithDetails, type PurchaseInvoice, type VendorPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
-import { BankAccountModel } from '../bank-accounts/model';
 
 export class PaymentModel {
   async getPayments(tenantId: string): Promise<PaymentWithDetails[]> {
@@ -286,9 +285,6 @@ export class PaymentModel {
             referenceType: 'Payment',
             referenceId: paymentsCreated[0].id,
           }, tenantId));
-
-          // Align bank account balance with bankbook running balance
-          await BankAccountModel.setBankAccountBalance(tx, tenantId, paymentData.bankAccountId, newBalance.toFixed(2));
         }
       }
 

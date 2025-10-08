@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../utils/base';
 import { DashboardModel } from './model';
-import { type AuthenticatedRequest, ForbiddenError } from '../../types';
+import { type AuthenticatedRequest } from '../../types';
 
 export class DashboardController extends BaseController {
   private dashboardModel: DashboardModel;
@@ -12,10 +12,12 @@ export class DashboardController extends BaseController {
   }
 
   async getKPIs(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    
-    const kpis = await this.dashboardModel.getDashboardKPIs(tenantId);
-    res.json(kpis);
+    try {
+      const tenantId = req.tenantId!;
+      const kpis = await this.dashboardModel.getDashboardKPIs(tenantId);
+      res.json(kpis);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to fetch dashboard KPIs');
+    }
   }
 }

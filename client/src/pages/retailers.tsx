@@ -26,7 +26,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { logEventHandlerError, logMutationError, logFormError } from "@/lib/error-logger";
 import { z } from "zod";
 import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search } from "lucide-react";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
@@ -109,7 +108,6 @@ export default function RetailerManagement() {
       form.reset();
     },
     onError: (error) => {
-      logMutationError(error, 'createRetailer');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create retailer",
@@ -135,7 +133,6 @@ export default function RetailerManagement() {
       form.reset();
     },
     onError: (error) => {
-      logMutationError(error, 'updateRetailer');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update retailer",
@@ -157,7 +154,6 @@ export default function RetailerManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
     },
     onError: (error) => {
-      logMutationError(error, 'deleteRetailer');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete retailer",
@@ -167,115 +163,44 @@ export default function RetailerManagement() {
   });
 
   const handleEdit = (retailer: any) => {
-    try {
-      if (!retailer) {
-        throw new Error('Invalid retailer data');
-      }
-      setEditingRetailer(retailer);
-      form.reset({
-        name: retailer.name,
-        contactPerson: retailer.contactPerson || "",
-        phone: retailer.phone || "",
-        address: retailer.address || "",
-      });
-      setOpen(true);
-    } catch (error) {
-      logEventHandlerError(error, 'handleEdit', { retailerId: retailer?.id });
-      toast({
-        title: "Error",
-        description: "Failed to open retailer for editing",
-        variant: "destructive",
-      });
-    }
+    setEditingRetailer(retailer);
+    form.reset({
+      name: retailer.name,
+      contactPerson: retailer.contactPerson || "",
+      phone: retailer.phone || "",
+      address: retailer.address || "",
+    });
+    setOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      if (!id) {
-        throw new Error('Invalid retailer ID');
-      }
-      
-      if (confirm("Are you sure you want to delete this retailer?")) {
-        await deleteRetailerMutation.mutateAsync(id);
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { retailerId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete retailer",
-        variant: "destructive",
-      });
+  const handleDelete = (id: string) => {
+    if (confirm("Are you sure you want to delete this retailer?")) {
+      deleteRetailerMutation.mutate(id);
     }
   };
 
   const handleRecordPayment = (retailer: any) => {
-    try {
-      if (!retailer || !retailer.id) {
-        throw new Error('Invalid retailer data for payment');
-      }
-      setSelectedRetailerForPayment(retailer);
-      setShowRetailerPaymentModal(true);
-    } catch (error) {
-      logEventHandlerError(error, 'handleRecordPayment', { retailerId: retailer?.id });
-      toast({
-        title: "Error",
-        description: "Failed to open payment form",
-        variant: "destructive",
-      });
-    }
+    setSelectedRetailerForPayment(retailer);
+    setShowRetailerPaymentModal(true);
   };
 
   const handleCloseRetailerPaymentModal = () => {
-    try {
-      setShowRetailerPaymentModal(false);
-      setSelectedRetailerForPayment(null);
-    } catch (error) {
-      logEventHandlerError(error, 'handleCloseRetailerPaymentModal');
-      toast({
-        title: "Error",
-        description: "Failed to close payment modal",
-        variant: "destructive",
-      });
-    }
+    setShowRetailerPaymentModal(false);
+    setSelectedRetailerForPayment(null);
   };
 
-  const onSubmit = async (data: RetailerFormData) => {
-    try {
-      if (!data || !data.name?.trim()) {
-        throw new Error('Invalid form data');
-      }
-      
-      if (editingRetailer) {
-        if (!editingRetailer.id) {
-          throw new Error('Invalid retailer ID for update');
-        }
-        await updateRetailerMutation.mutateAsync({ id: editingRetailer.id, data });
-      } else {
-        await createRetailerMutation.mutateAsync(data);
-      }
-    } catch (error) {
-      logFormError(error, 'retailerForm', data);
-      toast({
-        title: "Error",
-        description: "Failed to submit retailer form",
-        variant: "destructive",
-      });
+  const onSubmit = (data: RetailerFormData) => {
+    if (editingRetailer) {
+      updateRetailerMutation.mutate({ id: editingRetailer.id, data });
+    } else {
+      createRetailerMutation.mutate(data);
     }
   };
 
   const handleCreateNew = () => {
-    try {
-      setEditingRetailer(null);
-      form.reset();
-      setOpen(true);
-    } catch (error) {
-      logEventHandlerError(error, 'handleCreateNew');
-      toast({
-        title: "Error",
-        description: "Failed to open new retailer form",
-        variant: "destructive",
-      });
-    }
+    setEditingRetailer(null);
+    form.reset();
+    setOpen(true);
   };
 
   const handlePageChange = (page: number) => {

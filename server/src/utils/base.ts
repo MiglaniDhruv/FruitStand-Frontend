@@ -1,12 +1,18 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { PaginationOptions, PaginationMetadata, PaginatedResult } from "@shared/schema";
-import { ValidationError, NotFoundError, BadRequestError } from "../types";
-import { handleDatabaseError } from "./database-errors";
-import { z } from "zod";
 
 // Base Controller class for common CRUD operations
 export class BaseController {
   
+  // Common error handling method
+  protected handleError(res: Response, error: any, message: string = "An error occurred") {
+    console.error(error);
+    return res.status(500).json({ 
+      message, 
+      error: error.message || error 
+    });
+  }
+
   // Success response formatting
   protected sendSuccess(res: Response, data: any, message?: string, statusCode: number = 200) {
     const response: any = { data };
@@ -47,41 +53,17 @@ export class BaseController {
     };
   }
 
-  // Validate data with Zod schema and throw ValidationError if fails
-  protected validateZodSchema<T>(schema: z.ZodSchema<T>, data: any): T {
-    const result = schema.safeParse(data);
-    if (!result.success) {
-      throw new ValidationError("Validation failed", result.error);
-    }
-    return result.data;
+  // Validation error response
+  protected sendValidationError(res: Response, errors: any) {
+    return res.status(400).json({
+      message: "Validation failed",
+      errors
+    });
   }
 
-  // Ensure resource exists, throw NotFoundError if not
-  protected ensureResourceExists(resource: any, resourceName: string): void {
-    if (!resource) {
-      throw new NotFoundError(resourceName);
-    }
-  }
-
-  // Validate UUID format
-  protected validateUUID(id: string, fieldName: string = 'ID'): void {
-    const uuidSchema = z.string().uuid();
-    const result = uuidSchema.safeParse(id);
-    if (!result.success) {
-      const fieldKey = fieldName.toLowerCase().replace(/\s+/g, '_');
-      throw new ValidationError(`Invalid ${fieldName} format`, {
-        [fieldKey]: `Invalid UUID format for ${fieldName}`
-      });
-    }
-  }
-
-  // Wrap database operations with error handling
-  protected async wrapDatabaseOperation<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      handleDatabaseError(error);
-    }
+  // Not found response
+  protected sendNotFound(res: Response, message: string = "Resource not found") {
+    return res.status(404).json({ message });
   }
 }
 

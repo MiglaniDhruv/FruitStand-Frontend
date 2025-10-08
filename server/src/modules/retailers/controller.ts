@@ -4,7 +4,7 @@ import { BaseController } from '../../utils/base';
 import { RetailerModel } from './model';
 import { SalesPaymentModel } from '../sales-payments/model';
 import { insertRetailerSchema, insertRetailerPaymentSchema } from '@shared/schema';
-import { type AuthenticatedRequest, NotFoundError, ValidationError, BadRequestError, ForbiddenError } from '../../types';
+import { type AuthenticatedRequest } from '../../types';
 import { whatsAppService } from '../../services/whatsapp';
 
 export class RetailerController extends BaseController {
@@ -18,148 +18,193 @@ export class RetailerController extends BaseController {
   }
 
   async getAll(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    
-    const { 
-      page, 
-      limit, 
-      search, 
-      sortBy, 
-      sortOrder,
-      status,
-      paginated
-    } = req.query;
+    try {
+      const tenantId = req.tenantId!;
+      
+      const { 
+        page, 
+        limit, 
+        search, 
+        sortBy, 
+        sortOrder,
+        status,
+        paginated
+      } = req.query;
 
-    // Validate sortBy parameter
-    const validSortFields = ['name', 'phone', 'createdAt'];
-    const sortByValue = typeof sortBy === 'string' && validSortFields.includes(sortBy) ? sortBy : 'createdAt';
-    const sortOrderValue = sortOrder === 'asc' ? 'asc' : 'desc';
+      // Validate sortBy parameter
+      const validSortFields = ['name', 'phone', 'createdAt'];
+      const sortByValue = typeof sortBy === 'string' && validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+      const sortOrderValue = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    // Check if pagination is requested using the paginated flag
-    const doPaginate = paginated === 'true';
+      // Check if pagination is requested using the paginated flag
+      const doPaginate = paginated === 'true';
 
-    if (doPaginate) {
-      // Return paginated response
-      const options = {
-        page: page ? parseInt(page as string, 10) : 1,
-        limit: limit ? parseInt(limit as string, 10) : 10,
-        search: search as string,
-        sortBy: sortByValue,
-        sortOrder: sortOrderValue as 'asc' | 'desc',
-        status: status as string
-      };
+      if (doPaginate) {
+        // Return paginated response
+        const options = {
+          page: page ? parseInt(page as string, 10) : 1,
+          limit: limit ? parseInt(limit as string, 10) : 10,
+          search: search as string,
+          sortBy: sortByValue,
+          sortOrder: sortOrderValue as 'asc' | 'desc',
+          status: status as string
+        };
 
-      const result = await this.retailerModel.getRetailersPaginated(tenantId, options);
-      return this.sendPaginatedResponse(res, result.data, result.pagination);
-    } else {
-      // Return non-paginated response for backward compatibility
-      const retailers = await this.retailerModel.getRetailers(tenantId);
-      res.json(retailers);
+        const result = await this.retailerModel.getRetailersPaginated(tenantId, options);
+        return res.json({ data: result.data, pagination: result.pagination });
+      } else {
+        // Return non-paginated response for backward compatibility
+        const retailers = await this.retailerModel.getRetailers(tenantId);
+        res.json(retailers);
+      }
+    } catch (error) {
+      this.handleError(res, error, 'Failed to fetch retailers');
     }
   }
 
   async getById(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const { id } = req.params;
-    
-    if (!id) throw new BadRequestError('Retailer ID is required');
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Retailer ID is required' });
+      }
 
-    const retailer = await this.retailerModel.getRetailer(tenantId, id);
-    this.ensureResourceExists(retailer, 'Retailer');
+      const retailer = await this.retailerModel.getRetailer(tenantId, id);
+      
+      if (!retailer) {
+        return this.sendNotFound(res, 'Retailer not found');
+      }
 
-    res.json(retailer);
+      res.json(retailer);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to fetch retailer');
+    }
   }
 
   async create(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    
-    const retailerData = this.validateZodSchema(insertRetailerSchema, { ...req.body, tenantId });
-    
-    const retailer = await this.retailerModel.createRetailer(tenantId, retailerData);
-    
-    res.status(201).json(retailer);
+    try {
+      const tenantId = req.tenantId!;
+      
+      const validation = insertRetailerSchema.safeParse({ ...req.body, tenantId });
+      
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.errors);
+      }
+
+      const retailerData = validation.data;
+      
+      const retailer = await this.retailerModel.createRetailer(tenantId, retailerData);
+      
+      res.status(201).json(retailer);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to create retailer');
+    }
   }
 
   async update(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const { id } = req.params;
-    
-    if (!id) throw new BadRequestError('Retailer ID is required');
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Retailer ID is required' });
+      }
 
-    const retailerData = this.validateZodSchema(insertRetailerSchema.partial(), { ...req.body, tenantId });
-    
-    const retailer = await this.retailerModel.updateRetailer(tenantId, id, retailerData);
-    this.ensureResourceExists(retailer, 'Retailer');
+      const validation = insertRetailerSchema.partial().safeParse({ ...req.body, tenantId });
+      
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.errors);
+      }
 
-    res.json(retailer);
+      const retailerData = validation.data;
+      
+      const retailer = await this.retailerModel.updateRetailer(tenantId, id, retailerData);
+      
+      if (!retailer) {
+        return this.sendNotFound(res, 'Retailer not found');
+      }
+
+      res.json(retailer);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to update retailer');
+    }
   }
 
   async delete(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const { id } = req.params;
-    
-    if (!id) throw new BadRequestError('Retailer ID is required');
+    try {
+      const tenantId = req.tenantId!;
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({ message: 'Retailer ID is required' });
+      }
 
-    const success = await this.wrapDatabaseOperation(() => 
-      this.retailerModel.deleteRetailer(tenantId, id)
-    );
-    
-    if (!success) throw new NotFoundError('Retailer');
+      const success = await this.retailerModel.deleteRetailer(tenantId, id);
+      
+      if (!success) {
+        return this.sendNotFound(res, 'Retailer not found');
+      }
 
-    return res.status(204).send();
+      return res.status(204).send();
+    } catch (error) {
+      this.handleError(res, error, 'Failed to delete retailer');
+    }
   }
 
   async recordPayment(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const retailerId = req.params.id;
+    try {
+      if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
+      const tenantId = req.tenantId;
+      const retailerId = req.params.id;
 
-    const validatedData = this.validateZodSchema(insertRetailerPaymentSchema, req.body);
-
-    // Extract payment data without retailerId (it's passed separately)
-    const { retailerId: _, ...rest } = validatedData;
-    
-    // Ensure proper typing for the model method
-    const paymentData = {
-      ...rest,
-      paymentDate: typeof rest.paymentDate === 'string' ? new Date(rest.paymentDate) : rest.paymentDate,
-      paymentMode: rest.paymentMode as string
-    };
-
-    const result = await this.salesPaymentModel.recordRetailerPayment(tenantId, retailerId, paymentData);
-
-    // Send WhatsApp notifications for each created payment
-    for (const payment of result.paymentsCreated) {
-      try {
-        await whatsAppService.sendPaymentNotification(tenantId, payment.id, 'sales');
-      } catch (error) {
-        console.error('WhatsApp notification failed:', error);
+      const validation = insertRetailerPaymentSchema.safeParse(req.body);
+      if (!validation.success) {
+        return this.sendValidationError(res, validation.error.issues);
       }
-    }
 
-    res.status(201).json(result);
+      const result = await this.salesPaymentModel.recordRetailerPayment(tenantId, retailerId, validation.data);
+
+      // Send WhatsApp notifications for each created payment
+      for (const payment of result.paymentsCreated) {
+        try {
+          await whatsAppService.sendPaymentNotification(tenantId, payment.id, 'sales');
+        } catch (error) {
+          console.error('WhatsApp notification failed:', error);
+        }
+      }
+
+      res.status(201).json(result);
+    } catch (error) {
+      return this.handleError(res, error, "Failed to record retailer payment");
+    }
   }
 
   async getOutstandingInvoices(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const retailerId = req.params.id;
+    try {
+      if (!req.tenantId) return res.status(403).json({ message: 'No tenant context found' });
+      const tenantId = req.tenantId;
+      const retailerId = req.params.id;
 
-    this.validateUUID(retailerId, 'Retailer ID');
+      if (!z.string().uuid().safeParse(retailerId).success) {
+        return res.status(400).json({ message: 'Invalid retailer ID' });
+      }
 
-    const invoices = await this.salesPaymentModel.getOutstandingInvoicesForRetailer(tenantId, retailerId);
-    res.json(invoices);
+      const invoices = await this.salesPaymentModel.getOutstandingInvoicesForRetailer(tenantId, retailerId);
+      res.json(invoices);
+    } catch (error) {
+      return this.handleError(res, error, "Failed to fetch outstanding invoices");
+    }
   }
 
   async getStats(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const stats = await this.retailerModel.getRetailerStats(tenantId);
-    res.json(stats);
+    try {
+      const tenantId = req.tenantId!;
+      const stats = await this.retailerModel.getRetailerStats(tenantId);
+      res.json(stats);
+    } catch (error) {
+      this.handleError(res, error, 'Failed to fetch retailer statistics');
+    }
   }
 }

@@ -29,9 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, AlertCircle, Loader2 } from "lucide-react";
 
 const salesPaymentFormSchema = z.object({
   invoiceId: z.string().min(1, "Invoice is required"),
@@ -55,7 +52,6 @@ interface SalesPaymentFormProps {
 export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoiceId }: SalesPaymentFormProps) {
   const [selectedRetailer, setSelectedRetailer] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -75,7 +71,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
 
   const watchedPaymentMethod = form.watch("paymentMethod");
 
-  const { data: retailers, isError: retailersError, error: retailersErrorMessage } = useQuery<any[]>({
+  const { data: retailers } = useQuery<any[]>({
     queryKey: ["/api/retailers"],
     queryFn: async () => {
       const response = await authenticatedApiRequest('GET', '/api/retailers');
@@ -83,7 +79,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
     },
   });
 
-  const { data: invoices, isError: invoicesError, error: invoicesErrorMessage } = useQuery<any[]>({
+  const { data: invoices } = useQuery<any[]>({
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest('GET', '/api/sales-invoices');
@@ -91,7 +87,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
     },
   });
 
-  const { data: bankAccounts, isError: bankAccountsError, error: bankAccountsErrorMessage } = useQuery<any[]>({
+  const { data: bankAccounts } = useQuery<any[]>({
     queryKey: ["/api/bank-accounts"],
     queryFn: async () => {
       const response = await authenticatedApiRequest('GET', '/api/bank-accounts');
@@ -154,24 +150,8 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
     }
   };
 
-  const onSubmit = async (data: SalesPaymentFormData) => {
-    try {
-      setSubmissionError(null);
-      // Basic client-side validations
-      if (!data.invoiceId) throw new Error('Please select an invoice');
-      if (!data.retailerId) throw new Error('Please select a retailer');
-      const amt = parseFloat(data.amount);
-      if (isNaN(amt) || amt <= 0) throw new Error('Invalid payment amount');
-      if (data.paymentMethod === 'Bank Transfer' && !data.bankAccountId) throw new Error('Bank account is required');
-      if (data.paymentMethod === 'Cheque' && !data.chequeNumber) throw new Error('Cheque number is required');
-
-      createSalesPaymentMutation.mutate(data);
-    } catch (error) {
-      console.error('Payment submission error:', error);
-      const message = error instanceof Error ? error.message : 'Failed to record payment. Please try again.';
-      setSubmissionError(message);
-      toast({ title: 'Submission Error', description: message, variant: 'destructive' });
-    }
+  const onSubmit = (data: SalesPaymentFormData) => {
+    createSalesPaymentMutation.mutate(data);
   };
 
   // Pre-select invoice if provided
@@ -190,42 +170,13 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
     }
   }, [preSelectedInvoiceId, invoices, form]);
 
-  // Clear submission error when dialog closes
-  React.useEffect(() => {
-    if (!open) {
-      setSubmissionError(null);
-    }
-  }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <ErrorBoundary 
-          resetKeys={[open ? 1 : 0]}
-          fallback={({ error, resetError }) => (
-            <div className="p-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Failed to load form</AlertTitle>
-                <AlertDescription className="mt-2 space-y-2">
-                  <p>An error occurred while loading the sales payment form.</p>
-                  <div className="flex gap-2">
-                    <Button onClick={resetError} size="sm">
-                      Try Again
-                    </Button>
-                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
-                      Close
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-        >
-          <DialogHeader>
-            <DialogTitle>Record Sales Payment</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
+        <DialogHeader>
+          <DialogTitle>Record Sales Payment</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
@@ -408,21 +359,6 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
               )}
             />
 
-            {submissionError && (
-              <Alert variant="destructive">
-                <AlertDescription className="flex items-center justify-between">
-                  <span>{submissionError}</span>
-                  <Button variant="ghost" size="sm" onClick={() => setSubmissionError(null)}>Dismiss</Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {retailersError && <Alert variant="destructive"><AlertDescription>Failed to load retailers: {retailersErrorMessage?.message || 'Unknown error'}</AlertDescription></Alert>}
-            {invoicesError && <Alert variant="destructive"><AlertDescription>Failed to load invoices: {invoicesErrorMessage?.message || 'Unknown error'}</AlertDescription></Alert>}
-            {bankAccountsError && watchedPaymentMethod === 'Bank Transfer' && (
-              <Alert variant="destructive"><AlertDescription>Failed to load bank accounts: {bankAccountsErrorMessage?.message || 'Unknown error'}</AlertDescription></Alert>
-            )}
-
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
@@ -442,7 +378,6 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
             </div>
           </form>
         </Form>
-        </ErrorBoundary>
       </DialogContent>
     </Dialog>
   );

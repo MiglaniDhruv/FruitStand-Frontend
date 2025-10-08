@@ -22,7 +22,6 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { buildPaginationParams } from "@/lib/pagination";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { useToast } from "@/hooks/use-toast";
-import { logEventHandlerError, logMutationError, logNavigationError } from "@/lib/error-logger";
 
 export default function PurchaseInvoices() {
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
@@ -53,7 +52,6 @@ export default function PurchaseInvoices() {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
     },
     onError: (error) => {
-      logMutationError(error, 'deletePurchaseInvoice');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete invoice",
@@ -63,21 +61,8 @@ export default function PurchaseInvoices() {
   });
 
   const handleDelete = async (id: string) => {
-    try {
-      if (!id) {
-        throw new Error('Invalid invoice ID');
-      }
-      
-      if (confirm("Are you sure you want to delete this purchase invoice? This action cannot be undone.")) {
-        await deleteInvoiceMutation.mutateAsync(id);
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { invoiceId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete purchase invoice",
-        variant: "destructive",
-      });
+    if (confirm("Are you sure you want to delete this purchase invoice? This action cannot be undone.")) {
+      deleteInvoiceMutation.mutate(id);
     }
   };
 
@@ -201,45 +186,21 @@ export default function PurchaseInvoices() {
   const paginationMetadata = invoicesResult?.pagination;
 
   const getStatusColor = (status: string) => {
-    try {
-      if (!status) {
+    switch (status) {
+      case "Paid":
+        return "bg-chart-2/10 text-chart-2";
+      case "Pending":
+      case "Unpaid":
+        return "bg-chart-1/10 text-chart-1";
+      case "Partially Paid":
+        return "bg-chart-4/10 text-chart-4";
+      default:
         return "bg-muted text-muted-foreground";
-      }
-      
-      switch (status) {
-        case "Paid":
-          return "bg-chart-2/10 text-chart-2";
-        case "Pending":
-        case "Unpaid":
-          return "bg-chart-1/10 text-chart-1";
-        case "Partially Paid":
-          return "bg-chart-4/10 text-chart-4";
-        default:
-          return "bg-muted text-muted-foreground";
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'getStatusColor', { status });
-      return "bg-muted text-muted-foreground"; // Safe default
     }
   };
 
   const handleViewInvoice = (invoice: any) => {
-    try {
-      if (!invoice || !invoice.id) {
-        throw new Error('Invalid invoice data for navigation');
-      }
-      if (!slug) {
-        throw new Error('Invalid tenant slug for navigation');
-      }
-      setLocation(`/${slug}/purchase-invoices/${invoice.id}`);
-    } catch (error) {
-      logNavigationError(error, `purchase-invoice-${invoice?.id}`);
-      toast({
-        title: "Error",
-        description: "Failed to navigate to invoice details",
-        variant: "destructive",
-      });
-    }
+    setLocation(`/${slug}/purchase-invoices/${invoice.id}`);
   };
 
   if (isLoading) {
