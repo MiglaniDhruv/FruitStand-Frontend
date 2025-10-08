@@ -127,31 +127,102 @@ export interface RetailerFilter {
   retailerId?: string;
 }
 
-// Standardized error types
-export class ValidationError extends Error {
-  constructor(public fields: Record<string, string>) {
-    super("Validation failed");
-    this.name = "ValidationError";
+// Enhanced error infrastructure with status codes and error codes
+import { ERROR_CODES, type ErrorCode } from '../constants/error-codes';
+import { ZodError } from 'zod';
+
+export class AppError extends Error {
+  public statusCode: number;
+  public code: ErrorCode;
+  public isOperational: boolean;
+  public details?: any;
+
+  constructor(
+    message: string,
+    statusCode: number,
+    code: ErrorCode,
+    isOperational: boolean = true,
+    details?: any
+  ) {
+    super(message);
+    this.name = 'AppError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.isOperational = isOperational;
+    this.details = details;
   }
 }
 
-export class NotFoundError extends Error {
+export class ValidationError extends AppError {
+  public fields?: Record<string, string>;
+
+  constructor(message: string = "Validation failed", fieldsOrZodError?: Record<string, string> | ZodError) {
+    super(message, 400, ERROR_CODES.VALIDATION_FAILED, true);
+    this.name = 'ValidationError';
+    
+    if (fieldsOrZodError instanceof ZodError) {
+      this.fields = {};
+      fieldsOrZodError.errors.forEach(error => {
+        const path = error.path.join('.');
+        this.fields![path] = error.message;
+      });
+      this.details = { fields: this.fields };
+    } else if (fieldsOrZodError) {
+      this.fields = fieldsOrZodError;
+      this.details = { fields: this.fields };
+    }
+  }
+}
+
+export class NotFoundError extends AppError {
   constructor(resource: string = "Resource") {
-    super(`${resource} not found`);
-    this.name = "NotFoundError";
+    super(`${resource} not found`, 404, ERROR_CODES.RESOURCE_NOT_FOUND, true);
+    this.name = 'NotFoundError';
   }
 }
 
-export class UnauthorizedError extends Error {
+export class UnauthorizedError extends AppError {
   constructor(message: string = "Unauthorized access") {
-    super(message);
-    this.name = "UnauthorizedError";
+    super(message, 401, ERROR_CODES.AUTH_UNAUTHORIZED, true);
+    this.name = 'UnauthorizedError';
   }
 }
 
-export class ForbiddenError extends Error {
+export class ForbiddenError extends AppError {
   constructor(message: string = "Insufficient permissions") {
-    super(message);
-    this.name = "ForbiddenError";
+    super(message, 403, ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS, true);
+    this.name = 'ForbiddenError';
+  }
+}
+
+export class BadRequestError extends AppError {
+  constructor(message: string = "Bad request") {
+    super(message, 400, ERROR_CODES.VALIDATION_FAILED, true);
+    this.name = 'BadRequestError';
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string = "Resource conflict") {
+    super(message, 409, ERROR_CODES.RESOURCE_CONFLICT, true);
+    this.name = 'ConflictError';
+  }
+}
+
+export class DatabaseError extends AppError {
+  public originalError?: Error;
+
+  constructor(message: string = "Database error", originalError?: Error) {
+    super(message, 500, ERROR_CODES.DB_QUERY_ERROR, false);
+    this.name = 'DatabaseError';
+    this.originalError = originalError;
+    this.details = { originalError: originalError?.message };
+  }
+}
+
+export class InternalServerError extends AppError {
+  constructor(message: string = "Internal server error") {
+    super(message, 500, ERROR_CODES.SYSTEM_INTERNAL_ERROR, false);
+    this.name = 'InternalServerError';
   }
 }

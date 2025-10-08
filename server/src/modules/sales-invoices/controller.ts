@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { SalesInvoiceModel } from './model';
-import { type AuthenticatedRequest } from '../../types';
+import { type AuthenticatedRequest, NotFoundError, ValidationError, BadRequestError, ForbiddenError } from '../../types';
 
 const salesInvoiceValidation = {
   createSalesInvoice: z.object({
@@ -42,176 +42,150 @@ export class SalesInvoiceController extends BaseController {
   }
 
   async getSalesInvoices(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const salesInvoices = await this.salesInvoiceModel.getSalesInvoices(tenantId);
-      res.json(salesInvoices);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch sales invoices');
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const salesInvoices = await this.salesInvoiceModel.getSalesInvoices(tenantId);
+    res.json(salesInvoices);
   }
 
   async getSalesInvoice(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { id } = req.params;
-      
-      if (!id) {
-        return res.status(400).json({ message: 'Sales invoice ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
 
-      const salesInvoice = await this.salesInvoiceModel.getSalesInvoice(tenantId, id);
-      
-      if (!salesInvoice) {
-        return this.sendNotFound(res, 'Sales invoice not found');
-      }
+    this.validateUUID(id, 'Sales invoice ID');
 
-      res.json(salesInvoice);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch sales invoice');
-    }
+    const salesInvoice = await this.salesInvoiceModel.getSalesInvoice(tenantId, id);
+    this.ensureResourceExists(salesInvoice, 'Sales invoice');
+
+    res.json(salesInvoice);
   }
 
   async createSalesInvoice(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Inject tenantId into invoice, items, and crateTransaction before validation
-      const requestData = {
-        invoice: { ...req.body.invoice, tenantId },
-        items: req.body.items?.map((item: any) => ({ ...item, tenantId })) || [],
-        crateTransaction: req.body.crateTransaction ? { ...req.body.crateTransaction, tenantId } : undefined,
-      };
-      
-      const validation = salesInvoiceValidation.createSalesInvoice.safeParse(requestData);
-      
-      if (!validation.success) {
-        return this.sendValidationError(res, validation.error.errors);
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Inject tenantId into invoice, items, and crateTransaction before validation
+    const requestData = {
+      invoice: { ...req.body.invoice, tenantId },
+      items: req.body.items?.map((item: any) => ({ ...item, tenantId })) || [],
+      crateTransaction: req.body.crateTransaction ? { ...req.body.crateTransaction, tenantId } : undefined,
+    };
+    
+    const validatedData = this.validateZodSchema(salesInvoiceValidation.createSalesInvoice, requestData);
 
-      const { invoice, items, crateTransaction } = validation.data;
-      
-      const result = await this.salesInvoiceModel.createSalesInvoice(tenantId, invoice, items, crateTransaction);
-      
-      res.status(201).json(result);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to create sales invoice');
-    }
+    const { invoice, items, crateTransaction } = validatedData;
+    
+    // Ensure invoiceDate is a Date object
+    const processedInvoice = {
+      ...invoice,
+      invoiceDate: typeof invoice.invoiceDate === 'string' ? new Date(invoice.invoiceDate) : invoice.invoiceDate
+    };
+    
+    // Ensure crateTransaction transactionDate is a Date object if present
+    const processedCrateTransaction = crateTransaction ? {
+      ...crateTransaction,
+      transactionDate: typeof crateTransaction.transactionDate === 'string' 
+        ? new Date(crateTransaction.transactionDate) 
+        : crateTransaction.transactionDate
+    } : crateTransaction;
+    
+    const result = await this.salesInvoiceModel.createSalesInvoice(tenantId, processedInvoice, items, processedCrateTransaction);
+    
+    res.status(201).json(result);
   }
 
   async markSalesInvoiceAsPaid(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { id } = req.params;
-      
-      if (!id) {
-        return res.status(400).json({ message: 'Sales invoice ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
+    this.validateUUID(id, 'Sales invoice ID');
 
-      const result = await this.salesInvoiceModel.markSalesInvoiceAsPaid(tenantId, id);
-      
-      res.json(result);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to mark sales invoice as paid');
-    }
+    const result = await this.salesInvoiceModel.markSalesInvoiceAsPaid(tenantId, id);
+    
+    res.json(result);
   }
 
   async revertInvoiceStatus(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { id } = req.params;
-      
-      if (!id) {
-        return res.status(400).json({ message: 'Sales invoice ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
+    this.validateUUID(id, 'Sales invoice ID');
 
-      const result = await this.salesInvoiceModel.revertInvoiceStatus(tenantId, id);
-      
-      res.json(result);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to revert sales invoice status');
-    }
+    const result = await this.salesInvoiceModel.revertInvoiceStatus(tenantId, id);
+    
+    res.json(result);
   }
 
   async getSalesInvoicesPaginated(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      
-      const validation = salesInvoiceValidation.getSalesInvoicesPaginated.safeParse(req.query);
-      
-      if (!validation.success) {
-        return this.sendValidationError(res, validation.error.errors);
-      }
-
-      const { dateFrom, dateTo, ...restOptions } = validation.data;
-      
-      // Map legacy dateFrom/dateTo to dateRange
-      const options = {
-        ...restOptions,
-        dateRange: (dateFrom || dateTo) ? {
-          from: dateFrom,
-          to: dateTo
-        } : restOptions.dateRange
-      };
-      
-      // Check if this should return all invoices or paginated
-      if (options.paginated === 'false' || (!options.page && !options.limit && !options.paginated)) {
-        const allInvoices = await this.salesInvoiceModel.getSalesInvoices(tenantId);
-        return res.json(allInvoices);
-      }
-      
-      const result = await this.salesInvoiceModel.getSalesInvoicesPaginated(tenantId, options);
-      
-      return res.json({ data: result.data, pagination: result.pagination });
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch paginated sales invoices');
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const validationResult = salesInvoiceValidation.getSalesInvoicesPaginated.safeParse(req.query);
+    if (!validationResult.success) {
+      throw new ValidationError('Invalid query parameters', validationResult.error);
     }
+    const validatedQuery = validationResult.data;
+
+    const { dateFrom, dateTo, ...restOptions } = validatedQuery;
+    
+    // Map legacy dateFrom/dateTo to dateRange
+    const options = {
+      ...restOptions,
+      dateRange: (dateFrom || dateTo) ? {
+        from: dateFrom,
+        to: dateTo
+      } : restOptions.dateRange
+    };
+    
+    // Check if this should return all invoices or paginated
+    if (options.paginated === 'false' || (!options.page && !options.limit && !options.paginated)) {
+      const allInvoices = await this.salesInvoiceModel.getSalesInvoices(tenantId);
+      return res.json(allInvoices);
+    }
+    
+    const result = await this.salesInvoiceModel.getSalesInvoicesPaginated(tenantId, options);
+    
+    return this.sendPaginatedResponse(res, result.data, result.pagination);
   }
 
   async createShareLink(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      
-      const validation = shareInvoiceParamsSchema.safeParse(req.params);
-      
-      if (!validation.success) {
-        return this.sendValidationError(res, validation.error.errors);
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const { id: invoiceId } = this.validateZodSchema(shareInvoiceParamsSchema, req.params);
+    
+    const shareLink = await this.salesInvoiceModel.createShareLink(tenantId, invoiceId);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        shareLink,
+        publicUrl: `${req.protocol}://${req.get('host')}/api/public/invoices/${shareLink.token}`
       }
-
-      const { id: invoiceId } = validation.data;
-      
-      const shareLink = await this.salesInvoiceModel.createShareLink(tenantId, invoiceId);
-      
-      res.status(201).json({
-        success: true,
-        data: {
-          shareLink,
-          publicUrl: `${req.protocol}://${req.get('host')}/api/public/invoices/${shareLink.token}`
-        }
-      });
-    } catch (error) {
-      this.handleError(res, error, 'Failed to create share link');
-    }
+    });
   }
 
   async delete(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { id } = req.params;
-      
-      if (!id) {
-        return res.status(400).json({ message: 'Sales invoice ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
 
-      const success = await this.salesInvoiceModel.deleteSalesInvoice(tenantId, id);
-      
-      if (!success) {
-        return this.sendNotFound(res, 'Sales invoice not found');
-      }
+    const { id } = req.params;
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
+    this.validateUUID(id, 'Sales Invoice ID');
 
-      res.status(204).send();
-    } catch (error) {
-      this.handleError(res, error, 'Failed to delete sales invoice');
-    }
+    const success = await this.wrapDatabaseOperation(() =>
+      this.salesInvoiceModel.deleteSalesInvoice(tenantId, id)
+    );
+    
+    if (!success) throw new NotFoundError('Sales invoice not found');
+
+    res.status(204).send();
   }
 }

@@ -19,6 +19,7 @@ import Expenses from "@/pages/expenses";
 import Crates from "@/pages/crates";
 import Stock from "@/pages/stock";
 import Ledgers from "@/pages/ledgers";
+import BankAccounts from "@/pages/bank-accounts";
 import Reports from "@/pages/reports";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
@@ -31,6 +32,7 @@ import { TenantLogin } from "@/components/tenant/tenant-login";
 import { TenantProtectedRoute } from "@/components/tenant/tenant-protected-route";
 import { TenantSlugProvider } from "@/contexts/tenant-slug-context";
 import { NavigationRefreshHandler } from "@/components/NavigationRefreshHandler";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function Router() {
   return (
@@ -157,6 +159,17 @@ function Router() {
         )}
       />
       <Route
+        path="/:slug/bank-accounts"
+        component={(props) => (
+          <TenantSlugProvider slug={props.params.slug}>
+            <TenantProtectedRoute
+              component={BankAccounts}
+              slug={props.params.slug}
+            />
+          </TenantSlugProvider>
+        )}
+      />
+      <Route
         path="/:slug/crates"
         component={(props) => (
           <TenantSlugProvider slug={props.params.slug}>
@@ -239,15 +252,19 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationRefreshHandler />
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary onError={(error, errorInfo) => console.error('App Error:', error, errorInfo)}>
+      <QueryClientProvider client={queryClient}>
+        <NavigationRefreshHandler />
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <ErrorBoundary resetKeys={[window.location.pathname]}>
+              <Router />
+            </ErrorBoundary>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

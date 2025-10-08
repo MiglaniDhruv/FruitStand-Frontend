@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/hooks/use-tenant";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { logApiError, logEventHandlerError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@/lib/permissions";
 import { TenantSettings } from "@shared/schema";
@@ -53,6 +54,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [liveCreditBalance, setLiveCreditBalance] = useState<number | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { toast } = useToast();
   const { tenant, isLoading } = useTenant();
@@ -64,64 +66,138 @@ export default function SettingsPage() {
     setCreditLoading(true);
     try {
       const response = await authenticatedApiRequest("GET", "/api/whatsapp/credits");
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch credit balance`);
+      }
       const result = await response.json();
       if (result.success) {
         setLiveCreditBalance(result.data.balance);
+      } else {
+        throw new Error(result.message || 'Invalid response format');
       }
     } catch (error) {
-      console.error("Failed to fetch credit balance:", error);
+      logApiError(error, '/api/whatsapp/credits', 'GET');
+      toast({
+        title: "Error",
+        description: "Failed to fetch WhatsApp credit balance",
+        variant: "destructive",
+      });
     } finally {
       setCreditLoading(false);
     }
   };
 
-  // Load tenant settings on component mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (!tenant) return;
+  // Load tenant settings function
+  const loadSettings = async () => {
+    if (!tenant) return;
+    
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await authenticatedApiRequest("GET", "/api/tenants/current/settings");
+      const tenantSettings = await response.json();
       
-      setLoading(true);
-      try {
-        const response = await authenticatedApiRequest("GET", "/api/tenants/current/settings");
-        const tenantSettings = await response.json();
-        
-        // Map tenant settings to form state with defaults
+      // Map tenant settings to form state with defaults
+      const mapped = {
+        companyName: tenantSettings.companyName || tenant.name || "",
+        address: tenantSettings.address || "",
+        phone: tenantSettings.phone || "",
+        email: tenantSettings.email || "",
+        commissionRate: tenantSettings.commissionRate || "5",
+        currency: tenantSettings.currency || "INR",
+        dateFormat: tenantSettings.dateFormat || "DD/MM/YYYY",
+        whatsapp: {
+          enabled: tenantSettings.whatsapp?.enabled ?? false,
+          creditBalance: tenantSettings.whatsapp?.creditBalance ?? 0,
+          lowCreditThreshold: tenantSettings.whatsapp?.lowCreditThreshold ?? 50,
+          scheduler: {
+            enabled: tenantSettings.whatsapp?.scheduler?.enabled ?? true,
+            preferredSendHour: tenantSettings.whatsapp?.scheduler?.preferredSendHour ?? 9,
+            reminderFrequency: tenantSettings.whatsapp?.scheduler?.reminderFrequency || 'daily',
+            sendOnWeekends: tenantSettings.whatsApp?.scheduler?.sendOnWeekends ?? true
+          }
+        }
+      };
+      setSettings(mapped);
+      localStorage.setItem('tenantSettings', JSON.stringify(mapped));
+    } catch (error) {
+      logApiError(error, '/api/tenants/current/settings', 'GET');
+      const errorMessage = error instanceof Error ? error.message : "Failed to load settings";
+      setLoadError(errorMessage);
+      
+      // Try to use cached settings first
+      const cached = localStorage.getItem('tenantSettings');
+      if (cached) {
+        try {
+          setSettings(JSON.parse(cached));
+          toast({
+            title: "Using cached settings",
+            description: "Using previously saved settings while offline.",
+            variant: "default",
+          });
+        } catch (cacheError) {
+          // If cached settings are corrupted, fall back to defaults
+          setSettings({
+            companyName: tenant?.name || "",
+            address: "",
+            phone: "",
+            email: "",
+            commissionRate: "5",
+            currency: "INR",
+            dateFormat: "DD/MM/YYYY",
+            whatsapp: {
+              enabled: false,
+              creditBalance: 0,
+              lowCreditThreshold: 50,
+              scheduler: {
+                enabled: true,
+                preferredSendHour: 9,
+                reminderFrequency: 'daily',
+                sendOnWeekends: true
+              }
+            }
+          });
+        }
+      } else {
+        // Set fallback settings if no cache available
         setSettings({
-          companyName: tenantSettings.companyName || tenant.name || "",
-          address: tenantSettings.address || "",
-          phone: tenantSettings.phone || "",
-          email: tenantSettings.email || "",
-          commissionRate: tenantSettings.commissionRate || "5",
-          currency: tenantSettings.currency || "INR",
-          dateFormat: tenantSettings.dateFormat || "DD/MM/YYYY",
+          companyName: tenant?.name || "",
+          address: "",
+          phone: "",
+          email: "",
+          commissionRate: "5",
+          currency: "INR",
+          dateFormat: "DD/MM/YYYY",
           whatsapp: {
-            enabled: tenantSettings.whatsapp?.enabled ?? false,
-            creditBalance: tenantSettings.whatsapp?.creditBalance ?? 0,
-            lowCreditThreshold: tenantSettings.whatsapp?.lowCreditThreshold ?? 50,
+            enabled: false,
+            creditBalance: 0,
+            lowCreditThreshold: 50,
             scheduler: {
-              enabled: tenantSettings.whatsapp?.scheduler?.enabled ?? true,
-              preferredSendHour: tenantSettings.whatsapp?.scheduler?.preferredSendHour ?? 9,
-              reminderFrequency: tenantSettings.whatsapp?.scheduler?.reminderFrequency || 'daily',
-              sendOnWeekends: tenantSettings.whatsapp?.scheduler?.sendOnWeekends ?? true
+              enabled: true,
+              preferredSendHour: 9,
+              reminderFrequency: 'daily',
+              sendOnWeekends: true
             }
           }
         });
-      } catch (error) {
-        console.error("Failed to load settings:", error);
-        toast({
-          title: "Error loading settings",
-          description: "Failed to load organization settings. Using defaults.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
       }
-    };
+      
+      toast({
+        title: "Error loading settings",
+        description: cached ? "Using cached settings due to network error." : "Failed to load organization settings. Using defaults.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Load tenant settings on component mount
+  useEffect(() => {
     if (tenant && !isLoading) {
       loadSettings();
     }
-  }, [tenant, isLoading, toast]);
+  }, [tenant, isLoading]);
 
   // Fetch credit balance when WhatsApp is enabled
   useEffect(() => {
@@ -133,20 +209,41 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Validate required fields
+      if (!settings.companyName?.trim()) {
+        throw new Error('Company name is required');
+      }
+      
+      if (settings.commissionRate && (isNaN(parseFloat(settings.commissionRate)) || parseFloat(settings.commissionRate) < 0)) {
+        throw new Error('Commission rate must be a valid positive number');
+      }
+      
+      // Validate WhatsApp settings
+      if (settings.whatsapp?.enabled && settings.whatsapp.lowCreditThreshold !== undefined) {
+        if (isNaN(settings.whatsapp.lowCreditThreshold) || settings.whatsapp.lowCreditThreshold < 0) {
+          throw new Error('Low credit threshold must be a valid positive number');
+        }
+      }
+      
       // Defense-in-depth: Clone and strip creditBalance before sending
       const payload = JSON.parse(JSON.stringify(settings));
       if (payload.whatsapp) delete payload.whatsapp.creditBalance;
       
-      await authenticatedApiRequest("PUT", "/api/tenants/current/settings", payload);
+      const response = await authenticatedApiRequest("PUT", "/api/tenants/current/settings", payload);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to save settings`);
+      }
+      
       toast({
         title: "Settings saved",
         description: "Organization settings have been updated successfully",
       });
     } catch (error) {
-      console.error("Failed to save settings:", error);
+      logApiError(error, '/api/tenants/current/settings', 'PUT');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save organization settings';
       toast({
         title: "Error saving settings",
-        description: "Failed to save organization settings. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -155,50 +252,111 @@ export default function SettingsPage() {
   };
 
   const handleSettingChange = (key: string, value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    try {
+      if (!key) {
+        throw new Error('Invalid setting key');
+      }
+      setSettings(prev => ({
+        ...prev,
+        [key]: value
+      }));
+    } catch (error) {
+      logEventHandlerError(error, 'handleSettingChange', { key, value });
+      toast({
+        title: "Error",
+        description: "Failed to update setting",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleWhatsAppSettingChange = (key: string, value: any) => {
-    const defaultWhatsApp = {
-      enabled: false,
-      creditBalance: 0,
-      lowCreditThreshold: 50,
-      scheduler: {
-        enabled: true,
-        preferredSendHour: 9,
-        reminderFrequency: 'daily' as const,
-        sendOnWeekends: true
+    try {
+      if (!key) {
+        throw new Error('Invalid WhatsApp setting key');
       }
-    };
+      
+      const defaultWhatsApp = {
+        enabled: false,
+        creditBalance: 0,
+        lowCreditThreshold: 50,
+        scheduler: {
+          enabled: true,
+          preferredSendHour: 9,
+          reminderFrequency: 'daily' as const,
+          sendOnWeekends: true
+        }
+      };
 
-    if (key.startsWith('scheduler.')) {
-      const schedulerKey = key.replace('scheduler.', '');
-      setSettings(prev => ({
-        ...prev,
-        whatsapp: {
-          ...defaultWhatsApp,
-          ...prev.whatsapp,
-          scheduler: {
-            ...defaultWhatsApp.scheduler,
-            ...prev.whatsapp?.scheduler,
-            [schedulerKey]: value
+      // Validate specific values
+      if (key === 'lowCreditThreshold' && (isNaN(value) || value < 0)) {
+        throw new Error('Low credit threshold must be a positive number');
+      }
+      
+      if (key === 'scheduler.preferredSendHour' && (isNaN(value) || value < 0 || value > 23)) {
+        throw new Error('Preferred send hour must be between 0 and 23');
+      }
+
+      if (key.startsWith('scheduler.')) {
+        const schedulerKey = key.replace('scheduler.', '');
+        setSettings(prev => ({
+          ...prev,
+          whatsapp: {
+            ...defaultWhatsApp,
+            ...prev.whatsapp,
+            scheduler: {
+              ...defaultWhatsApp.scheduler,
+              ...prev.whatsapp?.scheduler,
+              [schedulerKey]: value
+            }
           }
-        }
-      }));
-    } else {
-      setSettings(prev => ({
-        ...prev,
-        whatsapp: {
-          ...defaultWhatsApp,
-          ...prev.whatsapp,
-          [key]: value
-        }
-      }));
+        }));
+      } else {
+        setSettings(prev => ({
+          ...prev,
+          whatsapp: {
+            ...defaultWhatsApp,
+            ...prev.whatsapp,
+            [key]: value
+          }
+        }));
+      }
+    } catch (error) {
+      logEventHandlerError(error, 'handleWhatsAppSettingChange', { key, value });
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update WhatsApp setting",
+        variant: "destructive",
+      });
     }
   };
+
+  if (loadError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-semibold text-red-600">Error Loading Settings</h2>
+            <p className="text-gray-600 max-w-md">{loadError}</p>
+            <Button
+              onClick={loadSettings}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                'Retry Loading Settings'
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">
@@ -231,9 +389,14 @@ export default function SettingsPage() {
         {/* Content */}
         <main className="flex-1 overflow-auto p-6 space-y-6">
           {loading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="ml-2">Loading organization settings...</span>
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+              <div className="h-96 bg-gray-200 rounded"></div>
             </div>
           )}
 

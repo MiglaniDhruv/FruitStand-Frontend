@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { insertCrateTransactionSchema } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { CrateModel } from './model';
-import { type AuthenticatedRequest } from '../../types';
+import { type AuthenticatedRequest, ForbiddenError, BadRequestError } from '../../types';
 
 const crateValidation = {
   getCrateTransactionsPaginated: z.object({
@@ -39,87 +39,73 @@ export class CrateController extends BaseController {
   }
 
   async getAll(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      
-      const validation = crateValidation.getCrateTransactionsPaginated.safeParse(req.query);
-      
-      if (!validation.success) {
-        return this.sendValidationError(res, validation.error.errors);
-      }
-
-      const options = validation.data;
-      
-      // Check if this should return all transactions or paginated
-      if (options.paginated !== 'true') {
-        const allTransactions = await this.crateModel.getCrateTransactions(tenantId);
-        return res.json(allTransactions);
-      }
-      
-      const result = await this.crateModel.getCrateTransactionsPaginated(tenantId, options);
-      
-      return res.json({ data: result.data, pagination: result.pagination });
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch crate transactions');
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const validationResult = crateValidation.getCrateTransactionsPaginated.safeParse(req.query);
+    if (!validationResult.success) {
+      throw new BadRequestError('Invalid query parameters');
     }
+    const options = validationResult.data;
+    
+    // Check if this should return all transactions or paginated
+    if (options.paginated !== 'true') {
+      const allTransactions = await this.crateModel.getCrateTransactions(tenantId);
+      return res.json(allTransactions);
+    }
+    
+    const result = await this.crateModel.getCrateTransactionsPaginated(tenantId, options);
+    
+    return this.sendPaginatedResponse(res, result.data, result.pagination);
   }
 
   async getByRetailer(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { retailerId } = req.params;
-      
-      if (!retailerId) {
-        return res.status(400).json({ message: 'Retailer ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const { retailerId } = req.params;
+    this.validateUUID(retailerId, 'Retailer ID');
 
-      const transactions = await this.crateModel.getCrateTransactionsByRetailer(tenantId, retailerId);
-      // Strip retailer and vendor fields to match original response format
-      const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
-      res.json(responseTransactions);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch crate transactions for retailer');
-    }
+    const transactions = await this.crateModel.getCrateTransactionsByRetailer(tenantId, retailerId);
+    // Strip retailer and vendor fields to match original response format
+    const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
+    res.json(responseTransactions);
   }
 
   async getByVendor(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      const { vendorId } = req.params;
-      
-      if (!vendorId) {
-        return res.status(400).json({ message: 'Vendor ID is required' });
-      }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const { vendorId } = req.params;
+    this.validateUUID(vendorId, 'Vendor ID');
 
-      const transactions = await this.crateModel.getCrateTransactionsByVendor(tenantId, vendorId);
-      // Strip retailer and vendor fields to match original response format
-      const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
-      res.json(responseTransactions);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to fetch crate transactions for vendor');
-    }
+    const transactions = await this.crateModel.getCrateTransactionsByVendor(tenantId, vendorId);
+    // Strip retailer and vendor fields to match original response format
+    const responseTransactions = transactions.map(({ retailer, vendor, ...tx }) => tx);
+    res.json(responseTransactions);
   }
 
   async create(req: AuthenticatedRequest, res: Response) {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Inject tenantId into request body before validation
-      const validation = insertCrateTransactionSchema.safeParse({ ...req.body, tenantId });
-      
-      if (!validation.success) {
-        return this.sendValidationError(res, validation.error.errors);
-      }
-
-      const transactionData = validation.data;
-      
-      const transaction = await this.crateModel.createCrateTransaction(tenantId, transactionData);
-      
-      // Strip retailer and vendor fields to match original response format
-      const { retailer, vendor, ...responseTx } = transaction;
-      res.status(201).json(responseTx);
-    } catch (error) {
-      this.handleError(res, error, 'Failed to create crate transaction');
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Inject tenantId into request body before validation
+    const validatedData = this.validateZodSchema(insertCrateTransactionSchema, { ...req.body, tenantId });
+    
+    // Ensure transactionDate is a Date object
+    const transactionData = {
+      ...validatedData,
+      transactionDate: typeof validatedData.transactionDate === 'string' 
+        ? new Date(validatedData.transactionDate) 
+        : validatedData.transactionDate
+    };
+    
+    const transaction = await this.wrapDatabaseOperation(() =>
+      this.crateModel.createCrateTransaction(tenantId, transactionData)
+    );
+    
+    // Strip retailer and vendor fields to match original response format
+    const { retailer, vendor, ...responseTx } = transaction;
+    res.status(201).json(responseTx);
   }
 }

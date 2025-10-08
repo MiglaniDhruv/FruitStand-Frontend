@@ -45,9 +45,11 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
-import { Info, AlertCircle, Loader2 } from "lucide-react";
+import { Info, AlertCircle, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert as AlertComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
 import { InsertVendorPayment, VendorPaymentDistributionResult, PurchaseInvoice } from "@shared/schema";
 
 const vendorPaymentFormSchema = z.object({
@@ -89,6 +91,8 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   const [outstandingInvoices, setOutstandingInvoices] = useState<PurchaseInvoice[]>([]);
   const [distributionPreview, setDistributionPreview] = useState<Array<{ invoice: PurchaseInvoice; allocatedAmount: number }>>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [distributionError, setDistributionError] = useState<string | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -137,49 +141,69 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
 
   // Calculate distribution preview
   useEffect(() => {
-    const paymentAmount = parseFloat(amount || '0');
-    
-    if (paymentAmount > 0 && outstandingInvoices.length > 0) {
-      let remainingAmount = paymentAmount;
-      const preview: Array<{ invoice: PurchaseInvoice; allocatedAmount: number }> = [];
+    try {
+      setDistributionError(null);
+      const paymentAmount = parseFloat(amount || '0');
       
-      for (const invoice of outstandingInvoices) {
-        if (remainingAmount <= 0) break;
-        
-        const invoiceBalance = parseFloat(invoice.balanceAmount);
-        const allocation = Math.min(remainingAmount, invoiceBalance);
-        
-        preview.push({
-          invoice,
-          allocatedAmount: allocation
-        });
-        
-        remainingAmount -= allocation;
+      if (isNaN(paymentAmount)) {
+        throw new Error('Invalid payment amount');
       }
       
-      setDistributionPreview(preview);
-      setShowPreview(true);
-    } else {
+      if (paymentAmount > 0 && outstandingInvoices.length > 0) {
+        let remainingAmount = paymentAmount;
+        const preview: Array<{ invoice: PurchaseInvoice; allocatedAmount: number }> = [];
+        
+        for (const invoice of outstandingInvoices) {
+          if (remainingAmount <= 0) break;
+          
+          const invoiceBalance = parseFloat(invoice.balanceAmount);
+          if (isNaN(invoiceBalance)) {
+            throw new Error(`Invalid balance amount for invoice ${invoice.id}`);
+          }
+          const allocation = Math.min(remainingAmount, invoiceBalance);
+          
+          preview.push({
+            invoice,
+            allocatedAmount: allocation
+          });
+          
+          remainingAmount -= allocation;
+        }
+        
+        setDistributionPreview(preview);
+        setShowPreview(true);
+      } else {
+        setShowPreview(false);
+        setDistributionPreview([]);
+      }
+    } catch (error) {
+      console.error('Distribution calculation error:', error);
+      setDistributionError('Error calculating payment distribution');
       setShowPreview(false);
-      setDistributionPreview([]);
     }
   }, [amount, outstandingInvoices]);
 
   // Reset form and preview state when modal is closed
   useEffect(() => {
     if (!open) {
-      form.reset({
-        amount: "",
-        paymentMode: 'Cash',
-        paymentDate: new Date().toISOString().split('T')[0],
-        bankAccountId: "",
-        chequeNumber: "",
-        upiReference: "",
-        notes: "",
-      });
-      setOutstandingInvoices([]);
-      setDistributionPreview([]);
-      setShowPreview(false);
+      try {
+        setSubmissionError(null);
+        setDistributionError(null);
+        form.reset({
+          amount: "",
+          paymentMode: 'Cash',
+          paymentDate: new Date().toISOString().split('T')[0],
+          bankAccountId: "",
+          chequeNumber: "",
+          upiReference: "",
+          notes: "",
+        });
+        setOutstandingInvoices([]);
+        setDistributionPreview([]);
+        setShowPreview(false);
+      } catch (error) {
+        console.error('Error resetting form:', error);
+      }
     }
   }, [open, form]);
 
@@ -201,6 +225,8 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
       return response.json();
     },
     onSuccess: (result) => {
+      setSubmissionError(null);
+      setDistributionError(null);
       toast({
         title: "Payment Recorded",
         description: `Payment recorded and distributed across ${result.invoicesUpdated.length} invoice(s)`,
@@ -216,16 +242,53 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
       form.reset();
     },
     onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message : "Failed to record payment";
+      setSubmissionError(errorMessage);
+      console.error('Payment submission error:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to record payment",
+        description: errorMessage,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: VendorPaymentFormData) => {
-    mutation.mutate(data);
+  const onSubmit = async (data: VendorPaymentFormData) => {
+    try {
+      setSubmissionError(null);
+      
+      // Validate payment amount
+      const paymentAmount = parseFloat(data.amount);
+      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        throw new Error('Invalid payment amount');
+      }
+      
+      // Validate outstanding invoices
+      if (outstandingInvoices.length === 0) {
+        throw new Error('No outstanding invoices found for this vendor');
+      }
+      
+      // Validate payment mode specific fields
+      if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+        throw new Error('Bank account is required for bank transfers');
+      }
+      if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
+        throw new Error('Cheque number is required');
+      }
+      if (data.paymentMode === 'UPI' && !data.upiReference) {
+        throw new Error('UPI reference is required');
+      }
+      
+      mutation.mutate(data);
+    } catch (error) {
+      console.error('Payment submission error:', error);
+      setSubmissionError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      toast({
+        title: "Submission Error",
+        description: error instanceof Error ? error.message : "Failed to record payment. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const totalOutstanding = outstandingInvoices.reduce((sum, invoice) => sum + parseFloat(invoice.balanceAmount), 0);
@@ -236,9 +299,31 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Record Payment - {vendorName || 'Vendor'}</DialogTitle>
-        </DialogHeader>
+        <ErrorBoundary 
+          resetKeys={[open ? 1 : 0, vendorId]}
+          fallback={({ error, resetError }) => (
+            <div className="p-4">
+              <AlertComponent variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Failed to load form</AlertTitle>
+                <AlertDescriptionComponent className="mt-2 space-y-2">
+                  <p>An error occurred while loading the vendor payment form.</p>
+                  <div className="flex gap-2">
+                    <Button onClick={resetError} size="sm">
+                      Try Again
+                    </Button>
+                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
+                      Close
+                    </Button>
+                  </div>
+                </AlertDescriptionComponent>
+              </AlertComponent>
+            </div>
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle>Record Payment - {vendorName || 'Vendor'}</DialogTitle>
+          </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -476,6 +561,40 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
               </Card>
             ) : null}
 
+            {submissionError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescriptionComponent>
+                  {submissionError}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                    onClick={() => setSubmissionError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </AlertDescriptionComponent>
+              </Alert>
+            )}
+
+            {distributionError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescriptionComponent>
+                  {distributionError}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                    onClick={() => setDistributionError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </AlertDescriptionComponent>
+              </Alert>
+            )}
+
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
@@ -502,6 +621,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
             </div>
           </form>
         </Form>
+        </ErrorBoundary>
       </DialogContent>
     </Dialog>
   );

@@ -34,6 +34,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { logEventHandlerError, logMutationError, logFormError } from "@/lib/error-logger";
 import { z } from "zod";
 import { 
   Plus, 
@@ -196,6 +197,7 @@ export default function ExpenseManagement() {
       expenseForm.reset();
     },
     onError: (error) => {
+      logMutationError(error, 'createExpense');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to add expense",
@@ -220,6 +222,7 @@ export default function ExpenseManagement() {
       categoryForm.reset();
     },
     onError: (error) => {
+      logMutationError(error, 'createExpenseCategory');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create category",
@@ -244,6 +247,7 @@ export default function ExpenseManagement() {
       categoryForm.reset();
     },
     onError: (error) => {
+      logMutationError(error, 'updateExpenseCategory');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update category",
@@ -264,6 +268,7 @@ export default function ExpenseManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/expense-categories"] });
     },
     onError: (error) => {
+      logMutationError(error, 'deleteExpenseCategory');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete category",
@@ -273,69 +278,157 @@ export default function ExpenseManagement() {
   });
 
   const handleCreateExpense = () => {
-    setEditingExpense(null);
-    expenseForm.reset({
-      categoryId: "",
-      description: "",
-      amount: 0,
-      paymentDate: format(new Date(), "yyyy-MM-dd"),
-      paymentMode: "Cash",
-      bankAccountId: "",
-      notes: "",
-    });
-    setExpenseDialogOpen(true);
-  };
-
-  const handleCreateCategory = () => {
-    setEditingCategory(null);
-    categoryForm.reset();
-    setCategoryDialogOpen(true);
-  };
-
-  const handleEditCategory = (category: any) => {
-    setEditingCategory(category);
-    categoryForm.reset({
-      name: category.name,
-      description: category.description || "",
-    });
-    setCategoryDialogOpen(true);
-  };
-
-  const handleDeleteCategory = (id: string) => {
-    if (confirm("Are you sure you want to delete this category? This action cannot be undone.")) {
-      deleteCategoryMutation.mutate(id);
+    try {
+      setEditingExpense(null);
+      expenseForm.reset({
+        categoryId: "",
+        description: "",
+        amount: 0,
+        paymentDate: format(new Date(), "yyyy-MM-dd"),
+        paymentMode: "Cash",
+        bankAccountId: "",
+        notes: "",
+      });
+      setExpenseDialogOpen(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleCreateExpense');
+      toast({
+        title: "Error",
+        description: "Failed to open new expense form",
+        variant: "destructive",
+      });
     }
   };
 
-  const onSubmitExpense = (data: ExpenseFormData) => {
-    createExpenseMutation.mutate(data);
+  const handleCreateCategory = () => {
+    try {
+      setEditingCategory(null);
+      categoryForm.reset();
+      setCategoryDialogOpen(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleCreateCategory');
+      toast({
+        title: "Error",
+        description: "Failed to open new category form",
+        variant: "destructive",
+      });
+    }
   };
 
-  const onSubmitCategory = (data: ExpenseCategoryFormData) => {
-    if (editingCategory) {
-      updateCategoryMutation.mutate({ id: editingCategory.id, data });
-    } else {
-      createCategoryMutation.mutate(data);
+  const handleEditCategory = (category: any) => {
+    try {
+      if (!category) {
+        throw new Error('Invalid category data');
+      }
+      setEditingCategory(category);
+      categoryForm.reset({
+        name: category.name,
+        description: category.description || "",
+      });
+      setCategoryDialogOpen(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleEditCategory', { categoryId: category?.id });
+      toast({
+        title: "Error",
+        description: "Failed to open category for editing",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      if (!id) {
+        throw new Error('Invalid category ID');
+      }
+      
+      if (confirm("Are you sure you want to delete this category? This action cannot be undone.")) {
+        await deleteCategoryMutation.mutateAsync(id);
+      }
+    } catch (error) {
+      logEventHandlerError(error, 'handleDeleteCategory', { categoryId: id });
+      toast({
+        title: "Error",
+        description: "Failed to delete category",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onSubmitExpense = async (data: ExpenseFormData) => {
+    try {
+      if (!data || !data.categoryId || !data.description || data.amount <= 0) {
+        throw new Error('Invalid expense data');
+      }
+      await createExpenseMutation.mutateAsync(data);
+    } catch (error) {
+      logFormError(error, 'expenseForm', data);
+      toast({
+        title: "Error",
+        description: "Failed to submit expense",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onSubmitCategory = async (data: ExpenseCategoryFormData) => {
+    try {
+      if (!data || !data.name?.trim()) {
+        throw new Error('Invalid category data');
+      }
+      
+      if (editingCategory) {
+        if (!editingCategory.id) {
+          throw new Error('Invalid category ID for update');
+        }
+        await updateCategoryMutation.mutateAsync({ id: editingCategory.id, data });
+      } else {
+        await createCategoryMutation.mutateAsync(data);
+      }
+    } catch (error) {
+      logFormError(error, 'expenseCategoryForm', data);
+      toast({
+        title: "Error",
+        description: "Failed to submit category",
+        variant: "destructive",
+      });
     }
   };
 
   const getCategoryName = (categoryId: string) => {
-    const category = categories.find((c: any) => c.id === categoryId);
-    return category?.name || "Unknown Category";
+    try {
+      if (!categoryId || !categories) {
+        return "Unknown Category";
+      }
+      const category = categories.find((c: any) => c.id === categoryId);
+      return category?.name || "Unknown Category";
+    } catch (error) {
+      logEventHandlerError(error, 'getCategoryName', { categoryId });
+      return "Error Loading Category";
+    }
   };
 
   const getPaymentModeColor = (mode: string) => {
-    switch (mode) {
-      case "Cash":
-        return "bg-green-500";
-      case "Bank":
-        return "bg-blue-500";
-      case "UPI":
-        return "bg-purple-500";
-      case "Card":
-        return "bg-orange-500";
-      default:
+    try {
+      if (!mode) {
         return "bg-gray-500";
+      }
+      
+      switch (mode) {
+        case "Cash":
+          return "bg-green-500";
+        case "Bank":
+          return "bg-blue-500";
+        case "UPI":
+          return "bg-purple-500";
+        case "Card":
+          return "bg-orange-500";
+        default:
+          return "bg-gray-500";
+      }
+    } catch (error) {
+      logEventHandlerError(error, 'getPaymentModeColor', { mode });
+      return "bg-gray-500"; // Safe default
     }
   };
 

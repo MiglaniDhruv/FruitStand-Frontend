@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
@@ -29,6 +29,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -53,6 +56,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!item;
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const form = useForm<ItemFormData>({
     resolver: zodResolver(itemSchema),
@@ -67,17 +71,33 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
 
   // Reset form when item changes (for switching between create/edit modes)
   React.useEffect(() => {
-    form.reset({
-      name: item?.name || "",
-      quality: item?.quality || "",
-      unit: item?.unit || "crate",
-      vendorId: item?.vendorId || "",
-      isActive: item?.isActive ?? true,
-    });
+    try {
+      setSubmissionError(null);
+      form.reset({
+        name: item?.name || "",
+        quality: item?.quality || "",
+        unit: item?.unit || "crate",
+        vendorId: item?.vendorId || "",
+        isActive: item?.isActive ?? true,
+      });
+    } catch (error) {
+      console.error('Form reset error:', error);
+    }
   }, [item, form]);
 
-  const { data: vendors } = useQuery<any[]>({
+  // Clear submission error when dialog closes
+  React.useEffect(() => {
+    if (!open) {
+      setSubmissionError(null);
+    }
+  }, [open]);
+
+  const { data: vendors, isError: vendorsError, error: vendorsErrorMessage } = useQuery<any[]>({
     queryKey: ["/api/vendors"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest('GET', '/api/vendors');
+      return response.json();
+    },
   });
 
   const mutation = useMutation({
@@ -88,6 +108,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
       return response.json();
     },
     onSuccess: () => {
+      setSubmissionError(null);
       toast({
         title: isEditing ? "Item updated" : "Item created",
         description: `Item has been ${isEditing ? "updated" : "created"} successfully`,
@@ -97,24 +118,60 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
       form.reset();
     },
     onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message : `Failed to ${isEditing ? "update" : "create"} item`;
+      setSubmissionError(errorMessage);
+      console.error('Mutation error:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : `Failed to ${isEditing ? "update" : "create"} item`,
+        description: errorMessage,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: ItemFormData) => {
-    mutation.mutate(data);
+  const onSubmit = async (data: ItemFormData) => {
+    try {
+      setSubmissionError(null);
+      mutation.mutate(data);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      setSubmissionError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      toast({
+        title: "Submission Error",
+        description: "Failed to submit form. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Item" : "Add New Item"}</DialogTitle>
-        </DialogHeader>
+        <ErrorBoundary 
+          resetKeys={[open, item?.id]}
+          fallback={({ error, resetError }) => (
+            <div className="p-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Failed to load form</AlertTitle>
+                <AlertDescription className="mt-2 space-y-2">
+                  <p>An error occurred while loading the item form.</p>
+                  <div className="flex gap-2">
+                    <Button onClick={resetError} size="sm">
+                      Try Again
+                    </Button>
+                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
+                      Close
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle>{isEditing ? "Edit Item" : "Add New Item"}</DialogTitle>
+          </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -183,11 +240,13 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {vendors?.map((vendor: any) => (
-                          <SelectItem key={vendor.id} value={vendor.id}>
-                            {vendor.name}
+                        {vendors && Array.isArray(vendors) ? vendors.map((vendor: any) => (
+                          <SelectItem key={vendor?.id || ''} value={vendor?.id || ''}>
+                            {vendor?.name || 'Unknown Vendor'}
                           </SelectItem>
-                        ))}
+                        )) : (
+                          <SelectItem value="" disabled>No vendors available</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -218,6 +277,31 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
               />
             </div>
 
+            {vendorsError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Warning: Failed to load vendors. You may need to enter vendor information manually.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {submissionError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{submissionError}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSubmissionError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
@@ -237,6 +321,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
             </div>
           </form>
         </Form>
+        </ErrorBoundary>
       </DialogContent>
     </Dialog>
   );

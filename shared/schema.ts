@@ -639,7 +639,24 @@ export const insertItemSchema = createInsertSchema(items, {
   createdAt: true,
 });
 
-export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({
+export const insertBankAccountSchema = createInsertSchema(bankAccounts, {
+  balance: z.string().transform((val) => {
+    const balanceValue = (val || "0.00").trim();
+    const balanceNum = parseFloat(balanceValue);
+    return balanceNum.toFixed(2);
+  }).refine((val) => {
+    const balanceNum = parseFloat(val);
+    return !isNaN(balanceNum) && balanceNum >= 0;
+  }, "Balance must be a valid non-negative number")
+}).omit({
+  id: true,
+  createdAt: true,
+}).transform((data) => ({
+  ...data,
+  balance: data.balance || "0.00"
+}));
+
+export const updateBankAccountSchema = createInsertSchema(bankAccounts).omit({
   id: true,
   balance: true,
   createdAt: true,
@@ -1020,6 +1037,7 @@ export interface PaginationOptions {
   sortBy?: string;
   sortOrder?: SortOrder;
   status?: string; // Add this line: 'active', 'inactive', or 'all'
+  isActive?: string; // Add this line: 'true', 'false', or undefined for all items
 }
 
 export interface PaginationMetadata {

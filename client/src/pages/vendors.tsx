@@ -19,6 +19,7 @@ import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
+import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
 
@@ -39,7 +40,7 @@ export default function Vendors() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: vendorsResult, isLoading } = useQuery<PaginatedResult<Vendor>>({
+  const { data: vendorsResult, isLoading, isError, error } = useQuery<PaginatedResult<Vendor>>({
     queryKey: ["/api/vendors", paginationOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -68,6 +69,7 @@ export default function Vendors() {
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
     },
     onError: (error) => {
+      logMutationError(error, 'deleteVendor');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete vendor",
@@ -160,6 +162,7 @@ export default function Vendors() {
             size="icon"
             onClick={() => handleDelete(vendor.id)}
             data-testid={`button-delete-vendor-${vendor.id}`}
+            disabled={deleteVendorMutation.isPending}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -169,30 +172,117 @@ export default function Vendors() {
   ];
 
   const handleEdit = (vendor: any) => {
-    setEditingVendor(vendor);
-    setShowForm(true);
+    try {
+      if (!vendor) {
+        throw new Error('Invalid vendor data');
+      }
+      setEditingVendor(vendor);
+      setShowForm(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleEdit', { vendorId: vendor?.id });
+      toast({
+        title: "Error",
+        description: "Failed to open vendor for editing",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this vendor?")) {
-      deleteVendorMutation.mutate(id);
+    try {
+      if (!id) {
+        throw new Error('Invalid vendor ID');
+      }
+      
+      if (confirm("Are you sure you want to delete this vendor?")) {
+        await deleteVendorMutation.mutateAsync(id);
+      }
+    } catch (error) {
+      logEventHandlerError(error, 'handleDelete', { vendorId: id });
+      toast({
+        title: "Error",
+        description: "Failed to delete vendor",
+        variant: "destructive",
+      });
     }
   };
 
   const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingVendor(null);
+    try {
+      setShowForm(false);
+      setEditingVendor(null);
+    } catch (error) {
+      logEventHandlerError(error, 'handleCloseForm');
+      toast({
+        title: "Error",
+        description: "Failed to close form",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRecordPayment = (vendor: any) => {
-    setSelectedVendorForPayment(vendor);
-    setShowVendorPaymentModal(true);
+    try {
+      if (!vendor || !vendor.id) {
+        throw new Error('Invalid vendor data for payment');
+      }
+      setSelectedVendorForPayment(vendor);
+      setShowVendorPaymentModal(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleRecordPayment', { vendorId: vendor?.id });
+      toast({
+        title: "Error",
+        description: "Failed to open payment form",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCloseVendorPaymentModal = () => {
     setShowVendorPaymentModal(false);
     setSelectedVendorForPayment(null);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+            <div className="h-96 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-semibold text-red-600">Error Loading Vendors</h2>
+            <p className="text-gray-600 max-w-md">
+              {error instanceof Error ? error.message : "Failed to load vendors. Please try again."}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">
