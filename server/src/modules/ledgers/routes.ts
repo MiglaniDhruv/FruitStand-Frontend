@@ -59,5 +59,13 @@ export class LedgerRouter extends BaseRouter {
       attachTenantContext,
       this.ledgerController.getCrateLedger.bind(this.ledgerController)
     );
+
+    // GET /ledgers/cashbook/status - Get cashbook status
+    this.router.get('/ledgers/cashbook/status', 
+      authenticateToken, 
+      validateTenant,
+      attachTenantContext,
+      this.ledgerController.getCashbookStatus.bind(this.ledgerController)
+    );
   }
 }

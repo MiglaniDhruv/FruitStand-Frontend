@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import { salesPayments, salesInvoices, retailers, bankAccounts, cashbook, bankbook, type SalesPayment, type InsertSalesPayment, type SalesPaymentWithDetails, type SalesInvoice, type RetailerPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { BankAccountModel } from '../bank-accounts/model';
+import { TenantModel } from '../tenants/model';
 
 export class SalesPaymentModel {
   async getSalesPayments(tenantId: string, includeDetails: boolean = false): Promise<SalesPayment[] | SalesPaymentWithDetails[]> {
@@ -47,7 +48,7 @@ export class SalesPaymentModel {
           ...payment,
           invoice,
           retailer,
-          bankAccount: payment.bankAccountId ? bankAccountMap.get(payment.bankAccountId) : undefined
+          bankAccount: payment.bankAccountId ? (bankAccountMap.get(payment.bankAccountId) || null) : null
         };
       })
       .filter(payment => payment !== null) as SalesPaymentWithDetails[];
@@ -101,7 +102,7 @@ export class SalesPaymentModel {
           ...payment,
           invoice,
           retailer,
-          bankAccount: payment.bankAccountId ? bankAccountMap.get(payment.bankAccountId) : undefined
+          bankAccount: payment.bankAccountId ? (bankAccountMap.get(payment.bankAccountId) || null) : null
         };
       })
       .filter(payment => payment !== null) as SalesPaymentWithDetails[];
@@ -110,32 +111,159 @@ export class SalesPaymentModel {
   }
 
   async createSalesPayment(tenantId: string, paymentData: InsertSalesPayment): Promise<SalesPaymentWithDetails> {
-    const paymentWithTenant = ensureTenantInsert(paymentData, tenantId);
-    const [payment] = await db.insert(salesPayments).values(paymentWithTenant).returning();
-
-    // Get related data with tenant filtering
-    const [invoice, retailer, bankAccount] = await Promise.all([
-      db.select().from(salesInvoices).where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, payment.invoiceId))).then(result => result[0]),
-      db.select().from(retailers).where(withTenant(retailers, tenantId, eq(retailers.id, payment.retailerId))).then(result => result[0]),
-      payment.bankAccountId ? 
-        db.select().from(bankAccounts).where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, payment.bankAccountId))).then(result => result[0]) : 
-        undefined
-    ]);
-
-    if (!invoice) {
-      throw new Error('Invoice not found');
+    // Validate bankAccountId for non-cash payments
+    if (['Bank', 'UPI', 'Cheque'].includes(paymentData.paymentMode) && !paymentData.bankAccountId) {
+      throw new Error('bankAccountId is required for non-cash payments');
     }
+    
+    return await db.transaction(async (tx) => {
+      const paymentWithTenant = ensureTenantInsert(paymentData, tenantId);
+      const [payment] = await tx.insert(salesPayments).values(paymentWithTenant).returning();
 
-    if (!retailer) {
-      throw new Error('Retailer not found');
-    }
+      // Fetch and validate related entities with tenant filtering
+      const [invoice] = await tx.select().from(salesInvoices)
+        .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, payment.invoiceId)));
+      
+      const [retailer] = await tx.select().from(retailers)
+        .where(withTenant(retailers, tenantId, eq(retailers.id, payment.retailerId)));
 
-    return {
-      ...payment,
-      invoice,
-      retailer,
-      bankAccount
-    };
+      if (!invoice) {
+        throw new Error('Invoice not found');
+      }
+
+      if (!retailer) {
+        throw new Error('Retailer not found');
+      }
+
+      // Update invoice amounts and status
+      const paymentAmount = parseFloat(payment.amount);
+      const currentPaidAmount = parseFloat(invoice.paidAmount || '0');
+      const totalAmount = parseFloat(invoice.totalAmount);
+      const newPaidAmount = currentPaidAmount + paymentAmount;
+      const newUdhaaarAmount = totalAmount - newPaidAmount;
+      
+      // Calculate shortfall using corrected logic
+      let shortfallAmount = 0;
+      const epsilon = 0.005;
+      let newStatus = 'Unpaid';
+      
+      if (Math.abs(newUdhaaarAmount) < epsilon) {
+        newStatus = 'Paid';
+        const calculatedShortfall = totalAmount - newPaidAmount;
+        if (calculatedShortfall > epsilon) {
+          shortfallAmount = calculatedShortfall;
+        }
+      } else if (newPaidAmount > epsilon) {
+        newStatus = 'Partially Paid';
+      }
+      
+      const prevShortfall = parseFloat(invoice.shortfallAmount || '0');
+      let newShortfallAmount = prevShortfall;
+      if (shortfallAmount > epsilon) {
+        newShortfallAmount = shortfallAmount;
+      }
+      
+      await tx.update(salesInvoices)
+        .set({
+          paidAmount: newPaidAmount.toFixed(2),
+          udhaaarAmount: Math.max(0, newUdhaaarAmount).toFixed(2),
+          shortfallAmount: newShortfallAmount.toFixed(2),
+          status: newStatus
+        })
+        .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, payment.invoiceId)));
+      
+      // Update retailer balances
+      const currentRetailerBalance = parseFloat(retailer.balance || '0');
+      const currentUdhaaarBalance = parseFloat(retailer.udhaaarBalance || '0');
+      const currentShortfallBalance = parseFloat(retailer.shortfallBalance || '0');
+      
+      const newRetailerBalance = currentRetailerBalance - paymentAmount;
+      const newUdhaaarBalance = Math.max(0, currentUdhaaarBalance - paymentAmount);
+      const newShortfallBalance = currentShortfallBalance + shortfallAmount;
+      
+      await tx.update(retailers)
+        .set({ 
+          balance: newRetailerBalance.toFixed(2),
+          udhaaarBalance: newUdhaaarBalance.toFixed(2),
+          shortfallBalance: newShortfallBalance.toFixed(2)
+        })
+        .where(withTenant(retailers, tenantId, eq(retailers.id, payment.retailerId)));
+      
+      // Create cashbook entry for Cash payments
+      if (payment.paymentMode === 'Cash') {
+        const lastCashEntry = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(desc(cashbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
+        const newBalance = currentBalance + paymentAmount;
+
+        await tx.insert(cashbook).values(ensureTenantInsert({
+          date: payment.paymentDate,
+          description: `Retailer Payment - ${retailer.name}`,
+          inflow: paymentAmount.toFixed(2),
+          outflow: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Sales Payment',
+          referenceId: payment.id,
+        }, tenantId));
+
+        // Update tenant cash balance
+        await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
+      }
+      
+      // Create bankbook entry for Bank/UPI/Cheque payments
+      else if ((payment.paymentMode === 'Bank' || payment.paymentMode === 'UPI' || payment.paymentMode === 'Cheque') && payment.bankAccountId) {
+        const lastBankEntry = await tx.select().from(bankbook)
+          .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, payment.bankAccountId)))
+          .orderBy(desc(bankbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+        const newBalance = currentBalance + paymentAmount;
+
+        await tx.insert(bankbook).values(ensureTenantInsert({
+          bankAccountId: payment.bankAccountId,
+          date: payment.paymentDate,
+          description: `Retailer Payment - ${retailer.name}`,
+          debit: paymentAmount.toFixed(2),
+          credit: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Sales Payment',
+          referenceId: payment.id,
+        }, tenantId));
+
+        // Update bank account balance
+        await BankAccountModel.setBankAccountBalance(tx, tenantId, payment.bankAccountId, newBalance.toFixed(2));
+      }
+      
+      // Fetch bank account data for response
+      let bankAccount = null;
+      if (payment.bankAccountId) {
+        const [bankAccountData] = await tx.select().from(bankAccounts)
+          .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, payment.bankAccountId)));
+        bankAccount = bankAccountData || null;
+      }
+      
+      // Return payment with related data
+      const updatedInvoice = {
+        ...invoice,
+        paidAmount: newPaidAmount.toFixed(2),
+        udhaaarAmount: Math.max(0, newUdhaaarAmount).toFixed(2),
+        shortfallAmount: newShortfallAmount.toFixed(2),
+        status: newStatus,
+      };
+      
+      return {
+        ...payment,
+        invoice: updatedInvoice,
+        retailer,
+        bankAccount: bankAccount || undefined
+      };
+    });
   }
 
   async recordRetailerPayment(
@@ -264,8 +392,9 @@ export class SalesPaymentModel {
           // Get current cashbook balance
           const lastCashEntry = await tx.select().from(cashbook)
             .where(withTenant(cashbook, tenantId))
-            .orderBy(desc(cashbook.createdAt))
-            .limit(1);
+            .orderBy(desc(cashbook.id))
+            .limit(1)
+            .for('update');
 
           const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
           const newBalance = currentBalance + (distributedAmount - remainingPaymentAmount);
@@ -279,6 +408,9 @@ export class SalesPaymentModel {
             referenceType: 'Sales Payment',
             referenceId: paymentsCreated[0].id,
           }, tenantId));
+
+          // Update tenant cash balance
+          await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
         } else if (paymentData.paymentMode === 'Bank' && paymentData.bankAccountId) {
           // Get current bank balance
           const lastBankEntry = await tx.select().from(bankbook)

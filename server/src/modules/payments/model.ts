@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import { payments, purchaseInvoices, vendors, bankAccounts, cashbook, bankbook, type Payment, type InsertPayment, type PaymentWithDetails, type PurchaseInvoice, type VendorPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { BankAccountModel } from '../bank-accounts/model';
+import { TenantModel } from '../tenants/model';
 
 export class PaymentModel {
   async getPayments(tenantId: string): Promise<PaymentWithDetails[]> {
@@ -50,7 +51,7 @@ export class PaymentModel {
           ...payment,
           invoice,
           vendor,
-          bankAccount: payment.bankAccountId ? (bankAccountMap.get(payment.bankAccountId) || null) : null
+          bankAccount: payment.bankAccountId ? bankAccountMap.get(payment.bankAccountId) : undefined
         };
       })
       .filter(payment => payment !== null) as PaymentWithDetails[];
@@ -103,7 +104,7 @@ export class PaymentModel {
           ...payment,
           invoice,
           vendor,
-          bankAccount: payment.bankAccountId ? (bankAccountMap.get(payment.bankAccountId) || null) : null
+          bankAccount: payment.bankAccountId ? bankAccountMap.get(payment.bankAccountId) : undefined
         };
       })
       .filter(payment => payment !== null) as PaymentWithDetails[];
@@ -112,37 +113,133 @@ export class PaymentModel {
   }
 
   async createPayment(tenantId: string, paymentData: InsertPayment): Promise<PaymentWithDetails> {
-    const paymentWithTenant = ensureTenantInsert(paymentData, tenantId);
-    const [payment] = await db.insert(payments).values(paymentWithTenant).returning();
-    
-    // Fetch related data for response with tenant filtering
-    const [invoice] = await db.select().from(purchaseInvoices)
-      .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, payment.invoiceId)));
-    
-    const [vendor] = await db.select().from(vendors)
-      .where(withTenant(vendors, tenantId, eq(vendors.id, payment.vendorId)));
-    
-    if (!invoice) {
-      throw new Error('Payment invoice not found');
+    // Validate bankAccountId for non-cash payments
+    if (['Bank', 'UPI', 'Cheque'].includes(paymentData.paymentMode) && !paymentData.bankAccountId) {
+      throw new Error('bankAccountId is required for non-cash payments');
     }
     
-    if (!vendor) {
-      throw new Error('Payment vendor not found');
-    }
-    
-    let bankAccount = null;
-    if (payment.bankAccountId) {
-      const [bankAccountData] = await db.select().from(bankAccounts)
-        .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, payment.bankAccountId)));
-      bankAccount = bankAccountData || null;
-    }
-    
-    return {
-      ...payment,
-      invoice,
-      vendor,
-      bankAccount: bankAccount || undefined
-    };
+    return await db.transaction(async (tx) => {
+      const paymentWithTenant = ensureTenantInsert(paymentData, tenantId);
+      const [payment] = await tx.insert(payments).values(paymentWithTenant).returning();
+      
+      // Fetch and validate related entities with tenant filtering
+      const [invoice] = await tx.select().from(purchaseInvoices)
+        .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, payment.invoiceId)));
+      
+      const [vendor] = await tx.select().from(vendors)
+        .where(withTenant(vendors, tenantId, eq(vendors.id, payment.vendorId)));
+      
+      if (!invoice) {
+        throw new Error('Payment invoice not found');
+      }
+      
+      if (!vendor) {
+        throw new Error('Payment vendor not found');
+      }
+      
+      // Update invoice amounts and status with overpayment protection
+      const paymentAmount = parseFloat(payment.amount);
+      const currentPaidAmount = parseFloat(invoice.paidAmount || '0');
+      const totalAmount = parseFloat(invoice.netAmount);
+      const currentInvoiceBalance = totalAmount - currentPaidAmount;
+      const appliedAmount = Math.min(paymentAmount, currentInvoiceBalance);
+      
+      const newPaidAmount = currentPaidAmount + appliedAmount;
+      const newBalanceAmount = Math.max(0, totalAmount - newPaidAmount);
+      
+      // Determine status using epsilon threshold for floating-point precision
+      const epsilon = 0.005;
+      let newStatus = 'Unpaid';
+      if (newBalanceAmount <= epsilon) {
+        newStatus = 'Paid';
+      } else if (newPaidAmount > epsilon) {
+        newStatus = 'Partially Paid';
+      }
+      
+      await tx.update(purchaseInvoices)
+        .set({
+          paidAmount: newPaidAmount.toFixed(2),
+          balanceAmount: newBalanceAmount.toFixed(2),
+          status: newStatus
+        })
+        .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, payment.invoiceId)));
+      
+      // Update vendor balance using applied amount
+      const currentVendorBalance = parseFloat(vendor.balance || '0');
+      const newVendorBalance = currentVendorBalance - appliedAmount;
+      await tx.update(vendors)
+        .set({ balance: newVendorBalance.toFixed(2) })
+        .where(withTenant(vendors, tenantId, eq(vendors.id, payment.vendorId)));
+      
+      // Create cashbook entry for Cash payments using applied amount
+      if (payment.paymentMode === 'Cash') {
+        const lastCashEntry = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(desc(cashbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
+        const newBalance = currentBalance - appliedAmount;
+
+        await tx.insert(cashbook).values(ensureTenantInsert({
+          date: payment.paymentDate,
+          description: `Vendor Payment - ${vendor.name}`,
+          outflow: appliedAmount.toFixed(2),
+          inflow: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Payment',
+          referenceId: payment.id,
+        }, tenantId));
+
+        // Update tenant cash balance
+        await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
+      }
+      
+      // Create bankbook entry for Bank/UPI/Cheque payments using applied amount
+      else if ((payment.paymentMode === 'Bank' || payment.paymentMode === 'UPI' || payment.paymentMode === 'Cheque') && payment.bankAccountId) {
+        const lastBankEntry = await tx.select().from(bankbook)
+          .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, payment.bankAccountId)))
+          .orderBy(desc(bankbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+        const newBalance = currentBalance - appliedAmount;
+
+        await tx.insert(bankbook).values(ensureTenantInsert({
+          bankAccountId: payment.bankAccountId,
+          date: payment.paymentDate,
+          description: `Vendor Payment - ${vendor.name}`,
+          credit: appliedAmount.toFixed(2),
+          debit: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Payment',
+          referenceId: payment.id,
+        }, tenantId));
+
+        // Update bank account balance
+        await BankAccountModel.setBankAccountBalance(tx, tenantId, payment.bankAccountId, newBalance.toFixed(2));
+      }
+      
+      // Fetch bank account data for response
+      let bankAccount = null;
+      if (payment.bankAccountId) {
+        const [bankAccountData] = await tx.select().from(bankAccounts)
+          .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, payment.bankAccountId)));
+        bankAccount = bankAccountData || null;
+      }
+      
+      // Return payment with related data
+      const updatedInvoice = { ...invoice, paidAmount: newPaidAmount.toFixed(2), balanceAmount: newBalanceAmount.toFixed(2), status: newStatus };
+      
+      return {
+        ...payment,
+        invoice: updatedInvoice,
+        vendor,
+        bankAccount: bankAccount || undefined
+      };
+    });
   }
 
   async recordVendorPayment(
@@ -251,8 +348,9 @@ export class PaymentModel {
           // Get current cashbook balance
           const lastCashEntry = await tx.select().from(cashbook)
             .where(withTenant(cashbook, tenantId))
-            .orderBy(desc(cashbook.createdAt))
-            .limit(1);
+            .orderBy(desc(cashbook.id))
+            .limit(1)
+            .for('update');
 
           const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
           const newBalance = currentBalance - (distributedAmount - remainingPaymentAmount);
@@ -266,6 +364,9 @@ export class PaymentModel {
             referenceType: 'Payment',
             referenceId: paymentsCreated[0].id,
           }, tenantId));
+
+          // Update tenant cash balance
+          await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
         } else if (paymentData.paymentMode === 'Bank' && paymentData.bankAccountId) {
           // Get current bank balance
           const lastBankEntry = await tx.select().from(bankbook)

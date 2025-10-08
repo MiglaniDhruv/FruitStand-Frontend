@@ -1,5 +1,6 @@
 import { eq, desc, asc, and, or } from 'drizzle-orm';
 import { db } from '../../../db';
+import { TenantModel } from '../tenants/model';
 import { 
   cashbook, 
   bankbook, 
@@ -18,13 +19,42 @@ import {
   type UdhaaarBookEntry,
   type CrateLedgerEntry
 } from '@shared/schema';
-import { withTenant } from '../../utils/tenant-scope';
+import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 
 export class LedgerModel {
   async getCashbook(tenantId: string): Promise<CashbookEntry[]> {
     return await db.select().from(cashbook)
       .where(withTenant(cashbook, tenantId))
       .orderBy(desc(cashbook.date));
+  }
+
+  async getLatestCashbookEntry(tenantId: string): Promise<CashbookEntry | null> {
+    const [latestEntry] = await db.select().from(cashbook)
+      .where(withTenant(cashbook, tenantId))
+      .orderBy(desc(cashbook.createdAt), desc(cashbook.id))
+      .limit(1);
+    return latestEntry || null;
+  }
+
+  static async initializeCashbook(tenantId: string, initialBalance: number): Promise<boolean> {
+    try {
+      return await db.transaction(async (tx) => {
+        const existing = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .limit(1);
+        if (existing.length > 0 || initialBalance <= 0) return false;
+        await tx.insert(cashbook).values(ensureTenantInsert({
+          date: new Date(), description: 'Opening Balance', inflow: initialBalance.toFixed(2), outflow: '0.00', balance: initialBalance.toFixed(2), referenceType: 'Opening Balance', referenceId: null,
+        }, tenantId));
+        
+        // Initialize cash balance in tenant settings
+        await TenantModel.setCashBalance(tx, tenantId, initialBalance.toFixed(2));
+        return true;
+      });
+    } catch (error) {
+      console.error('Error initializing cashbook:', error);
+      return false;
+    }
   }
 
   async getBankbook(tenantId: string, bankAccountId?: string): Promise<BankbookEntry[]> {

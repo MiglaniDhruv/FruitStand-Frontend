@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import { expenseCategories, expenses, bankAccounts, cashbook, bankbook, type ExpenseCategory, type InsertExpenseCategory, type Expense, type InsertExpense, type ExpenseWithCategory, type PaginationOptions, type PaginatedResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { BankAccountModel } from '../bank-accounts/model';
+import { TenantModel } from '../tenants/model';
 import { 
   normalizePaginationOptions, 
   buildPaginationMetadata, 
@@ -238,6 +239,9 @@ export class ExpenseModel {
           referenceType: 'Expense',
           referenceId: expense.id,
         }, tenantId));
+
+        // Update tenant cash balance
+        await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
       }
 
       // Add bankbook entry for bank payments

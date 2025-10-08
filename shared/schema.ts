@@ -586,6 +586,7 @@ export const tenantSettingsSchema = z.object({
   commissionRate: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(), // Decimal string validation
   currency: z.enum(["INR", "USD", "EUR"]).optional(),
   dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).optional(),
+  cashBalance: z.string().regex(/^-?\d+(\.\d{1,2})?$/).optional(), // Decimal string validation, allows negative values
   
   // Notification Settings
   notifications: z.boolean().optional(),

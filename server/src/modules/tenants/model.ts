@@ -1,7 +1,8 @@
-import { eq, like, or, sql } from "drizzle-orm";
+import { eq, like, or, sql, and } from "drizzle-orm";
 import { db } from "../../../db";
 import { tenants, type Tenant, type InsertTenant, type PaginationOptions, type PaginatedResult } from "@shared/schema";
 import { WhatsAppCreditModel } from '../whatsapp/credit-model.js';
+import { LedgerModel } from '../ledgers/model';
 import { 
   applySorting,
   applySearchFilter,
@@ -66,25 +67,123 @@ export class TenantModel {
   }
 
   /**
-   * Update tenant settings with deep merge
+   * Build atomic JSONB update SQL for partial settings
    */
-  static async updateTenantSettings(tenantId: string, newSettings: any): Promise<Tenant | null> {
-    // Get current settings
-    const currentSettings = await this.getTenantSettings(tenantId);
+  private static buildAtomicSettingsUpdate(partialSettings: any): any {
+    let updateSql = sql`${tenants.settings}`;
     
-    // Deep merge new settings with current settings
-    const mergedSettings = this.deepMerge(currentSettings, newSettings);
+    const processObject = (obj: any, path: string[] = []) => {
+      for (const [key, value] of Object.entries(obj)) {
+        if (key === 'accountSid' || key === 'authToken' || key === 'phoneNumber') {
+          // Skip legacy WhatsApp credentials
+          continue;
+        }
+        
+        const currentPath = [...path, key];
+        const jsonPath = `{${currentPath.join(',')}}`;
+        
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          // For nested objects, recursively process
+          processObject(value, currentPath);
+        } else {
+          // For primitive values, create jsonb_set
+          updateSql = sql`jsonb_set(${updateSql}, ${jsonPath}, to_jsonb(${value}), true)`;
+        }
+      }
+    };
     
-    // Strip legacy WhatsApp credentials after merge to ensure they don't persist
-    if (mergedSettings.whatsapp) {
-      delete mergedSettings.whatsapp.accountSid;
-      delete mergedSettings.whatsapp.authToken;
-      delete mergedSettings.whatsapp.phoneNumber;
+    processObject(partialSettings);
+    return updateSql;
+  }
+
+  /**
+   * Update tenant settings with atomic JSON updates
+   */
+  static async updateTenantSettings(tenantId: string, newSettings: any, cashBalanceKnown?: string, tx?: any): Promise<Tenant | null> {
+    const dbConnection = tx || db;
+    
+    // Build atomic JSONB update to avoid overwriting concurrent changes
+    const settingsUpdate = this.buildAtomicSettingsUpdate(newSettings);
+    
+    // Build where clause with optimistic concurrency check for cashBalance
+    let whereClause = eq(tenants.id, tenantId);
+    if (cashBalanceKnown !== undefined && 'cashBalance' in newSettings) {
+      whereClause = and(
+        eq(tenants.id, tenantId),
+        sql`coalesce(${tenants.settings}->>'cashBalance','') = ${cashBalanceKnown}`
+      )!;
     }
     
-    const result = await db.update(tenants).set({ settings: mergedSettings }).where(eq(tenants.id, tenantId)).returning();
+    const result = await dbConnection.update(tenants)
+      .set({ settings: settingsUpdate })
+      .where(whereClause)
+      .returning();
+    
+    // If optimistic concurrency check failed, throw error
+    if (cashBalanceKnown !== undefined && 'cashBalance' in newSettings && result.length === 0) {
+      throw new Error('Cash balance has been modified by another operation. Please refresh and try again.');
+    }
+    
     return result[0] || null;
   }
+
+  /**
+   * Set cash balance in tenant settings
+   */
+  static async setCashBalance(tx: any, tenantId: string, newBalance: string): Promise<void> {
+    const dbc = tx || db;
+    await dbc.update(tenants)
+      .set({ 
+        settings: sql`jsonb_set(coalesce(${tenants.settings}, '{}'::jsonb), '{cashBalance}', to_jsonb(${newBalance}::text), true)` 
+      })
+      .where(eq(tenants.id, tenantId));
+  }
+
+  /**
+   * Get cash balance from tenant settings
+   */
+  static async getCashBalance(tenantId: string): Promise<number> {
+    const settings = await this.getTenantSettings(tenantId);
+    
+    // If cashBalance is not set (legacy tenant), query latest cashbook entry as fallback
+    if (!settings.cashBalance) {
+      const ledgerModel = new LedgerModel();
+      const latestEntry = await ledgerModel.getLatestCashbookEntry(tenantId);
+      if (latestEntry) {
+        const balance = parseFloat(latestEntry.balance || '0');
+        return balance;
+      }
+      return 0;
+    }
+    
+    return parseFloat(settings.cashBalance);
+  }
+
+  /**
+   * Seed cash balance if missing - separate method for controlled migration
+   */
+  static async seedCashBalanceIfMissing(tenantId: string): Promise<boolean> {
+    const settings = await this.getTenantSettings(tenantId);
+    
+    if (!settings.cashBalance) {
+      const ledgerModel = new LedgerModel();
+      const latestEntry = await ledgerModel.getLatestCashbookEntry(tenantId);
+      if (latestEntry) {
+        const balance = parseFloat(latestEntry.balance || '0');
+        try {
+          await this.setCashBalance(null, tenantId, balance.toFixed(2));
+          return true;
+        } catch (error) {
+          console.error('Error seeding cash balance for legacy tenant:', error);
+          return false;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+
 
   /**
    * Get WhatsApp settings for a tenant, returning defaults when absent

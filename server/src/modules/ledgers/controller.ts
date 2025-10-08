@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../utils/base';
 import { LedgerModel } from './model';
+import { TenantModel } from '../tenants/model';
 import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
 
 export class LedgerController extends BaseController {
@@ -82,5 +83,19 @@ export class LedgerController extends BaseController {
     
     const crateLedger = await this.ledgerModel.getCrateLedger(tenantId, retailerId as string);
     res.json(crateLedger);
+  }
+
+  async getCashbookStatus(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const latestEntry = await this.ledgerModel.getLatestCashbookEntry(tenantId);
+    const hasEntries = latestEntry !== null;
+    const currentBalance = await TenantModel.getCashBalance(tenantId);
+    
+    res.json({
+      hasEntries,
+      currentBalance
+    });
   }
 }

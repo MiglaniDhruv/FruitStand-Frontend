@@ -52,6 +52,7 @@ export default function Ledgers() {
   });
   const [searchInput, setSearchInput] = useState("");
   const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
+  const [selectedBankAccount, setSelectedBankAccount] = useState("all");
 
   // Fetch all data needed for ledgers
   const { data: purchaseInvoices = [], isLoading: purchaseInvoicesLoading, isError: purchaseInvoicesError, error: purchaseInvoicesErrorMsg } = useQuery({
@@ -204,8 +205,10 @@ export default function Ledgers() {
   };
 
   const getBankAccountName = (accountId: string) => {
+    if (!Array.isArray(bankAccounts)) return "Unknown Bank";
     const account = bankAccounts.find((a: any) => a.id === accountId);
-    return account?.bankName || "Unknown Bank";
+    if (!account) return "Unknown Bank";
+    return account.accountNumber ? `${account.bankName} - ${account.accountNumber}` : account.bankName;
   };
 
   const getCategoryName = (categoryId: string) => {
@@ -256,12 +259,23 @@ export default function Ledgers() {
   };
 
   // Filter functions for each ledger type
-  const filterCashbookEntries = (entries: any[]) => {
+  const filterLedgerEntries = (entries: any[]) => {
     if (!searchInput && transactionTypeFilter === "all") return entries;
     
     return entries.filter(entry => {
       const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
-      const matchesType = transactionTypeFilter === "all" || entry.type === transactionTypeFilter;
+      
+      // For cashbook/bankbook entries, ignore Purchase/Sale filters since they don't apply
+      let matchesType = true;
+      if (transactionTypeFilter !== "all") {
+        // Only apply filter if the transaction type is relevant to cashbook/bankbook
+        const relevantTypes = ["Receipt", "Payment", "Expense", "Opening", "Closing"];
+        if (relevantTypes.includes(transactionTypeFilter)) {
+          matchesType = entry.type === transactionTypeFilter;
+        }
+        // For Purchase/Sale filters, show all entries (ignore filter)
+      }
+      
       return matchesSearch && matchesType;
     });
   };
@@ -339,48 +353,48 @@ export default function Ledgers() {
   const filteredExpenses = filterByDate(expenses, "paymentDate");
   const filteredCrateTransactions = filterByDate(crateTransactions, "transactionDate");
 
-  // Combined Cashbook - All cash and bank transactions with daily balances
-  const getCombinedCashbookEntries = () => {
+  // Cashbook - Cash transactions only
+  const getCashbookEntries = () => {
     const allEntries: any[] = [];
 
-    // Sales payments (all modes)
-    filteredSalesPayments.forEach((payment: any) => {
+    // Sales payments (Cash only)
+    filteredSalesPayments.filter((payment: any) => payment.paymentMode === "Cash").forEach((payment: any) => {
       const sale = salesInvoices.find((s: any) => s.id === payment.salesInvoiceId);
       const amount = parseFloat(payment.amount || "0");
       allEntries.push({
         date: payment.paymentDate,
-        description: `${payment.paymentMode} receipt from ${getRetailerName(sale?.retailerId || "")}`,
-        paymentMode: payment.paymentMode,
-        bankAccount: payment.paymentMode !== "Cash" ? getBankAccountName(payment.bankAccountId || "") : "Cash",
+        description: `Cash receipt from ${getRetailerName(sale?.retailerId || "")}`,
+        paymentMode: "Cash",
+        bankAccount: "Cash",
         inflow: amount,
         outflow: 0,
         type: "Receipt",
       });
     });
 
-    // Purchase payments (all modes)
-    filteredPayments.forEach((payment: any) => {
+    // Purchase payments (Cash only)
+    filteredPayments.filter((payment: any) => payment.paymentMode === "Cash").forEach((payment: any) => {
       const purchase = purchaseInvoices.find((p: any) => p.id === payment.invoiceId);
       const amount = parseFloat(payment.amount || "0");
       allEntries.push({
         date: payment.paymentDate,
-        description: `${payment.paymentMode} payment to ${getVendorName(purchase?.vendorId || "")}`,
-        paymentMode: payment.paymentMode,
-        bankAccount: payment.paymentMode !== "Cash" ? getBankAccountName(payment.bankAccountId || "") : "Cash",
+        description: `Cash payment to ${getVendorName(purchase?.vendorId || "")}`,
+        paymentMode: "Cash",
+        bankAccount: "Cash",
         inflow: 0,
         outflow: amount,
         type: "Payment",
       });
     });
 
-    // Expenses (all modes)
-    filteredExpenses.forEach((expense: any) => {
+    // Expenses (Cash only)
+    filteredExpenses.filter((expense: any) => expense.paymentMode === "Cash").forEach((expense: any) => {
       const amount = parseFloat(expense.amount || "0");
       allEntries.push({
         date: expense.paymentDate,
-        description: `${expense.paymentMode} expense - ${expense.description}`,
-        paymentMode: expense.paymentMode,
-        bankAccount: expense.paymentMode !== "Cash" ? getBankAccountName(expense.bankAccountId || "") : "Cash",
+        description: `Cash expense - ${expense.description}`,
+        paymentMode: "Cash",
+        bankAccount: "Cash",
         inflow: 0,
         outflow: amount,
         type: "Expense",
@@ -428,7 +442,7 @@ export default function Ledgers() {
             date: currentDate,
             description: "Day Closing Balance",
             paymentMode: "Balance",
-            bankAccount: "All Accounts",
+            bankAccount: "Cash",
             inflow: 0,
             outflow: 0,
             balance: runningBalance,
@@ -445,7 +459,7 @@ export default function Ledgers() {
           date: entryDate,
           description: "Day Opening Balance",
           paymentMode: "Balance",
-          bankAccount: "All Accounts",
+          bankAccount: "Cash",
           inflow: 0,
           outflow: 0,
           balance: runningBalance,
@@ -471,7 +485,166 @@ export default function Ledgers() {
         date: currentDate,
         description: "Day Closing Balance",
         paymentMode: "Balance",
-        bankAccount: "All Accounts",
+        bankAccount: "Cash",
+        inflow: 0,
+        outflow: 0,
+        balance: runningBalance,
+        type: "Closing",
+        isBalanceEntry: true,
+      });
+    }
+
+    return entriesWithBalance;
+  };
+
+  // Bankbook - Bank/UPI/Cheque transactions with account filtering
+  const getBankbookEntries = () => {
+    const allEntries: any[] = [];
+
+    // Sales payments (Bank/UPI/Cheque only)
+    filteredSalesPayments.filter((payment: any) => payment.paymentMode !== "Cash").forEach((payment: any) => {
+      // Filter by selected bank account if not "all"
+      if (selectedBankAccount !== "all" && payment.bankAccountId !== selectedBankAccount) {
+        return;
+      }
+      
+      const sale = salesInvoices.find((s: any) => s.id === payment.salesInvoiceId);
+      const amount = parseFloat(payment.amount || "0");
+      allEntries.push({
+        date: payment.paymentDate,
+        description: `${payment.paymentMode} receipt from ${getRetailerName(sale?.retailerId || "")}`,
+        paymentMode: payment.paymentMode,
+        bankAccount: getBankAccountName(payment.bankAccountId || ""),
+        inflow: amount,
+        outflow: 0,
+        type: "Receipt",
+      });
+    });
+
+    // Purchase payments (Bank/UPI/Cheque only)
+    filteredPayments.filter((payment: any) => payment.paymentMode !== "Cash").forEach((payment: any) => {
+      // Filter by selected bank account if not "all"
+      if (selectedBankAccount !== "all" && payment.bankAccountId !== selectedBankAccount) {
+        return;
+      }
+      
+      const purchase = purchaseInvoices.find((p: any) => p.id === payment.invoiceId);
+      const amount = parseFloat(payment.amount || "0");
+      allEntries.push({
+        date: payment.paymentDate,
+        description: `${payment.paymentMode} payment to ${getVendorName(purchase?.vendorId || "")}`,
+        paymentMode: payment.paymentMode,
+        bankAccount: getBankAccountName(payment.bankAccountId || ""),
+        inflow: 0,
+        outflow: amount,
+        type: "Payment",
+      });
+    });
+
+    // Expenses (Bank/UPI/Cheque only)
+    filteredExpenses.filter((expense: any) => expense.paymentMode !== "Cash").forEach((expense: any) => {
+      // Filter by selected bank account if not "all"
+      if (selectedBankAccount !== "all" && expense.bankAccountId !== selectedBankAccount) {
+        return;
+      }
+      
+      const amount = parseFloat(expense.amount || "0");
+      allEntries.push({
+        date: expense.paymentDate,
+        description: `${expense.paymentMode} expense - ${expense.description}`,
+        paymentMode: expense.paymentMode,
+        bankAccount: getBankAccountName(expense.bankAccountId || ""),
+        inflow: 0,
+        outflow: amount,
+        type: "Expense",
+      });
+    });
+
+    // Sort entries by date (with validation)
+    const sortedEntries = allEntries
+      .filter(entry => entry.date && !isNaN(new Date(entry.date).getTime())) // Filter out invalid dates
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Calculate running balance and add daily opening/closing
+    let runningBalance = 0;
+    const entriesWithBalance = [];
+    let currentDate = "";
+    let dayOpeningBalance = 0;
+
+    for (let i = 0; i < sortedEntries.length; i++) {
+      const entry = sortedEntries[i];
+      
+      // Validate date before formatting
+      if (!entry.date) {
+        console.warn('Entry has no date, skipping:', entry);
+        continue;
+      }
+      
+      let entryDate;
+      try {
+        const dateObj = new Date(entry.date);
+        if (isNaN(dateObj.getTime())) {
+          console.warn('Invalid date in entry, skipping:', entry.date, entry);
+          continue;
+        }
+        entryDate = format(dateObj, "yyyy-MM-dd");
+      } catch (error) {
+        console.warn('Error formatting date, skipping entry:', entry.date, error);
+        continue;
+      }
+      
+      // Add opening balance for new day
+      if (entryDate !== currentDate) {
+        if (currentDate !== "") {
+          // Add closing balance for previous day
+          entriesWithBalance.push({
+            date: currentDate,
+            description: "Day Closing Balance",
+            paymentMode: "Balance",
+            bankAccount: selectedBankAccount === "all" ? "All Bank Accounts" : getBankAccountName(selectedBankAccount),
+            inflow: 0,
+            outflow: 0,
+            balance: runningBalance,
+            type: "Closing",
+            isBalanceEntry: true,
+          });
+        }
+        
+        currentDate = entryDate;
+        dayOpeningBalance = runningBalance;
+        
+        // Add opening balance for new day
+        entriesWithBalance.push({
+          date: entryDate,
+          description: "Day Opening Balance",
+          paymentMode: "Balance",
+          bankAccount: selectedBankAccount === "all" ? "All Bank Accounts" : getBankAccountName(selectedBankAccount),
+          inflow: 0,
+          outflow: 0,
+          balance: runningBalance,
+          type: "Opening",
+          isBalanceEntry: true,
+        });
+      }
+      
+      // Calculate new balance
+      runningBalance += entry.inflow - entry.outflow;
+      
+      // Add the actual transaction
+      entriesWithBalance.push({
+        ...entry,
+        balance: runningBalance,
+        isBalanceEntry: false,
+      });
+    }
+    
+    // Add final closing balance
+    if (currentDate !== "") {
+      entriesWithBalance.push({
+        date: currentDate,
+        description: "Day Closing Balance",
+        paymentMode: "Balance",
+        bankAccount: selectedBankAccount === "all" ? "All Bank Accounts" : getBankAccountName(selectedBankAccount),
         inflow: 0,
         outflow: 0,
         balance: runningBalance,
@@ -664,7 +837,8 @@ export default function Ledgers() {
     }
   };
 
-  const cashbookEntries = filterCashbookEntries(getCombinedCashbookEntries());
+  const cashbookEntries = filterLedgerEntries(getCashbookEntries());
+  const bankbookEntries = filterLedgerEntries(getBankbookEntries());
   const vendorLedgerEntries = filterVendorLedgerEntries(getVendorLedgerEntries());
   const retailerLedgerEntries = filterRetailerLedgerEntries(getRetailerLedgerEntries());
   const udhaarBookEntries = filterUdhaarBookEntries(getUdhaarBookEntries());
@@ -978,8 +1152,9 @@ export default function Ledgers() {
         {/* Content */}
         <main className="flex-1 overflow-auto p-6">
           <Tabs defaultValue="cashbook" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="cashbook" data-testid="tab-cashbook">Cashbook</TabsTrigger>
+              <TabsTrigger value="bankbook" data-testid="tab-bankbook">Bankbook</TabsTrigger>
               <TabsTrigger value="vapari-book" data-testid="tab-vapari-book">Vapari Book</TabsTrigger>
               <TabsTrigger value="retailer-ledger" data-testid="tab-retailer-ledger">Retailer Ledger</TabsTrigger>
               <TabsTrigger value="udhaar-book" data-testid="tab-udhaar-book">Udhaar Book</TabsTrigger>
@@ -987,13 +1162,13 @@ export default function Ledgers() {
             </TabsList>
 
 
-            {/* Combined Cashbook */}
+            {/* Cashbook - Cash Only */}
             <TabsContent value="cashbook">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <DollarSign className="h-5 w-5" />
-                    <span>Cashbook - All Cash & Bank Transactions</span>
+                    <span>Cashbook - Cash Transactions Only</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1049,6 +1224,82 @@ export default function Ledgers() {
               </Card>
             </TabsContent>
 
+            {/* Bankbook - Bank/UPI/Cheque Transactions */}
+            <TabsContent value="bankbook">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center space-x-2">
+                      <CreditCard className="h-5 w-5" />
+                      <span>Bankbook - Bank/UPI/Cheque Transactions</span>
+                    </CardTitle>
+                    <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
+                      <SelectTrigger className="w-64" data-testid="select-bank-account">
+                        <SelectValue placeholder="Select bank account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Bank Accounts</SelectItem>
+                        {(bankAccounts && Array.isArray(bankAccounts) ? bankAccounts : []).map((account: any) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.bankName} - {account.accountNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Payment Mode</TableHead>
+                        <TableHead>Bank Account</TableHead>
+                        <TableHead>Inflow</TableHead>
+                        <TableHead>Outflow</TableHead>
+                        <TableHead>Balance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bankbookEntries.map((entry: any, index: number) => (
+                        <TableRow 
+                          key={index} 
+                          className={entry.isBalanceEntry ? "bg-muted/50 font-medium" : ""}
+                        >
+                          <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{entry.description}</TableCell>
+                          <TableCell>
+                            {entry.isBalanceEntry ? (
+                              <Badge variant="secondary">{entry.paymentMode}</Badge>
+                            ) : (
+                              <Badge variant="outline">{entry.paymentMode}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{entry.bankAccount}</TableCell>
+                          <TableCell className="text-green-600">
+                            {entry.inflow > 0 ? formatCurrency(entry.inflow) : "-"}
+                          </TableCell>
+                          <TableCell className="text-red-600">
+                            {entry.outflow > 0 ? formatCurrency(entry.outflow) : "-"}
+                          </TableCell>
+                          <TableCell className={entry.balance >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                            {formatCurrency(entry.balance)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {bankbookEntries.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            No bank transactions found for the selected period and account
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* 2. Vapari Book (Vendor Ledger) */}
             <TabsContent value="vapari-book">

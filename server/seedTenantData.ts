@@ -23,6 +23,7 @@ import {
 } from '../shared/schema';
 import { ROLE_PERMISSIONS } from '../shared/permissions';
 import { ensureTenantInsert, withTenant } from './src/utils/tenant-scope';
+import { LedgerModel } from './src/modules/ledgers/model';
 import bcrypt from 'bcrypt';
 
 // Tenant configurations
@@ -40,6 +41,7 @@ const TENANT_CONFIGS = [
       commissionRate: '8.5',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
+      cashBalance: '75000.00',
       notifications: {
         emailNotifications: true,
         smsNotifications: true,
@@ -87,6 +89,7 @@ const TENANT_CONFIGS = [
       commissionRate: '7.0',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
+      cashBalance: '35000.00',
       notifications: {
         emailNotifications: true,
         smsNotifications: false,
@@ -134,6 +137,7 @@ const TENANT_CONFIGS = [
       commissionRate: '10.0',
       currency: 'INR',
       dateFormat: 'DD/MM/YYYY',
+      cashBalance: '10000.00',
       notifications: {
         emailNotifications: true,
         smsNotifications: true,
@@ -232,6 +236,15 @@ async function createTenant(config: typeof TENANT_CONFIGS[0]) {
     settings: config.settings,
     isActive: true
   }).returning({ id: tenants.id });
+
+  // Create cashbook opening entry if cashBalance is set
+  if (config.settings.cashBalance) {
+    const cashBalance = parseFloat(config.settings.cashBalance);
+    if (cashBalance > 0) {
+      console.log(`   Creating cashbook opening entry: ${config.settings.cashBalance}`);
+      await LedgerModel.initializeCashbook(tenant.id, cashBalance);
+    }
+  }
 
   return tenant.id;
 }

@@ -76,6 +76,13 @@ export class TenantController extends BaseController {
 
     // Sanitize validated settings to prevent creditBalance updates and strip legacy credentials
     const sanitizedSettings = { ...validatedSettings } as any;
+
+    // Guard against stale cashBalance overwrites
+    const includeCashBalance = req.body?.__updateCashBalance === true;
+    if (!includeCashBalance && 'cashBalance' in sanitizedSettings) {
+      delete (sanitizedSettings as any).cashBalance;
+    }
+
     if (sanitizedSettings.whatsapp) {
       // Prevent creditBalance updates
       if ('creditBalance' in sanitizedSettings.whatsapp) {
@@ -87,10 +94,19 @@ export class TenantController extends BaseController {
       delete sanitizedSettings.whatsapp.phoneNumber;
     }
     
-    const updatedTenant = await TenantModel.updateTenantSettings(req.tenantId, sanitizedSettings);
-    this.ensureResourceExists(updatedTenant, 'Tenant');
-    
-    return res.json(updatedTenant!.settings || {});
+    // Handle optimistic concurrency for cashBalance updates
+    const cashBalanceKnown = req.body?.__cashBalanceKnown;
+    try {
+      const updatedTenant = await TenantModel.updateTenantSettings(req.tenantId, sanitizedSettings, cashBalanceKnown);
+      this.ensureResourceExists(updatedTenant, 'Tenant');
+      
+      return res.json(updatedTenant!.settings || {});
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Cash balance has been modified')) {
+        return res.status(409).json({ error: error.message });
+      }
+      throw error;
+    }
   }
 
   /**
