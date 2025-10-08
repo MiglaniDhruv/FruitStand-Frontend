@@ -3,6 +3,7 @@ import { db } from '../../../db';
 import { 
   cashbook, 
   bankbook, 
+  bankAccounts,
   purchaseInvoices, 
   payments, 
   salesInvoices, 
@@ -170,10 +171,9 @@ export class LedgerModel {
       });
     }
 
-    // Add crate transaction entries - Option A: Include deposit amounts in monetary ledger
+    // Add crate transaction entries - Note: No monetary impact since depositAmount field doesn't exist
     for (const crateTransaction of crateTransactionsList) {
-      const isIssue = crateTransaction.transactionType === 'Issue';
-      const depositAmount = Number(crateTransaction.depositAmount || '0');
+      const isIssue = crateTransaction.transactionType === 'Given';
       
       allEntries.push({
         tenantId,
@@ -181,8 +181,8 @@ export class LedgerModel {
         description: `Crates ${crateTransaction.transactionType} - Qty: ${crateTransaction.quantity}`,
         referenceType: 'Crate Transaction' as const,
         referenceId: crateTransaction.id,
-        debit: isIssue ? depositAmount : 0, // Issue = we give crates, customer owes deposit
-        credit: isIssue ? 0 : depositAmount, // Return = customer returns crates, we refund deposit
+        debit: 0, // No monetary impact since no depositAmount field
+        credit: 0, // No monetary impact since no depositAmount field
         balance: 0, // Will be computed after sorting
         transactionType: crateTransaction.transactionType,
         quantity: crateTransaction.quantity,
@@ -270,7 +270,6 @@ export class LedgerModel {
       phone: retailers.phone,
       transactionType: crateTransactions.transactionType,
       quantity: crateTransactions.quantity,
-      depositAmount: crateTransactions.depositAmount,
       transactionDate: crateTransactions.transactionDate,
       notes: crateTransactions.notes,
       createdAt: crateTransactions.createdAt
@@ -292,34 +291,37 @@ export class LedgerModel {
     // Calculate running crate balance for each retailer
     const retailerBalances = new Map<string, number>();
     
-    const ledgerEntries: CrateLedgerEntry[] = transactions.map(transaction => {
-      const currentBalance = retailerBalances.get(transaction.retailerId) || 0;
-      let newBalance = currentBalance;
+    const ledgerEntries: CrateLedgerEntry[] = transactions
+      .filter(transaction => transaction.retailerId !== null) // Filter out null retailerIds
+      .map(transaction => {
+        const retailerId = transaction.retailerId!; // Non-null assertion after filter
+        const currentBalance = retailerBalances.get(retailerId) || 0;
+        let newBalance = currentBalance;
 
-      if (transaction.transactionType === 'Issue') {
-        newBalance = currentBalance + transaction.quantity;
-      } else if (transaction.transactionType === 'Return') {
-        newBalance = currentBalance - transaction.quantity;
-      }
+        if (transaction.transactionType === 'Given') {
+          newBalance = currentBalance + transaction.quantity;
+        } else if (transaction.transactionType === 'Received') {
+          newBalance = currentBalance - transaction.quantity;
+        }
 
-      retailerBalances.set(transaction.retailerId, newBalance);
+        retailerBalances.set(retailerId, newBalance);
 
-      return {
-        tenantId,
-        id: transaction.id,
-        retailerId: transaction.retailerId,
-        retailerName: transaction.retailerName,
-        contactPerson: transaction.contactPerson,
-        phone: transaction.phone,
-        transactionType: transaction.transactionType,
-        quantity: transaction.quantity,
-        depositAmount: Number(transaction.depositAmount || '0'),
-        transactionDate: transaction.transactionDate,
-        notes: transaction.notes,
-        runningBalance: newBalance,
-        createdAt: transaction.createdAt
-      };
-    });
+        return {
+          tenantId,
+          id: transaction.id,
+          retailerId: retailerId,
+          retailerName: transaction.retailerName || '',
+          contactPerson: transaction.contactPerson || '',
+          phone: transaction.phone || '',
+          transactionType: transaction.transactionType,
+          quantity: transaction.quantity,
+          depositAmount: 0, // No depositAmount field in schema
+          transactionDate: transaction.transactionDate,
+          notes: transaction.notes || '',
+          runningBalance: newBalance,
+          createdAt: transaction.createdAt
+        };
+      });
 
     return ledgerEntries;
   }
@@ -335,5 +337,11 @@ export class LedgerModel {
     const [retailer] = await db.select().from(retailers)
       .where(withTenant(retailers, tenantId, eq(retailers.id, retailerId)));
     return retailer;
+  }
+
+  async getBankAccountById(tenantId: string, bankAccountId: string): Promise<any> {
+    const [bankAccount] = await db.select().from(bankAccounts)
+      .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, bankAccountId)));
+    return bankAccount;
   }
 }

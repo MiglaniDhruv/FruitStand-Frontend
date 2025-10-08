@@ -1,0 +1,338 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Sidebar from "@/components/layout/sidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import BankAccountForm from "@/components/forms/bank-account-form";
+import { useToast } from "@/hooks/use-toast";
+import { authenticatedApiRequest } from "@/lib/auth";
+import { PaginationOptions, PaginatedResult, BankAccount } from "@shared/schema";
+import { PermissionGuard } from "@/components/ui/permission-guard";
+import { PERMISSIONS } from "@shared/permissions";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function BankAccounts() {
+  const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
+    page: 1,
+    limit: 10,
+    search: "",
+    sortBy: "name",
+    sortOrder: "asc"
+  });
+  const [searchInput, setSearchInput] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedBankAccount, setSelectedBankAccount] = useState<BankAccount | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [bankAccountToDelete, setBankAccountToDelete] = useState<BankAccount | null>(null);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: bankAccountsResult, isLoading, isError, error } = useQuery<PaginatedResult<BankAccount>>({
+    queryKey: ["/api/bank-accounts", paginationOptions, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('paginated', 'true');
+      if (paginationOptions.page) params.append('page', paginationOptions.page.toString());
+      if (paginationOptions.limit) params.append('limit', paginationOptions.limit.toString());
+      if (paginationOptions.search) params.append('search', paginationOptions.search);
+      if (paginationOptions.sortBy) params.append('sortBy', paginationOptions.sortBy);
+      if (paginationOptions.sortOrder) params.append('sortOrder', paginationOptions.sortOrder);
+      
+      // Only add status filter if it's not "all"
+      if (statusFilter !== "all") {
+        params.append("status", statusFilter);
+      }
+      
+      const response = await authenticatedApiRequest("GET", `/api/bank-accounts?${params.toString()}`);
+      return response.json();
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await authenticatedApiRequest("DELETE", `/api/bank-accounts/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Bank account deleted",
+        description: "Bank account has been deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
+      setIsDeleteDialogOpen(false);
+      setBankAccountToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete bank account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handlePageChange = (page: number) => {
+    setPaginationOptions(prev => ({ ...prev, page }));
+  };
+  
+  const handlePageSizeChange = (limit: number) => {
+    setPaginationOptions(prev => ({ ...prev, limit, page: 1 }));
+  };
+  
+  const handleSearchChange = (search: string) => {
+    setPaginationOptions(prev => ({ ...prev, search, page: 1 }));
+  };
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    handleSearchChange(value);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setPaginationOptions(prev => ({ ...prev, page: 1 }));
+  };
+  
+  const handleSortChange = (sortBy: string, sortOrder: string) => {
+    setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
+  };
+
+  const handleCreate = () => {
+    setSelectedBankAccount(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEdit = (bankAccount: BankAccount) => {
+    setSelectedBankAccount(bankAccount);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = (bankAccount: BankAccount) => {
+    setBankAccountToDelete(bankAccount);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (bankAccountToDelete) {
+      deleteAccountMutation.mutate(bankAccountToDelete.id);
+    }
+  };
+
+  const formatBalance = (balance: string | null) => {
+    if (!balance) return "₹0.00";
+    const num = parseFloat(balance);
+    return `₹${num.toFixed(2)}`;
+  };
+
+  const columns = [
+    {
+      accessorKey: "name",
+      header: "Account Name",
+    },
+    {
+      accessorKey: "accountNumber",
+      header: "Account Number",
+    },
+    {
+      accessorKey: "bankName",
+      header: "Bank Name",
+    },
+    {
+      accessorKey: "ifscCode",
+      header: "IFSC Code",
+      cell: ({ row }: any) => {
+        return row.original.ifscCode || "-";
+      },
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: ({ row }: any) => {
+        return formatBalance(row.original.balance);
+      },
+    },
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: ({ row }: any) => {
+        return (
+          <Badge variant={row.original.isActive ? "default" : "secondary"}>
+            {row.original.isActive ? "Active" : "Inactive"}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "actions",
+      header: "Actions",
+      cell: ({ row }: any) => {
+        return (
+          <div className="flex items-center gap-2">
+            <PermissionGuard permission={PERMISSIONS.EDIT_PAYMENTS}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleEdit(row.original)}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={PERMISSIONS.DELETE_PAYMENTS}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(row.original)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </PermissionGuard>
+          </div>
+        );
+      },
+    },
+  ];
+
+  if (isError) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 p-6">
+          <div className="text-center">
+            <p className="text-destructive">Error loading bank accounts: {error?.message}</p>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] })}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <div className="p-6">
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold">Bank Accounts</h1>
+              <p className="text-muted-foreground">
+                Manage your bank accounts and track balances
+              </p>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>All Bank Accounts</CardTitle>
+                    <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
+                      <Button onClick={handleCreate}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Bank Account
+                      </Button>
+                    </PermissionGuard>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name, account number, or bank..."
+                        value={searchInput}
+                        onChange={handleSearchInputChange}
+                        className="pl-8"
+                      />
+                    </div>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={handleStatusFilterChange}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Accounts</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <DataTable
+                      data={bankAccountsResult?.data || []}
+                      columns={columns}
+                      paginationMetadata={bankAccountsResult?.pagination}
+                      onPageChange={handlePageChange}
+                      onPageSizeChange={handlePageSizeChange}
+                      onSortChange={(column: string, direction: string) => handleSortChange(column, direction)}
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <BankAccountForm
+          open={isFormOpen}
+          onOpenChange={setIsFormOpen}
+          bankAccount={selectedBankAccount}
+        />
+
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Bank Account</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{bankAccountToDelete?.name}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                disabled={deleteAccountMutation.isPending}
+              >
+                {deleteAccountMutation.isPending ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </ErrorBoundary>
+  );
+}

@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import twilio from 'twilio';
 const { validateRequest } = twilio;
 import { BaseController } from '../../utils/base.js';
-import { AuthenticatedRequest } from '../../types/index.js';
+import { AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types/index.js';
 import { WhatsAppMessageModel } from './model.js';
 import { WhatsAppCreditModel } from './credit-model.js';
 import { whatsAppService } from '../../services/whatsapp/index.js';
@@ -23,271 +23,175 @@ export class WhatsAppController extends BaseController {
    * Send sales invoice via WhatsApp
    */
   sendSalesInvoice = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Validate request body
-      const bodySchema = z.object({
-        invoiceId: z.string().uuid('Invalid invoice ID format')
-      });
-      
-      const { invoiceId } = bodySchema.parse(req.body);
-      
-      // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
-      const result = await whatsAppService.sendSalesInvoice(tenantId, invoiceId);
-      
-      res.status(200).json({
-        success: true,
-        message: 'Sales invoice sent via WhatsApp successfully',
-        data: result,
-        creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
-        remainingCredits: result.creditMetadata?.remainingCredits
-      });
-      
-    } catch (error: any) {
-      if (error.message.includes('Insufficient') || error.message.includes('credits')) {
-        return res.status(403).json({
-          success: false,
-          message: error.message,
-          errorType: 'INSUFFICIENT_CREDITS'
-        });
-      }
-      
-      if (error.message.includes('Invalid phone number') || error.message.includes('not found')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Validate request body using BaseController method
+    const { invoiceId } = this.validateZodSchema(z.object({
+      invoiceId: z.string().uuid('Invalid invoice ID format')
+    }), req.body);
+    
+    // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
+    const result = await whatsAppService.sendSalesInvoice(tenantId, invoiceId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Sales invoice sent via WhatsApp successfully',
+      data: result,
+      creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
+      remainingCredits: result.creditMetadata?.remainingCredits
+    });
   };
 
   /**
    * Send purchase invoice via WhatsApp
    */
   sendPurchaseInvoice = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Validate request body
-      const bodySchema = z.object({
-        invoiceId: z.string().uuid('Invalid invoice ID format')
-      });
-      
-      const { invoiceId } = bodySchema.parse(req.body);
-      
-      // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
-      const result = await whatsAppService.sendPurchaseInvoice(tenantId, invoiceId);
-      
-      res.status(200).json({
-        success: true,
-        message: 'Purchase invoice sent via WhatsApp successfully',
-        data: result,
-        creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
-        remainingCredits: result.creditMetadata?.remainingCredits
-      });
-      
-    } catch (error: any) {
-      if (error.message.includes('Insufficient') || error.message.includes('credits')) {
-        return res.status(403).json({
-          success: false,
-          message: error.message,
-          errorType: 'INSUFFICIENT_CREDITS'
-        });
-      }
-      
-      if (error.message.includes('Invalid phone number') || error.message.includes('not found')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Validate request body using BaseController method
+    const { invoiceId } = this.validateZodSchema(z.object({
+      invoiceId: z.string().uuid('Invalid invoice ID format')
+    }), req.body);
+    
+    // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
+    const result = await whatsAppService.sendPurchaseInvoice(tenantId, invoiceId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Purchase invoice sent via WhatsApp successfully',
+      data: result,
+      creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
+      remainingCredits: result.creditMetadata?.remainingCredits
+    });
   };
 
   /**
    * Send payment reminder via WhatsApp
    */
   sendPaymentReminder = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Validate request body
-      const bodySchema = z.object({
-        invoiceId: z.string().uuid('Invalid invoice ID format'),
-        invoiceType: z.enum(['sales', 'purchase'], { 
-          errorMap: () => ({ message: 'Invoice type must be either "sales" or "purchase"' })
-        })
-      });
-      
-      const { invoiceId, invoiceType } = bodySchema.parse(req.body);
-      
-      // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
-      const result = await whatsAppService.sendPaymentReminder(tenantId, invoiceId, invoiceType);
-      
-      res.status(200).json({
-        success: true,
-        message: 'Payment reminder sent via WhatsApp successfully',
-        data: result,
-        creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
-        remainingCredits: result.creditMetadata?.remainingCredits
-      });
-      
-    } catch (error: any) {
-      if (error.message.includes('Insufficient') || error.message.includes('credits')) {
-        return res.status(403).json({
-          success: false,
-          message: error.message,
-          errorType: 'INSUFFICIENT_CREDITS'
-        });
-      }
-      
-      if (error.message.includes('Invalid phone number') || error.message.includes('not found')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Validate request body using BaseController method
+    const { invoiceId, invoiceType } = this.validateZodSchema(z.object({
+      invoiceId: z.string().uuid('Invalid invoice ID format'),
+      invoiceType: z.enum(['sales', 'purchase'], { 
+        errorMap: () => ({ message: 'Invoice type must be either "sales" or "purchase"' })
+      })
+    }), req.body);
+    
+    // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
+    const result = await whatsAppService.sendPaymentReminder(tenantId, invoiceId, invoiceType);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Payment reminder sent via WhatsApp successfully',
+      data: result,
+      creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
+      remainingCredits: result.creditMetadata?.remainingCredits
+    });
   };
 
   /**
    * Send payment notification via WhatsApp
    */
   sendPaymentNotification = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Validate request body
-      const bodySchema = z.object({
-        paymentId: z.string().uuid('Invalid payment ID format'),
-        paymentType: z.enum(['sales', 'purchase'], {
-          errorMap: () => ({ message: 'Payment type must be either "sales" or "purchase"' })
-        })
-      });
-      
-      const { paymentId, paymentType } = bodySchema.parse(req.body);
-      
-      // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
-      const result = await whatsAppService.sendPaymentNotification(tenantId, paymentId, paymentType);
-      
-      res.status(200).json({
-        success: true,
-        message: 'Payment notification sent via WhatsApp successfully',
-        data: result,
-        creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
-        remainingCredits: result.creditMetadata?.remainingCredits
-      });
-      
-    } catch (error: any) {
-      if (error.message.includes('Insufficient') || error.message.includes('credits')) {
-        return res.status(403).json({
-          success: false,
-          message: error.message,
-          errorType: 'INSUFFICIENT_CREDITS'
-        });
-      }
-      
-      if (error.message.includes('Invalid phone number') || error.message.includes('not found')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Validate request body using BaseController method
+    const { paymentId, paymentType } = this.validateZodSchema(z.object({
+      paymentId: z.string().uuid('Invalid payment ID format'),
+      paymentType: z.enum(['sales', 'purchase'], {
+        errorMap: () => ({ message: 'Payment type must be either "sales" or "purchase"' })
+      })
+    }), req.body);
+    
+    // Consumes 1 WhatsApp credit. Returns 403 if insufficient credits.
+    const result = await whatsAppService.sendPaymentNotification(tenantId, paymentId, paymentType);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Payment notification sent via WhatsApp successfully',
+      data: result,
+      creditWarning: result.creditMetadata?.lowCreditWarning ? 'Credit balance is low' : undefined,
+      remainingCredits: result.creditMetadata?.remainingCredits
+    });
   };
 
   /**
    * Get paginated message history
    */
   getMessageHistory = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Get pagination options from base controller
-      const paginationOptions = this.getPaginationOptions(req.query);
-      
-      // Extract optional filters from query
-      const { status, messageType, recipientType, search } = req.query;
-      
-      const filters = {
-        ...(status && { status: status as string }),
-        ...(messageType && { messageType: messageType as string }),
-        ...(recipientType && { recipientType: recipientType as string }),
-        ...(search && { search: search as string })
-      };
-      
-      // Get paginated messages
-      const result = await WhatsAppMessageModel.getMessagesPaginated(tenantId, {
-        ...paginationOptions,
-        ...filters
-      });
-      
-      this.sendPaginatedResponse(res, result.data, result.pagination);
-      
-    } catch (error) {
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Get pagination options from base controller
+    const paginationOptions = this.getPaginationOptions(req.query);
+    
+    // Extract optional filters from query
+    const { status, messageType, recipientType, search } = req.query;
+    
+    const filters = {
+      ...(status && { status: status as string }),
+      ...(messageType && { messageType: messageType as string }),
+      ...(recipientType && { recipientType: recipientType as string }),
+      ...(search && { search: search as string })
+    };
+    
+    // Get paginated messages
+    const result = await WhatsAppMessageModel.getMessagesPaginated(tenantId, {
+      ...paginationOptions,
+      ...filters
+    });
+    
+    this.sendPaginatedResponse(res, result.data, result.pagination);
   };
 
   /**
    * Get messages by reference (invoice/payment)
    */
   getMessagesByReference = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
-      
-      // Validate query params
-      const querySchema = z.object({
-        referenceType: z.string().min(1, 'Reference type is required'),
-        referenceId: z.string().uuid('Invalid reference ID format')
-      });
-      
-      const { referenceType, referenceId } = querySchema.parse(req.query);
-      
-      // Get messages by reference
-      const messages = await WhatsAppMessageModel.getMessagesByReference(
-        tenantId, 
-        referenceType, 
-        referenceId
-      );
-      
-      res.status(200).json({
-        success: true,
-        data: messages
-      });
-      
-    } catch (error) {
-      this.handleError(res, error);
-    }
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    // Validate query params using BaseController method
+    const { referenceType, referenceId } = this.validateZodSchema(z.object({
+      referenceType: z.string().min(1, 'Reference type is required'),
+      referenceId: z.string().uuid('Invalid reference ID format')
+    }), req.query);
+    
+    // Get messages by reference
+    const messages = await WhatsAppMessageModel.getMessagesByReference(
+      tenantId, 
+      referenceType, 
+      referenceId
+    );
+    
+    res.status(200).json({
+      success: true,
+      data: messages
+    });
   };
 
   /**
    * Preview message content without sending
    */
   previewMessage = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const tenantId = req.tenantId!;
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
       
-      // Validate request body
-      const bodySchema = z.object({
+      // Validate request body using BaseController method
+      const { messageType, referenceId, invoiceType, paymentType } = this.validateZodSchema(z.object({
         messageType: z.enum(['sales_invoice', 'purchase_invoice', 'payment_reminder', 'payment_notification']),
         referenceId: z.string().uuid('Invalid reference ID format'),
         // For payment reminders, we need to specify invoice type
         invoiceType: z.enum(['sales', 'purchase']).optional(),
         // For payment notifications, we need to specify payment type
         paymentType: z.enum(['sales', 'purchase']).optional()
-      });
-      
-      const { messageType, referenceId, invoiceType, paymentType } = bodySchema.parse(req.body);
+      }), req.body);
       
       let templateVariables: any;
       let recipientInfo: any;
@@ -559,10 +463,6 @@ export class WhatsAppController extends BaseController {
           }
         }
       });
-      
-    } catch (error) {
-      this.handleError(res, error);
-    }
   };
 
   /**
@@ -725,7 +625,7 @@ export class WhatsAppController extends BaseController {
    */
   getCreditBalance = async (req: any, res: any) => {
     try {
-      const tenantId = req.tenantContext?.tenantId;
+      const tenantId = req.tenantId;
       if (!tenantId) {
         return res.status(400).json({
           success: false,

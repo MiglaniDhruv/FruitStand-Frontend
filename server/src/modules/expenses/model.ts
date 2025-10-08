@@ -1,7 +1,8 @@
 import { eq, desc, asc, inArray, and, count } from 'drizzle-orm';
 import { db } from '../../../db';
-import { expenseCategories, expenses, bankAccounts, type ExpenseCategory, type InsertExpenseCategory, type Expense, type InsertExpense, type ExpenseWithCategory, type PaginationOptions, type PaginatedResult } from '@shared/schema';
+import { expenseCategories, expenses, bankAccounts, cashbook, bankbook, type ExpenseCategory, type InsertExpenseCategory, type Expense, type InsertExpense, type ExpenseWithCategory, type PaginationOptions, type PaginatedResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
+import { BankAccountModel } from '../bank-accounts/model';
 import { 
   normalizePaginationOptions, 
   buildPaginationMetadata, 
@@ -193,29 +194,87 @@ export class ExpenseModel {
   }
 
   async createExpense(tenantId: string, expenseData: InsertExpense): Promise<ExpenseWithCategory> {
-    // Validate category and bank account exist before creating with tenant filtering
-    const [category, bankAccount] = await Promise.all([
-      db.select().from(expenseCategories).where(withTenant(expenseCategories, tenantId, eq(expenseCategories.id, expenseData.categoryId))).then(result => result[0]),
-      expenseData.bankAccountId ? 
-        db.select().from(bankAccounts).where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, expenseData.bankAccountId))).then(result => result[0]) : 
-        null
-    ]);
+    return await db.transaction(async (tx) => {
+      // Validate category and bank account exist before creating with tenant filtering
+      const [category, bankAccount] = await Promise.all([
+        tx.select().from(expenseCategories).where(withTenant(expenseCategories, tenantId, eq(expenseCategories.id, expenseData.categoryId))).then(result => result[0]),
+        expenseData.bankAccountId ? 
+          tx.select().from(bankAccounts).where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, expenseData.bankAccountId))).then(result => result[0]) : 
+          null
+      ]);
 
-    if (!category) {
-      throw new Error('Invalid category');
-    }
+      if (!category) {
+        throw new Error('Invalid category');
+      }
 
-    if (expenseData.bankAccountId && !bankAccount) {
-      throw new Error('Invalid bank account');
-    }
+      if (expenseData.bankAccountId && !bankAccount) {
+        throw new Error('Invalid bank account');
+      }
 
-    const expenseWithTenant = ensureTenantInsert(expenseData, tenantId);
-    const [expense] = await db.insert(expenses).values(expenseWithTenant).returning();
+      const expenseWithTenant = ensureTenantInsert(expenseData, tenantId);
+      const [expense] = await tx.insert(expenses).values(expenseWithTenant).returning();
 
-    return {
-      ...expense,
-      category: category || null,
-      bankAccount: bankAccount || null
-    };
+      // Add cashbook entry for cash payments
+      if (expenseData.paymentMode === 'Cash') {
+        // Query the last cashbook entry
+        const lastCashEntry = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(desc(cashbook.createdAt))
+          .limit(1);
+
+        // Calculate current balance
+        const currentBalance = lastCashEntry.length > 0 ? parseFloat(lastCashEntry[0].balance) : 0;
+
+        // Calculate new balance (expense is outflow)
+        const newBalance = currentBalance - parseFloat(expenseData.amount);
+
+        // Insert cashbook entry
+        await tx.insert(cashbook).values(ensureTenantInsert({
+          date: expenseData.paymentDate,
+          description: `Expense - ${category.name}: ${expenseData.description}`,
+          outflow: expenseData.amount,
+          inflow: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Expense',
+          referenceId: expense.id,
+        }, tenantId));
+      }
+
+      // Add bankbook entry for bank payments
+      if (expenseData.paymentMode === 'Bank' && expenseData.bankAccountId) {
+        // Query the last bankbook entry for this bank account
+        const lastBankEntry = await tx.select().from(bankbook)
+          .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, expenseData.bankAccountId)))
+          .orderBy(desc(bankbook.createdAt))
+          .limit(1);
+
+        // Calculate current balance
+        const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+
+        // Calculate new balance (expense is outflow)
+        const newBalance = currentBalance - parseFloat(expenseData.amount);
+
+        // Insert bankbook entry
+        await tx.insert(bankbook).values(ensureTenantInsert({
+          bankAccountId: expenseData.bankAccountId,
+          date: expenseData.paymentDate,
+          description: `Expense - ${category.name}: ${expenseData.description}`,
+          credit: expenseData.amount,
+          debit: '0.00',
+          balance: newBalance.toFixed(2),
+          referenceType: 'Expense',
+          referenceId: expense.id,
+        }, tenantId));
+
+        // Align bank account balance with bankbook running balance
+        await BankAccountModel.setBankAccountBalance(tx, tenantId, expenseData.bankAccountId, newBalance.toFixed(2));
+      }
+
+      return {
+        ...expense,
+        category: category || null,
+        bankAccount: bankAccount || null
+      };
+    });
   }
 }

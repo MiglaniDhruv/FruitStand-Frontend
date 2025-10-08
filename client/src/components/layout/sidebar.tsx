@@ -26,6 +26,7 @@ import {
   Users,
   Gauge,
   MessageSquare,
+  Landmark,
 } from "lucide-react";
 
 const getNavigationItems = (slug: string) => [
@@ -75,6 +76,12 @@ const getNavigationItems = (slug: string) => [
     title: "Expenses",
     href: `/${slug}/expenses`,
     icon: TrendingDown,
+    permission: PERMISSIONS.VIEW_PAYMENTS, // Using existing permission for now
+  },
+  {
+    title: "Bank Accounts",
+    href: `/${slug}/bank-accounts`,
+    icon: Landmark,
     permission: PERMISSIONS.VIEW_PAYMENTS, // Using existing permission for now
   },
   {

@@ -40,6 +40,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { logEventHandlerError, logMutationError, logFormError, logCalculationError, logNavigationError } from "@/lib/error-logger";
 import { z } from "zod";
 import {
   Plus,
@@ -128,6 +129,7 @@ export default function SalesInvoiceManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
     },
     onError: (error) => {
+      logMutationError(error, 'deleteSalesInvoice');
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete invoice",
@@ -137,8 +139,21 @@ export default function SalesInvoiceManagement() {
   });
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this sales invoice? This action cannot be undone.")) {
-      deleteInvoiceMutation.mutate(id);
+    try {
+      if (!id) {
+        throw new Error('Invalid invoice ID');
+      }
+      
+      if (confirm("Are you sure you want to delete this sales invoice? This action cannot be undone.")) {
+        await deleteInvoiceMutation.mutateAsync(id);
+      }
+    } catch (error) {
+      logEventHandlerError(error, 'handleDelete', { invoiceId: id });
+      toast({
+        title: "Error",
+        description: "Failed to delete invoice",
+        variant: "destructive",
+      });
     }
   };
 
@@ -290,33 +305,42 @@ export default function SalesInvoiceManagement() {
   };
 
   const handleCreateNew = () => {
-    setEditingInvoice(null);
-    form.reset({
-      invoice: {
-        retailerId: "",
-        invoiceDate: format(new Date(), "yyyy-MM-dd"),
-        totalAmount: 0,
-        paidAmount: 0,
-        balanceAmount: 0,
-        status: "Pending",
-        notes: "",
-      },
-      items: [
-        {
-          itemId: "",
-          weight: 0,
-          crates: 0,
-          boxes: 0,
-          rate: 0,
-          amount: 0,
+    try {
+      setEditingInvoice(null);
+      form.reset({
+        invoice: {
+          retailerId: "",
+          invoiceDate: format(new Date(), "yyyy-MM-dd"),
+          totalAmount: 0,
+          paidAmount: 0,
+          balanceAmount: 0,
+          status: "Pending",
+          notes: "",
         },
-      ],
-      crateTransaction: {
-        enabled: false,
-        quantity: undefined,
-      },
-    });
-    setOpen(true);
+        items: [
+          {
+            itemId: "",
+            weight: 0,
+            crates: 0,
+            boxes: 0,
+            rate: 0,
+            amount: 0,
+          },
+        ],
+        crateTransaction: {
+          enabled: false,
+          quantity: undefined,
+        },
+      });
+      setOpen(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleCreateNew');
+      toast({
+        title: "Error",
+        description: "Failed to open new invoice form",
+        variant: "destructive",
+      });
+    }
   };
 
   const getQuantityForCalculation = (item: any) => {
@@ -324,15 +348,34 @@ export default function SalesInvoiceManagement() {
   };
 
   const calculateItemAmount = (rate: number, item: any) => {
-    const quantity = getQuantityForCalculation(item);
-    return rate * quantity;
+    try {
+      if (!item) {
+        throw new Error('Invalid item data for calculation');
+      }
+      if (isNaN(rate) || rate < 0) {
+        throw new Error('Invalid rate for calculation');
+      }
+      const quantity = getQuantityForCalculation(item);
+      return rate * quantity;
+    } catch (error) {
+      logCalculationError(error, 'calculateItemAmount', { rate, item });
+      return 0; // Safe default
+    }
   };
 
   const calculateTotalAmount = () => {
-    const items = form.watch("items");
-    return items.reduce((total, item) => {
-      return total + calculateItemAmount(item.rate, item);
-    }, 0);
+    try {
+      const items = form.watch("items");
+      if (!Array.isArray(items)) {
+        throw new Error('Invalid items array for total calculation');
+      }
+      return items.reduce((total, item) => {
+        return total + calculateItemAmount(item.rate, item);
+      }, 0);
+    } catch (error) {
+      logCalculationError(error, 'calculateTotalAmount');
+      return 0; // Safe default
+    }
   };
 
   const getAvailableStock = (itemId: string) => {
@@ -354,21 +397,43 @@ export default function SalesInvoiceManagement() {
 
   const onSubmit = async (data: InvoiceFormData) => {
     try {
-      // Calculate totals
+      // Validate form data
+      if (!data || !data.invoice) {
+        throw new Error('Invalid form data');
+      }
+      
+      if (!data.invoice.retailerId) {
+        throw new Error('Retailer is required');
+      }
+      
+      if (!data.items || data.items.length === 0) {
+        throw new Error('At least one item is required');
+      }
+      
+      // Calculate totals with error handling
       const totalAmount = calculateTotalAmount();
+      if (totalAmount <= 0) {
+        throw new Error('Invalid total amount calculated');
+      }
+      
       const invoiceData: any = {
         invoice: {
           ...data.invoice,
           totalAmount: totalAmount.toString(),
         },
-        items: data.items.map((item) => ({
-          ...item,
-          weight: item.weight.toString(),
-          crates: item.crates.toString(),
-          boxes: item.boxes.toString(),
-          rate: item.rate.toString(),
-          amount: calculateItemAmount(item.rate, item).toString(),
-        })),
+        items: data.items.map((item) => {
+          if (!item.itemId) {
+            throw new Error('Item ID is required for all items');
+          }
+          return {
+            ...item,
+            weight: item.weight.toString(),
+            crates: item.crates.toString(),
+            boxes: item.boxes.toString(),
+            rate: item.rate.toString(),
+            amount: calculateItemAmount(item.rate, item).toString(),
+          };
+        }),
       };
 
       // Add crate transaction if enabled
@@ -414,6 +479,7 @@ export default function SalesInvoiceManagement() {
       setOpen(false);
       form.reset();
     } catch (error) {
+      logFormError(error, 'salesInvoiceForm', data);
       toast({
         title: "Error",
         description:
@@ -424,7 +490,22 @@ export default function SalesInvoiceManagement() {
   };
 
   const handleViewInvoice = (invoice: any) => {
-    setLocation(`/${slug}/sales-invoices/${invoice.id}`);
+    try {
+      if (!invoice || !invoice.id) {
+        throw new Error('Invalid invoice data for navigation');
+      }
+      if (!slug) {
+        throw new Error('Invalid tenant slug for navigation');
+      }
+      setLocation(`/${slug}/sales-invoices/${invoice.id}`);
+    } catch (error) {
+      logNavigationError(error, `sales-invoice-${invoice?.id}`);
+      toast({
+        title: "Error",
+        description: "Failed to navigate to invoice details",
+        variant: "destructive",
+      });
+    }
   };
 
   // Define table columns

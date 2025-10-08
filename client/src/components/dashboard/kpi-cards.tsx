@@ -1,6 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IndianRupee, Clock, Truck, Boxes } from "lucide-react";
+import { IndianRupee, Clock, Truck, Boxes, AlertTriangle } from "lucide-react";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import type { DashboardKPIs } from "@/types";
 
 interface KPICardsProps {
@@ -67,7 +70,26 @@ export default function KPICards({ kpis, loading }: KPICardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <ErrorBoundary 
+      resetKeys={kpis ? [kpis.todaySales, kpis.pendingPayments, kpis.stockValue] : []}
+      fallback={({ error, resetError }) => (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Failed to load dashboard statistics</AlertTitle>
+              <AlertDescription className="mt-2 space-y-2">
+                <p>An error occurred while loading the dashboard KPIs.</p>
+                <Button onClick={resetError} size="sm">
+                  Try Again
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {cards.map((card) => (
         <Card key={card.title} data-testid={`card-${card.title.toLowerCase().replace(/\s+/g, '-')}`}>
           <CardContent className="p-6">
@@ -85,5 +107,6 @@ export default function KPICards({ kpis, loading }: KPICardsProps) {
         </Card>
       ))}
     </div>
+    </ErrorBoundary>
   );
 }

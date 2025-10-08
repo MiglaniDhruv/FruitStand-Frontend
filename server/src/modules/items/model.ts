@@ -21,10 +21,25 @@ import {
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
 
 export class ItemModel {
-  async getItems(tenantId: string): Promise<ItemWithVendor[]> {
+  async getItems(tenantId: string, isActive?: string): Promise<ItemWithVendor[]> {
+    // Build conditions array starting with tenant filtering
+    const conditions = [];
+    
+    // Add isActive filter conditionally
+    if (isActive === 'true') {
+      conditions.push(eq(items.isActive, true));
+    } else if (isActive === 'false') {
+      conditions.push(eq(items.isActive, false));
+    }
+    // If isActive is undefined, don't add any isActive filter (show all items)
+    
+    const whereCondition = conditions.length > 0 
+      ? withTenant(items, tenantId, and(...conditions))
+      : withTenant(items, tenantId);
+    
     const results = await db.select({ item: items, vendor: vendors }).from(items)
       .leftJoin(vendors, and(eq(items.vendorId, vendors.id), eq(vendors.tenantId, tenantId)))
-      .where(withTenant(items, tenantId, eq(items.isActive, true)))
+      .where(whereCondition)
       .orderBy(asc(items.name));
     
     return results.map(record => ({
@@ -33,9 +48,20 @@ export class ItemModel {
     }));
   }
 
-  async getItemsByVendor(tenantId: string, vendorId: string): Promise<Item[]> {
+  async getItemsByVendor(tenantId: string, vendorId: string, isActive?: string): Promise<Item[]> {
+    // Build conditions array starting with vendor filtering
+    const conditions = [eq(items.vendorId, vendorId)];
+    
+    // Add isActive filter conditionally
+    if (isActive === 'true') {
+      conditions.push(eq(items.isActive, true));
+    } else if (isActive === 'false') {
+      conditions.push(eq(items.isActive, false));
+    }
+    // If isActive is undefined, don't add any isActive filter (show all items)
+    
     return await db.select().from(items)
-      .where(withTenant(items, tenantId, and(eq(items.vendorId, vendorId), eq(items.isActive, true))))
+      .where(withTenant(items, tenantId, and(...conditions)))
       .orderBy(asc(items.name));
   }
 
@@ -95,7 +121,7 @@ export class ItemModel {
     });
   }
 
-  async getItemsPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<ItemWithVendor>> {
+  async getItemsPaginated(tenantId: string, options: PaginationOptions & { isActive?: 'true' | 'false' }): Promise<PaginatedResult<ItemWithVendor>> {
     const { page, limit, offset, tenantCondition } = withTenantPagination(items, tenantId, options);
     
     // Define table columns for sorting and searching
@@ -108,8 +134,18 @@ export class ItemModel {
     
     const searchableColumns = [items.name];
     
-    // Combine tenant filtering with existing isActive filtering
-    const combinedCondition = and(tenantCondition, eq(items.isActive, true))!;
+    // Build WHERE conditions array starting with tenant filtering
+    const whereConditions = [tenantCondition];
+    
+    // Add isActive filter conditionally based on options.isActive
+    if (options.isActive === 'true') {
+      whereConditions.push(eq(items.isActive, true));
+    } else if (options.isActive === 'false') {
+      whereConditions.push(eq(items.isActive, false));
+    }
+    // If options.isActive is undefined, don't add any isActive filter (show all items)
+    
+    const combinedCondition = and(...whereConditions)!;
     
     // Build base query with left join to vendors
     let query = db.select({ item: items, vendor: vendors }).from(items)

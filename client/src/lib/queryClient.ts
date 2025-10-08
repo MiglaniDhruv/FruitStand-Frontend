@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authenticatedApiRequest } from './auth';
+import { logApiError } from './error-logger';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -26,8 +27,13 @@ export async function apiRequest(
 
 const queryFunction: QueryFunction = async ({ queryKey }) => {
   const url = queryKey.join('/') as string;
-  const response = await authenticatedApiRequest('GET', url);
-  return await response.json();
+  try {
+    const response = await authenticatedApiRequest('GET', url);
+    return await response.json();
+  } catch (error) {
+    logApiError(error, url, 'GET');
+    throw error;
+  }
 };
 
 export const queryClient = new QueryClient({

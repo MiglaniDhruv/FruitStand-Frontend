@@ -45,9 +45,11 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
-import { Info, AlertCircle, Loader2 } from "lucide-react";
+import { Info, AlertCircle, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert as AlertComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
 import { InsertRetailerPayment, RetailerPaymentDistributionResult, SalesInvoice } from "@shared/schema";
 
 const retailerPaymentFormSchema = z.object({
@@ -93,6 +95,8 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const [outstandingInvoices, setOutstandingInvoices] = useState<SalesInvoice[]>([]);
   const [distributionPreview, setDistributionPreview] = useState<Array<{ invoice: SalesInvoice; allocatedAmount: number }>>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [distributionError, setDistributionError] = useState<string | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -114,7 +118,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const amount = form.watch('amount');
 
   // Fetch outstanding invoices
-  const { data: invoicesData, isLoading: invoicesLoading } = useQuery({
+  const { data: invoicesData, isLoading: invoicesLoading, isError: invoicesError, error: invoicesErrorMessage } = useQuery({
     queryKey: ["/api/retailers", retailerId, "outstanding-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", `/api/retailers/${retailerId}/outstanding-invoices`);
@@ -124,7 +128,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   });
 
   // Fetch bank accounts
-  const { data: bankAccountsData } = useQuery({
+  const { data: bankAccountsData, isError: bankAccountsError, error: bankAccountsErrorMessage } = useQuery({
     queryKey: ["/api/bank-accounts"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
@@ -142,50 +146,70 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
 
   // Calculate distribution preview
   useEffect(() => {
-    const paymentAmount = parseFloat(amount || '0');
-    
-    if (paymentAmount > 0 && outstandingInvoices.length > 0) {
-      let remainingAmount = paymentAmount;
-      const preview: Array<{ invoice: SalesInvoice; allocatedAmount: number }> = [];
+    try {
+      setDistributionError(null);
+      const paymentAmount = parseFloat(amount || '0');
       
-      for (const invoice of outstandingInvoices) {
-        if (remainingAmount <= 0) break;
-        
-        const invoiceBalance = parseFloat(invoice.udhaaarAmount || '0');
-        const allocation = Math.min(remainingAmount, invoiceBalance);
-        
-        preview.push({
-          invoice,
-          allocatedAmount: allocation
-        });
-        
-        remainingAmount -= allocation;
+      if (isNaN(paymentAmount)) {
+        throw new Error('Invalid payment amount');
       }
       
-      setDistributionPreview(preview);
-      setShowPreview(true);
-    } else {
+      if (paymentAmount > 0 && outstandingInvoices.length > 0) {
+        let remainingAmount = paymentAmount;
+        const preview: Array<{ invoice: SalesInvoice; allocatedAmount: number }> = [];
+        
+        for (const invoice of outstandingInvoices) {
+          if (remainingAmount <= 0) break;
+          
+          const invoiceBalance = parseFloat(invoice.udhaaarAmount || '0');
+          if (isNaN(invoiceBalance)) {
+            throw new Error(`Invalid balance amount for invoice ${invoice.id}`);
+          }
+          const allocation = Math.min(remainingAmount, invoiceBalance);
+          
+          preview.push({
+            invoice,
+            allocatedAmount: allocation
+          });
+          
+          remainingAmount -= allocation;
+        }
+        
+        setDistributionPreview(preview);
+        setShowPreview(true);
+      } else {
+        setShowPreview(false);
+        setDistributionPreview([]);
+      }
+    } catch (error) {
+      console.error('Distribution calculation error:', error);
+      setDistributionError('Error calculating payment distribution');
       setShowPreview(false);
-      setDistributionPreview([]);
     }
   }, [amount, outstandingInvoices]);
 
   // Reset form and preview state when modal is closed
   useEffect(() => {
     if (!open) {
-      form.reset({
-        amount: "",
-        paymentMode: 'Cash',
-        paymentDate: new Date().toISOString().split('T')[0],
-        bankAccountId: "",
-        chequeNumber: "",
-        upiReference: "",
-        paymentLinkId: "",
-        notes: "",
-      });
-      setOutstandingInvoices([]);
-      setDistributionPreview([]);
-      setShowPreview(false);
+      try {
+        setSubmissionError(null);
+        setDistributionError(null);
+        form.reset({
+          amount: "",
+          paymentMode: 'Cash',
+          paymentDate: new Date().toISOString().split('T')[0],
+          bankAccountId: "",
+          chequeNumber: "",
+          upiReference: "",
+          paymentLinkId: "",
+          notes: "",
+        });
+        setOutstandingInvoices([]);
+        setDistributionPreview([]);
+        setShowPreview(false);
+      } catch (error) {
+        console.error('Error resetting form:', error);
+      }
     }
   }, [open, form]);
 
@@ -207,32 +231,77 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
       const response = await authenticatedApiRequest("POST", `/api/retailers/${retailerId}/payments`, payload);
       return response.json();
     },
-    onSuccess: (result) => {
-      toast({
-        title: "Payment Recorded",
-        description: `Payment recorded and distributed across ${result.invoicesUpdated.length} invoice(s)`,
-      });
-      
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
-      
-      onOpenChange(false);
-      form.reset();
+    onSuccess: (result: any) => {
+      try {
+        setSubmissionError(null);
+        toast({
+          title: "Payment Recorded",
+          description: `Payment recorded and distributed across ${result.invoicesUpdated?.length || 0} invoice(s)`,
+        });
+        
+        // Invalidate queries
+        queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+        
+        onOpenChange(false);
+        form.reset();
+      } catch (error) {
+        console.error('Error in onSuccess handler:', error);
+        setSubmissionError('Payment recorded but there was an error updating the interface');
+      }
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Payment submission error:', error);
+      const errorMessage = error?.message || 'Failed to record payment. Please try again.';
+      setSubmissionError(errorMessage);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to record payment",
+        description: errorMessage,
         variant: "destructive",
       });
     },
   });
 
   const onSubmit = (data: RetailerPaymentFormData) => {
-    mutation.mutate(data);
+    try {
+      setSubmissionError(null);
+      
+      // Validate payment amount
+      const paymentAmount = parseFloat(data.amount);
+      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        throw new Error('Please enter a valid payment amount');
+      }
+      
+      // Validate outstanding invoices
+      if (outstandingInvoices.length === 0) {
+        throw new Error('No outstanding invoices found for this retailer');
+      }
+      
+      // Validate payment mode specific fields
+      if (data.paymentMode === 'Cheque' && !data.chequeNumber?.trim()) {
+        throw new Error('Cheque number is required for cheque payments');
+      }
+      
+      if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+        throw new Error('Bank account is required for bank transfers');
+      }
+      
+      if (data.paymentMode === 'UPI' && !data.upiReference?.trim()) {
+        throw new Error('UPI reference is required for UPI payments');
+      }
+      
+      if (data.paymentMode === 'PaymentLink' && !data.paymentLinkId?.trim()) {
+        throw new Error('Payment link ID is required for payment link transactions');
+      }
+      
+      mutation.mutate(data);
+    } catch (error) {
+      console.error('Form validation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Please check the form data and try again';
+      setSubmissionError(errorMessage);
+    }
   };
 
   const totalOutstanding = outstandingInvoices.reduce((sum, invoice) => sum + parseFloat(invoice.udhaaarAmount || '0'), 0);
@@ -243,9 +312,31 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Record Payment - {retailerName || 'Retailer'}</DialogTitle>
-        </DialogHeader>
+        <ErrorBoundary 
+          resetKeys={[open ? 1 : 0, retailerId]}
+          fallback={({ error, resetError }) => (
+            <div className="p-4">
+              <AlertComponent variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Failed to load form</AlertTitle>
+                <AlertDescriptionComponent className="mt-2 space-y-2">
+                  <p>An error occurred while loading the retailer payment form.</p>
+                  <div className="flex gap-2">
+                    <Button onClick={resetError} size="sm">
+                      Try Again
+                    </Button>
+                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
+                      Close
+                    </Button>
+                  </div>
+                </AlertDescriptionComponent>
+              </AlertComponent>
+            </div>
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle>Record Payment - {retailerName || 'Retailer'}</DialogTitle>
+          </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -504,6 +595,58 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
               </Card>
             ) : null}
 
+            {submissionError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {submissionError}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                    onClick={() => setSubmissionError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {distributionError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  {distributionError}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                    onClick={() => setDistributionError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {invoicesError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to load outstanding invoices: {invoicesErrorMessage?.message || 'Unknown error'}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {bankAccountsError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to load bank accounts: {bankAccountsErrorMessage?.message || 'Unknown error'}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
@@ -530,6 +673,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
             </div>
           </form>
         </Form>
+        </ErrorBoundary>
       </DialogContent>
     </Dialog>
   );

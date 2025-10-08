@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { File } from "lucide-react";
+import { File, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function RecentTransactions() {
   const { data: invoices, isLoading } = useQuery<any[]>({
@@ -26,7 +28,26 @@ export default function RecentTransactions() {
   };
 
   return (
-    <Card>
+    <ErrorBoundary 
+      resetKeys={invoices ? [invoices.length, invoices[0]?.id, invoices[invoices.length - 1]?.id].filter(Boolean) : []}
+      fallback={({ error, resetError }) => (
+        <Card>
+          <CardContent className="p-6">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Failed to load recent transactions</AlertTitle>
+              <AlertDescription className="mt-2 space-y-2">
+                <p>An error occurred while loading recent transactions.</p>
+                <Button onClick={resetError} size="sm">
+                  Try Again
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+    >
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Recent Purchase Invoices</CardTitle>
@@ -88,5 +109,6 @@ export default function RecentTransactions() {
         </div>
       </CardContent>
     </Card>
+    </ErrorBoundary>
   );
 }

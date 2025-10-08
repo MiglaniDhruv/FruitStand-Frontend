@@ -8,10 +8,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { PaginationMetadata } from "@shared/schema";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface DataTableColumn<T> {
   accessorKey: string;
@@ -52,6 +54,11 @@ interface DataTableProps<T> {
   onSortChange?: (sortBy: string, sortOrder: string) => void;
   pageSizeOptions?: number[];
   emptyMessage?: string;
+  /**
+   * Key to use for error boundary reset detection. 
+   * Falls back to data length and first/last row IDs if not provided.
+   */
+  resetKey?: string | number;
 }
 
 export function DataTable<T>({
@@ -70,6 +77,7 @@ export function DataTable<T>({
   isLoading = false,
   pageSizeOptions,
   emptyMessage = "No results.",
+  resetKey,
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
   const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
@@ -261,8 +269,44 @@ export function DataTable<T>({
     );
   }
 
+  const TableErrorFallback = ({ error, resetError }: { error: Error; resetError: () => void }) => (
+    <Alert variant="destructive" className="m-4">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Failed to load table data</AlertTitle>
+      <AlertDescription className="mt-2 space-y-2">
+        <p>An error occurred while rendering the table.</p>
+        <div className="flex gap-2">
+          <Button onClick={resetError} size="sm">
+            Try Again
+          </Button>
+          <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+            Reload Page
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+
+  // Generate meaningful reset keys for error boundary
+  const generateResetKeys = (): (string | number)[] => {
+    if (resetKey !== undefined) return [resetKey];
+    
+    const keys: (string | number)[] = [data.length];
+    
+    if (data.length > 0) {
+      // Add first and last row IDs for content change detection
+      const firstRowId = getNestedValue(data[0], rowKey);
+      const lastRowId = getNestedValue(data[data.length - 1], rowKey);
+      if (firstRowId !== undefined) keys.push(firstRowId);
+      if (lastRowId !== undefined && lastRowId !== firstRowId) keys.push(lastRowId);
+    }
+    
+    return keys;
+  };
+
   return (
-    <div className="space-y-4">
+    <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
+      <div className="space-y-4">
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -350,5 +394,6 @@ export function DataTable<T>({
         pageSizeOptions={pageSizeOptions}
       />
     </div>
+    </ErrorBoundary>
   );
 }
