@@ -15,6 +15,8 @@ import {
 } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
+import { ValidationError, AppError } from '../../types';
+import { handleDatabaseError } from '../../utils/database-errors';
 
 export class RetailerModel {
   async getRetailers(tenantId: string): Promise<Retailer[]> {
@@ -30,22 +32,59 @@ export class RetailerModel {
   }
 
   async createRetailer(tenantId: string, insertRetailer: InsertRetailer): Promise<Retailer> {
-    const retailerWithTenant = ensureTenantInsert(insertRetailer, tenantId);
-    const [retailer] = await db.insert(retailers).values(retailerWithTenant).returning();
-    return retailer;
+    // Add business logic validation
+    if (!insertRetailer.name || insertRetailer.name.trim().length === 0) {
+      throw new ValidationError('Retailer name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    if (insertRetailer.phone && insertRetailer.phone.trim().length < 10) {
+      throw new ValidationError('Invalid phone number', {
+        phone: 'Phone number must be at least 10 characters'
+      });
+    }
+
+    try {
+      const retailerWithTenant = ensureTenantInsert(insertRetailer, tenantId);
+      const [retailer] = await db.insert(retailers).values(retailerWithTenant).returning();
+      return retailer;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async updateRetailer(tenantId: string, id: string, insertRetailer: Partial<InsertRetailer>): Promise<Retailer | undefined> {
-    const [retailer] = await db
-      .update(retailers)
-      .set(insertRetailer)
-      .where(withTenant(retailers, tenantId, eq(retailers.id, id)))
-      .returning();
-    return retailer || undefined;
+    // Add business logic validation
+    if (insertRetailer.name !== undefined && (!insertRetailer.name || insertRetailer.name.trim().length === 0)) {
+      throw new ValidationError('Retailer name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    if (insertRetailer.phone !== undefined && insertRetailer.phone && insertRetailer.phone.trim().length < 10) {
+      throw new ValidationError('Invalid phone number', {
+        phone: 'Phone number must be at least 10 characters'
+      });
+    }
+
+    try {
+      const [retailer] = await db
+        .update(retailers)
+        .set(insertRetailer)
+        .where(withTenant(retailers, tenantId, eq(retailers.id, id)))
+        .returning();
+      return retailer || undefined;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async deleteRetailer(tenantId: string, id: string): Promise<boolean> {
-    return await db.transaction(async (tx) => {
+    try {
+      return await db.transaction(async (tx) => {
       // a. Delete whatsappMessages where recipientType='retailer' and recipientId=id
       await tx.delete(whatsappMessages)
         .where(and(
@@ -110,6 +149,10 @@ export class RetailerModel {
 
       return !!deletedRetailer;
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async getRetailersPaginated(tenantId: string, options?: PaginationOptions & {

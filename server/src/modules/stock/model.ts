@@ -20,6 +20,8 @@ import {
 } from "../../utils/pagination";
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
 import { assertSameTenant } from "../../utils/tenant";
+import { ValidationError, AppError } from "../../types";
+import { handleDatabaseError } from "../../utils/database-errors";
 
 export class StockModel {
   async getStock(tenantId: string): Promise<StockWithItem[]> {
@@ -190,20 +192,53 @@ export class StockModel {
   }
 
   async updateStock(tenantId: string, itemId: string, insertStock: Partial<InsertStock>, externalTx?: any): Promise<Stock> {
-    const dbToUse = externalTx || db;
-    const existing = await this.getStockByItem(tenantId, itemId, externalTx);
-    if (existing) {
-      const [updated] = await dbToUse
-        .update(stock)
-        .set({ ...insertStock, lastUpdated: new Date() })
-        .where(withTenant(stock, tenantId, eq(stock.itemId, itemId)))
-        .returning();
-      return updated;
-    } else {
-      const [created] = await dbToUse.insert(stock)
-        .values(ensureTenantInsert({ ...insertStock, itemId }, tenantId))
-        .returning();
-      return created;
+    // Add business logic validation
+    if (insertStock.quantityInCrates !== undefined) {
+      const cratesQty = parseFloat(insertStock.quantityInCrates || '0');
+      if (isNaN(cratesQty) || cratesQty < 0) {
+        throw new ValidationError('Invalid quantity in crates', {
+          quantityInCrates: 'Quantity in crates must be a non-negative number'
+        });
+      }
+    }
+
+    if (insertStock.quantityInBoxes !== undefined) {
+      const boxesQty = parseFloat(insertStock.quantityInBoxes || '0');
+      if (isNaN(boxesQty) || boxesQty < 0) {
+        throw new ValidationError('Invalid quantity in boxes', {
+          quantityInBoxes: 'Quantity in boxes must be a non-negative number'
+        });
+      }
+    }
+
+    if (insertStock.quantityInKgs !== undefined) {
+      const kgsQty = parseFloat(insertStock.quantityInKgs || '0');
+      if (isNaN(kgsQty) || kgsQty < 0) {
+        throw new ValidationError('Invalid quantity in kgs', {
+          quantityInKgs: 'Quantity in kgs must be a non-negative number'
+        });
+      }
+    }
+
+    try {
+      const dbToUse = externalTx || db;
+      const existing = await this.getStockByItem(tenantId, itemId, externalTx);
+      if (existing) {
+        const [updated] = await dbToUse
+          .update(stock)
+          .set({ ...insertStock, lastUpdated: new Date() })
+          .where(withTenant(stock, tenantId, eq(stock.itemId, itemId)))
+          .returning();
+        return updated;
+      } else {
+        const [created] = await dbToUse.insert(stock)
+          .values(ensureTenantInsert({ ...insertStock, itemId }, tenantId))
+          .returning();
+        return created;
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
     }
   }
 
@@ -263,26 +298,72 @@ export class StockModel {
   }
 
   async createStockMovement(tenantId: string, insertMovement: InsertStockMovement, externalTx?: any): Promise<StockMovement> {
-    const executeTransaction = async (tx: any) => {
-      const [movement] = await tx.insert(stockMovements)
-        .values(ensureTenantInsert(insertMovement, tenantId))
-        .returning();
-      
-      // Update stock balance after movement
-      const balance = await this.calculateStockBalance(tenantId, insertMovement.itemId, tx);
-      await this.updateStock(tenantId, insertMovement.itemId, {
-        quantityInCrates: balance.crates.toString(),
-        quantityInBoxes: balance.boxes.toString(),
-        quantityInKgs: balance.kgs.toString()
-      }, tx);
-      
-      return movement;
-    };
+    // Add business logic validation
+    if (!insertMovement.itemId) {
+      throw new ValidationError('Item is required', {
+        itemId: 'Item must be selected'
+      });
+    }
 
-    if (externalTx) {
-      return await executeTransaction(externalTx);
-    } else {
-      return await db.transaction(executeTransaction);
+    if (!insertMovement.movementType || !['IN', 'OUT'].includes(insertMovement.movementType)) {
+      throw new ValidationError('Invalid movement type', {
+        movementType: 'Movement type must be IN or OUT'
+      });
+    }
+
+    const cratesQty = parseFloat(insertMovement.quantityInCrates || '0');
+    if (isNaN(cratesQty) || cratesQty < 0) {
+      throw new ValidationError('Invalid quantity in crates', {
+        quantityInCrates: 'Quantity in crates must be a non-negative number'
+      });
+    }
+
+    const boxesQty = parseFloat(insertMovement.quantityInBoxes || '0');
+    if (isNaN(boxesQty) || boxesQty < 0) {
+      throw new ValidationError('Invalid quantity in boxes', {
+        quantityInBoxes: 'Quantity in boxes must be a non-negative number'
+      });
+    }
+
+    const kgsQty = parseFloat(insertMovement.quantityInKgs);
+    if (isNaN(kgsQty) || kgsQty < 0) {
+      throw new ValidationError('Invalid quantity in kgs', {
+        quantityInKgs: 'Quantity in kgs must be a non-negative number'
+      });
+    }
+
+    const rate = parseFloat(insertMovement.rate || '0');
+    if (isNaN(rate) || rate < 0) {
+      throw new ValidationError('Invalid rate', {
+        rate: 'Rate must be a non-negative number'
+      });
+    }
+
+    try {
+      const executeTransaction = async (tx: any) => {
+        const [movement] = await tx.insert(stockMovements)
+          .values(ensureTenantInsert(insertMovement, tenantId))
+          .returning();
+        
+        // Update stock balance after movement
+        const balance = await this.calculateStockBalance(tenantId, insertMovement.itemId, tx);
+        await this.updateStock(tenantId, insertMovement.itemId, {
+          quantityInCrates: balance.crates.toString(),
+          quantityInBoxes: balance.boxes.toString(),
+          quantityInKgs: balance.kgs.toString()
+        }, tx);
+        
+        return movement;
+      };
+
+      if (externalTx) {
+        return await executeTransaction(externalTx);
+      } else {
+        return await db.transaction(executeTransaction);
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
     }
   }
 

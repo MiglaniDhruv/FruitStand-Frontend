@@ -2,6 +2,7 @@ import { BaseRouter } from '../../utils/base';
 import { PurchaseInvoiceController } from './controller';
 import { authenticateToken, requireRole, validateTenant, attachTenantContext } from '../../middleware/auth';
 import { UserRole } from '../../types';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class PurchaseInvoiceRouter extends BaseRouter {
   private purchaseInvoiceController: PurchaseInvoiceController;
@@ -16,44 +17,44 @@ export class PurchaseInvoiceRouter extends BaseRouter {
     // GET /purchase-invoices - Get purchase invoices (with pagination support and filtering)
     this.router.get('/purchase-invoices', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.purchaseInvoiceController.getAll.bind(this.purchaseInvoiceController)
+      this.ah(this.purchaseInvoiceController, 'getAll')
     );
 
     // GET /purchase-invoices/:id - Get a specific purchase invoice
     this.router.get('/purchase-invoices/:id', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.purchaseInvoiceController.getById.bind(this.purchaseInvoiceController)
+      this.ah(this.purchaseInvoiceController, 'getById')
     );
 
     // POST /purchase-invoices - Create a new purchase invoice (Admin/Operator only)
     this.router.post('/purchase-invoices', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
-      this.purchaseInvoiceController.create.bind(this.purchaseInvoiceController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.purchaseInvoiceController, 'create')
     );
 
     // POST /purchase-invoices/:id/share-link - Create share link for purchase invoice
     this.router.post('/purchase-invoices/:id/share-link', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
-      this.purchaseInvoiceController.createShareLink.bind(this.purchaseInvoiceController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.purchaseInvoiceController, 'createShareLink')
     );
 
     // DELETE /purchase-invoices/:id - Delete a purchase invoice (Admin/Operator only)
     this.router.delete('/purchase-invoices/:id', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
-      this.purchaseInvoiceController.delete.bind(this.purchaseInvoiceController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.purchaseInvoiceController, 'delete')
     );
   }
 }

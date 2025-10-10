@@ -346,6 +346,7 @@ export default function PurchaseInvoiceDetailPage() {
                 invoice={invoice}
                 payments={payments}
                 onAddPayment={() => setShowPaymentForm(true)}
+                isPurchaseInvoice={true}
               />
             </div>
           </main>

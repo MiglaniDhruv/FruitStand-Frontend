@@ -1,9 +1,9 @@
-import { WhatsAppRouter } from './routes.js';
+import { WhatsAppRouter } from './routes';
 
 // Create and export router instance
 export const whatsappRouter = new WhatsAppRouter();
 
 // Export individual components for flexibility
-export { WhatsAppMessageModel } from './model.js';
-export { WhatsAppController } from './controller.js';
-export { WhatsAppRouter } from './routes.js';
+export { WhatsAppMessageModel } from './model';
+export { WhatsAppController } from './controller';
+export { WhatsAppRouter } from './routes';

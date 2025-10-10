@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { Response, NextFunction } from "express";
-import { AuthenticatedRequest, UserRole } from "../types";
+import { AuthenticatedRequest, UserRole, UnauthorizedError, ForbiddenError, InternalServerError } from "../types";
 
 // Enforce JWT_SECRET in production
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
@@ -32,7 +32,7 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   try {
     return jwt.verify(token, JWT_REFRESH_SECRET) as RefreshTokenPayload;
   } catch (error) {
-    throw new Error('Invalid refresh token');
+    throw new UnauthorizedError('Invalid refresh token');
   }
 };
 
@@ -42,22 +42,22 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    throw new UnauthorizedError('Access token required');
   }
 
-  jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid token' });
-    }
-    req.user = decoded as AuthTokenPayload;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
+    req.user = decoded;
     next();
-  });
+  } catch (err) {
+    throw new UnauthorizedError('Invalid token');
+  }
 };
 
 // Role-based access control
-export const requireRole = (roles: UserRole[]) => (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const requireRole = (roles: UserRole[]) => async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   if (!req.user || !roles.includes(req.user.role as UserRole)) {
-    return res.status(403).json({ message: 'Insufficient permissions' });
+    throw new ForbiddenError('Insufficient permissions');
   }
   next();
 };
@@ -65,36 +65,31 @@ export const requireRole = (roles: UserRole[]) => (req: AuthenticatedRequest, re
 // Permission-based access control
 export const requirePermission = (permissions: string[]) => async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   if (!req.user) {
-    return res.status(403).json({ message: 'Authentication required' });
+    throw new UnauthorizedError('Authentication required');
   }
 
-  try {
-    // Import UserModel dynamically to avoid circular dependencies
-    const { UserModel } = await import('../modules/users/model');
-    const { ROLE_PERMISSIONS } = await import('../../../shared/permissions');
-    
-    // Get full user data including permissions
-    const userModel = new UserModel();
-    const user = await userModel.getUserForAuth(req.user.id);
-    if (!user) {
-      return res.status(403).json({ message: 'User not found' });
-    }
-
-    // Get user permissions (individual permissions override role permissions)
-    const userPermissions = user.permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
-    
-    // Check if user has any of the required permissions
-    const hasPermission = permissions.some(permission => userPermissions.includes(permission));
-    
-    if (!hasPermission) {
-      return res.status(403).json({ message: 'Insufficient permissions' });
-    }
-    
-    next();
-  } catch (error) {
-    console.error('Permission check error:', error);
-    return res.status(500).json({ message: 'Server error during permission check' });
+  // Import UserModel dynamically to avoid circular dependencies
+  const { UserModel } = await import('../modules/users/model');
+  const { ROLE_PERMISSIONS } = await import('../../../shared/permissions');
+  
+  // Get full user data including permissions
+  const userModel = new UserModel();
+  const user = await userModel.getUserForAuth(req.user.id);
+  if (!user) {
+    throw new ForbiddenError('User not found');
   }
+
+  // Get user permissions (individual permissions override role permissions)
+  const userPermissions = user.permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
+  
+  // Check if user has any of the required permissions
+  const hasPermission = permissions.some(permission => userPermissions.includes(permission));
+  
+  if (!hasPermission) {
+    throw new ForbiddenError('Insufficient permissions');
+  }
+  
+  next();
 };
 
 // Tenant validation middleware - ensures user's tenant is active
@@ -103,34 +98,25 @@ export const validateTenant = async (req: AuthenticatedRequest, res: Response, n
   if (req.tenant) {
     // Tenant already validated by slug middleware, skip database query
     if (!req.tenant.isActive) {
-      return res.status(403).json({ 
-        message: 'Account access is temporarily suspended. Please contact your administrator.' 
-      });
+      throw new ForbiddenError('Account access is temporarily suspended. Please contact your administrator.');
     }
     return next();
   }
 
   // Fall back to JWT-based tenant validation for backward compatibility
   if (!req.user?.tenantId) {
-    return res.status(403).json({ message: 'No tenant context found' });
+    throw new ForbiddenError('No tenant context found');
   }
 
-  try {
-    // Import TenantModel dynamically to avoid circular dependencies
-    const { TenantModel } = await import('../modules/tenants/model');
-    
-    const tenant = await TenantModel.getTenant(req.user.tenantId);
-    if (!tenant || !tenant.isActive) {
-      return res.status(403).json({ 
-        message: 'Account access is temporarily suspended. Please contact your administrator.' 
-      });
-    }
-    
-    next();
-  } catch (error) {
-    console.error('Tenant validation error:', error);
-    return res.status(500).json({ message: 'Server error during tenant validation' });
+  // Import TenantModel dynamically to avoid circular dependencies
+  const { TenantModel } = await import('../modules/tenants/model');
+  
+  const tenant = await TenantModel.getTenant(req.user.tenantId);
+  if (!tenant || !tenant.isActive) {
+    throw new ForbiddenError('Account access is temporarily suspended. Please contact your administrator.');
   }
+  
+  next();
 };
 
 // Middleware to attach tenant context for easier access in controllers
@@ -144,14 +130,9 @@ export const attachTenantContext = (req: AuthenticatedRequest, res: Response, ne
 
   // Fall back to JWT-based tenant context for backward compatibility
   if (!req.user?.tenantId) {
-    return res.status(403).json({ message: 'No tenant context found' });
+    throw new ForbiddenError('No tenant context found');
   }
 
-  try {
-    req.tenantId = req.user.tenantId;
-    next();
-  } catch (error) {
-    console.error('Tenant context attachment error:', error);
-    return res.status(500).json({ message: 'Server error during tenant context setup' });
-  }
+  req.tenantId = req.user.tenantId;
+  next();
 };

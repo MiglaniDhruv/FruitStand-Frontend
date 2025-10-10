@@ -3,13 +3,13 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import twilio from 'twilio';
 const { validateRequest } = twilio;
-import { BaseController } from '../../utils/base.js';
-import { AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types/index.js';
-import { WhatsAppMessageModel } from './model.js';
-import { WhatsAppCreditModel } from './credit-model.js';
-import { whatsAppService } from '../../services/whatsapp/index.js';
-import { InvoiceShareLinkModel } from '../invoice-share-links/model.js';
-import { TenantModel } from '../tenants/model.js';
+import { BaseController } from '../../utils/base';
+import { AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
+import { WhatsAppMessageModel } from './model';
+import { WhatsAppCreditModel } from './credit-model';
+import { whatsAppService } from '../../services/whatsapp';
+import { InvoiceShareLinkModel } from '../invoice-share-links/model';
+import { TenantModel } from '../tenants/model';
 
 export class WhatsAppController extends BaseController {
   private whatsAppMessageModel: WhatsAppMessageModel;
@@ -199,7 +199,7 @@ export class WhatsAppController extends BaseController {
       
       if (messageType === 'sales_invoice') {
         // Mirror logic from sendSalesInvoice method
-        const salesInvoiceModel = new (await import('../../modules/sales-invoices/model.js')).SalesInvoiceModel();
+        const salesInvoiceModel = new (await import('../../modules/sales-invoices/model')).SalesInvoiceModel();
         const invoice = await salesInvoiceModel.getSalesInvoice(tenantId, referenceId);
         
         if (!invoice) {
@@ -235,7 +235,7 @@ export class WhatsAppController extends BaseController {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
         }
         
-        const { buildSalesInvoiceVariables } = await import('../../services/whatsapp/template-builder.js');
+        const { buildSalesInvoiceVariables } = await import('../../services/whatsapp/template-builder');
         templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceUrl);
         
         recipientInfo = {
@@ -252,7 +252,7 @@ export class WhatsAppController extends BaseController {
         
       } else if (messageType === 'purchase_invoice') {
         // Mirror logic from sendPurchaseInvoice method
-        const purchaseInvoiceModel = new (await import('../../modules/purchase-invoices/model.js')).PurchaseInvoiceModel();
+        const purchaseInvoiceModel = new (await import('../../modules/purchase-invoices/model')).PurchaseInvoiceModel();
         const invoice = await purchaseInvoiceModel.getPurchaseInvoice(tenantId, referenceId);
         
         if (!invoice) {
@@ -288,7 +288,7 @@ export class WhatsAppController extends BaseController {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
         }
         
-        const { buildPurchaseInvoiceVariables } = await import('../../services/whatsapp/template-builder.js');
+        const { buildPurchaseInvoiceVariables } = await import('../../services/whatsapp/template-builder');
         templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceUrl);
         
         recipientInfo = {
@@ -314,12 +314,12 @@ export class WhatsAppController extends BaseController {
         let recipientType: 'vendor' | 'retailer';
         
         if (invoiceType === 'sales') {
-          const salesInvoiceModel = new (await import('../../modules/sales-invoices/model.js')).SalesInvoiceModel();
+          const salesInvoiceModel = new (await import('../../modules/sales-invoices/model')).SalesInvoiceModel();
           invoice = await salesInvoiceModel.getSalesInvoice(tenantId, referenceId);
           recipient = invoice?.retailer;
           recipientType = 'retailer';
         } else {
-          const purchaseInvoiceModel = new (await import('../../modules/purchase-invoices/model.js')).PurchaseInvoiceModel();
+          const purchaseInvoiceModel = new (await import('../../modules/purchase-invoices/model')).PurchaseInvoiceModel();
           invoice = await purchaseInvoiceModel.getPurchaseInvoice(tenantId, referenceId);
           recipient = invoice?.vendor;
           recipientType = 'vendor';
@@ -359,7 +359,7 @@ export class WhatsAppController extends BaseController {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
         }
         
-        const { buildPaymentReminderVariables } = await import('../../services/whatsapp/template-builder.js');
+        const { buildPaymentReminderVariables } = await import('../../services/whatsapp/template-builder');
         templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceUrl);
         
         recipientInfo = {
@@ -383,11 +383,11 @@ export class WhatsAppController extends BaseController {
         let recipientType: 'vendor' | 'retailer';
         
         if (paymentType === 'sales') {
-          const salesPaymentModel = new (await import('../../modules/sales-payments/model.js')).SalesPaymentModel();
+          const salesPaymentModel = new (await import('../../modules/sales-payments/model')).SalesPaymentModel();
           payments = await salesPaymentModel.getSalesPayments(tenantId, true) as any[];
           recipientType = 'retailer';
         } else {
-          const paymentModel = new (await import('../../modules/payments/model.js')).PaymentModel();
+          const paymentModel = new (await import('../../modules/payments/model')).PaymentModel();
           payments = await paymentModel.getPayments(tenantId);
           recipientType = 'vendor';
         }
@@ -434,7 +434,7 @@ export class WhatsAppController extends BaseController {
           console.warn(`Warning: Failed to create share link for invoice ${invoice.id}:`, error);
         }
         
-        const { buildPaymentNotificationVariables } = await import('../../services/whatsapp/template-builder.js');
+        const { buildPaymentNotificationVariables } = await import('../../services/whatsapp/template-builder');
         templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceUrl);
         
         recipientInfo = {

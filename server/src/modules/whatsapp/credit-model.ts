@@ -1,7 +1,7 @@
-import { db } from '../../../db.js';
+import { db } from '../../../db';
 import { tenants, whatsappCreditTransactions, type InsertWhatsAppCreditTransaction, type WhatsAppCreditTransaction } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
-import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope.js';
+import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 
 export interface CreditCheckResult {
   hasCredits: boolean;

@@ -1,6 +1,7 @@
 import { BaseRouter } from '../../utils/base';
 import { SalesPaymentController } from './controller';
 import { authenticateToken, validateTenant, attachTenantContext } from '../../middleware/auth';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class SalesPaymentRouter extends BaseRouter {
   private salesPaymentController: SalesPaymentController;
@@ -15,25 +16,33 @@ export class SalesPaymentRouter extends BaseRouter {
     // GET /sales-payments - Get all sales payments
     this.router.get('/sales-payments', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesPaymentController.getSalesPayments.bind(this.salesPaymentController)
+      this.ah(this.salesPaymentController, 'getSalesPayments')
     );
 
     // GET /sales-payments/invoice/:invoiceId - Get sales payments by invoice
     this.router.get('/sales-payments/invoice/:invoiceId', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesPaymentController.getSalesPaymentsByInvoice.bind(this.salesPaymentController)
+      this.ah(this.salesPaymentController, 'getSalesPaymentsByInvoice')
     );
 
     // POST /sales-payments - Create a new sales payment
     this.router.post('/sales-payments', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesPaymentController.createSalesPayment.bind(this.salesPaymentController)
+      this.ah(this.salesPaymentController, 'createSalesPayment')
+    );
+
+    // DELETE /sales-payments/:id - Delete a sales payment
+    this.router.delete('/sales-payments/:id',
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.salesPaymentController, 'deleteSalesPayment')
     );
   }
 }

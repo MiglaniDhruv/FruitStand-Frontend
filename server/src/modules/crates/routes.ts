@@ -1,6 +1,7 @@
 import { BaseRouter } from '../../utils/base';
 import { CrateController } from './controller';
 import { authenticateToken, validateTenant, attachTenantContext } from '../../middleware/auth';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class CrateRouter extends BaseRouter {
   private crateController: CrateController;
@@ -15,33 +16,33 @@ export class CrateRouter extends BaseRouter {
     // GET /crate-transactions - Get crate transactions (with pagination support and filtering)
     this.router.get('/crate-transactions', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.crateController.getAll.bind(this.crateController)
+      this.ah(this.crateController, 'getAll')
     );
 
     // GET /crate-transactions/retailer/:retailerId - Get crate transactions by retailer
     this.router.get('/crate-transactions/retailer/:retailerId', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.crateController.getByRetailer.bind(this.crateController)
+      this.ah(this.crateController, 'getByRetailer')
     );
 
     // GET /crate-transactions/vendor/:vendorId - Get crate transactions by vendor
     this.router.get('/crate-transactions/vendor/:vendorId', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.crateController.getByVendor.bind(this.crateController)
+      this.ah(this.crateController, 'getByVendor')
     );
 
     // POST /crate-transactions - Create a new crate transaction
     this.router.post('/crate-transactions', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.crateController.create.bind(this.crateController)
+      this.ah(this.crateController, 'create')
     );
   }
 }

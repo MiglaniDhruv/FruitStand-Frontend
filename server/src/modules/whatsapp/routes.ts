@@ -1,12 +1,13 @@
-import { BaseRouter } from '../../utils/base.js';
-import { WhatsAppController } from './controller.js';
+import { BaseRouter } from '../../utils/base';
+import { WhatsAppController } from './controller';
 import { 
   authenticateToken, 
   validateTenant, 
   attachTenantContext, 
   requirePermission 
-} from '../../middleware/auth.js';
+} from '../../middleware/auth';
 import { PERMISSIONS } from '@shared/permissions';
+import { asyncHandler } from '../../utils/async-handler';
 
 export class WhatsAppRouter extends BaseRouter {
   private whatsAppController: WhatsAppController;
@@ -22,86 +23,86 @@ export class WhatsAppRouter extends BaseRouter {
     this.router.post(
       '/whatsapp/send/sales-invoice',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES]),
-      this.whatsAppController.sendSalesInvoice
+      asyncHandler(requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES])),
+      this.ah(this.whatsAppController.sendSalesInvoice)
     );
 
     // POST /whatsapp/send/purchase-invoice - Send purchase invoice to vendor
     this.router.post(
       '/whatsapp/send/purchase-invoice',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES]),
-      this.whatsAppController.sendPurchaseInvoice
+      asyncHandler(requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES])),
+      this.ah(this.whatsAppController.sendPurchaseInvoice)
     );
 
     // POST /whatsapp/send/payment-reminder - Send payment reminder
     this.router.post(
       '/whatsapp/send/payment-reminder',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES]),
-      this.whatsAppController.sendPaymentReminder
+      asyncHandler(requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES])),
+      this.ah(this.whatsAppController.sendPaymentReminder)
     );
 
     // POST /whatsapp/send/payment-notification - Send payment notification
     this.router.post(
       '/whatsapp/send/payment-notification',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES]),
-      this.whatsAppController.sendPaymentNotification
+      asyncHandler(requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES])),
+      this.ah(this.whatsAppController.sendPaymentNotification)
     );
 
     // GET /whatsapp/messages - Get paginated message history
     this.router.get(
       '/whatsapp/messages',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS]),
-      this.whatsAppController.getMessageHistory
+      asyncHandler(requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS])),
+      this.ah(this.whatsAppController.getMessageHistory)
     );
 
     // GET /whatsapp/messages/by-reference - Get messages for a specific reference
     this.router.get(
       '/whatsapp/messages/by-reference',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS]),
-      this.whatsAppController.getMessagesByReference
+      asyncHandler(requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS])),
+      this.ah(this.whatsAppController.getMessagesByReference)
     );
 
     // POST /whatsapp/preview - Preview message without sending
     this.router.post(
       '/whatsapp/preview',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES]),
-      this.whatsAppController.previewMessage
+      asyncHandler(requirePermission([PERMISSIONS.SEND_WHATSAPP_MESSAGES])),
+      this.ah(this.whatsAppController.previewMessage)
     );
 
     // POST /whatsapp/webhook - Handle Twilio status webhooks (no auth required)
     this.router.post(
       '/whatsapp/webhook',
-      this.whatsAppController.handleWebhook
+      this.ah(this.whatsAppController, 'handleWebhook')
     );
 
     // GET /whatsapp/credits - Get current credit balance
     this.router.get(
       '/whatsapp/credits',
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS]),
-      this.whatsAppController.getCreditBalance
+      asyncHandler(requirePermission([PERMISSIONS.VIEW_WHATSAPP_LOGS])),
+      this.ah(this.whatsAppController.getCreditBalance)
     );
   }
 }

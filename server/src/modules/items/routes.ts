@@ -2,6 +2,7 @@ import { BaseRouter } from "../../utils/base";
 import { ItemController } from "./controller";
 import { authenticateToken, requireRole, validateTenant, attachTenantContext } from "../../middleware/auth";
 import { UserRole } from "../../types";
+import { asyncHandler } from "../../utils/async-handler";
 
 export class ItemRouter extends BaseRouter {
   private itemController: ItemController;
@@ -16,52 +17,52 @@ export class ItemRouter extends BaseRouter {
     // GET /items - List items with pagination support
     this.router.get("/items", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.itemController.getAll.bind(this.itemController)
+      this.ah(this.itemController, 'getAll')
     );
 
     // GET /items/vendor/:vendorId - Get items by vendor
     this.router.get("/items/vendor/:vendorId", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.itemController.getByVendor.bind(this.itemController)
+      this.ah(this.itemController, 'getByVendor')
     );
 
     // GET /items/:id - Get item by ID
     this.router.get("/items/:id", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.itemController.getById.bind(this.itemController)
+      this.ah(this.itemController, 'getById')
     );
 
     // POST /items - Create new item
     this.router.post("/items", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
-      this.itemController.create.bind(this.itemController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.itemController, 'create')
     );
 
     // PUT /items/:id - Update item
     this.router.put("/items/:id", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.OPERATOR]), 
-      this.itemController.update.bind(this.itemController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.itemController, 'update')
     );
 
     // DELETE /items/:id - Delete item (Admin only)
     this.router.delete("/items/:id", 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN]), 
-      this.itemController.delete.bind(this.itemController)
+      asyncHandler(requireRole([UserRole.ADMIN])), 
+      this.ah(this.itemController, 'delete')
     );
   }
 }

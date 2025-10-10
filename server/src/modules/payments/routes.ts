@@ -2,6 +2,7 @@ import { BaseRouter } from '../../utils/base';
 import { PaymentController } from './controller';
 import { authenticateToken, requireRole, validateTenant, attachTenantContext } from '../../middleware/auth';
 import { UserRole } from '../../types';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class PaymentRouter extends BaseRouter {
   private paymentController: PaymentController;
@@ -16,26 +17,35 @@ export class PaymentRouter extends BaseRouter {
     // GET /payments - Get all payments
     this.router.get('/payments', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.paymentController.getAll.bind(this.paymentController)
+      this.ah(this.paymentController, 'getAll')
     );
 
     // GET /payments/invoice/:invoiceId - Get payments by invoice
     this.router.get('/payments/invoice/:invoiceId', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.paymentController.getByInvoice.bind(this.paymentController)
+      this.ah(this.paymentController, 'getByInvoice')
     );
 
     // POST /payments - Create a new payment (Admin/Accountant/Operator only)
     this.router.post('/payments', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      requireRole([UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.OPERATOR]), 
-      this.paymentController.create.bind(this.paymentController)
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.OPERATOR])), 
+      this.ah(this.paymentController, 'create')
+    );
+
+    // DELETE /payments/:id - Delete a payment
+    this.router.delete('/payments/:id',
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.OPERATOR])),
+      this.ah(this.paymentController, 'deletePayment')
     );
   }
 }

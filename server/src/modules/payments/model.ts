@@ -1,9 +1,11 @@
-import { eq, desc, inArray, and, or, gt, asc } from 'drizzle-orm';
+import { eq, desc, inArray, and, or, gt, asc, sum, sql } from 'drizzle-orm';
 import { db } from '../../../db';
 import { payments, purchaseInvoices, vendors, bankAccounts, cashbook, bankbook, type Payment, type InsertPayment, type PaymentWithDetails, type PurchaseInvoice, type VendorPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { BankAccountModel } from '../bank-accounts/model';
 import { TenantModel } from '../tenants/model';
+import { NotFoundError, ValidationError, BadRequestError, AppError } from '../../types';
+import { handleDatabaseError } from '../../utils/database-errors';
 
 export class PaymentModel {
   async getPayments(tenantId: string): Promise<PaymentWithDetails[]> {
@@ -113,12 +115,23 @@ export class PaymentModel {
   }
 
   async createPayment(tenantId: string, paymentData: InsertPayment): Promise<PaymentWithDetails> {
+    // Add business logic validation
+    const paymentAmount = parseFloat(paymentData.amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      throw new ValidationError('Invalid payment amount', {
+        amount: 'Payment amount must be a positive number'
+      });
+    }
+
     // Validate bankAccountId for non-cash payments
     if (['Bank', 'UPI', 'Cheque'].includes(paymentData.paymentMode) && !paymentData.bankAccountId) {
-      throw new Error('bankAccountId is required for non-cash payments');
+      throw new ValidationError('bankAccountId is required for non-cash payments', {
+        bankAccountId: 'Bank account is required for Bank, UPI, or Cheque payment modes'
+      });
     }
     
-    return await db.transaction(async (tx) => {
+    try {
+      return await db.transaction(async (tx) => {
       const paymentWithTenant = ensureTenantInsert(paymentData, tenantId);
       const [payment] = await tx.insert(payments).values(paymentWithTenant).returning();
       
@@ -130,11 +143,11 @@ export class PaymentModel {
         .where(withTenant(vendors, tenantId, eq(vendors.id, payment.vendorId)));
       
       if (!invoice) {
-        throw new Error('Payment invoice not found');
+        throw new NotFoundError('Purchase invoice');
       }
       
       if (!vendor) {
-        throw new Error('Payment vendor not found');
+        throw new NotFoundError('Vendor');
       }
       
       // Update invoice amounts and status with overpayment protection
@@ -200,7 +213,7 @@ export class PaymentModel {
       else if ((payment.paymentMode === 'Bank' || payment.paymentMode === 'UPI' || payment.paymentMode === 'Cheque') && payment.bankAccountId) {
         const lastBankEntry = await tx.select().from(bankbook)
           .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, payment.bankAccountId)))
-          .orderBy(desc(bankbook.id))
+          .orderBy(desc(bankbook.date), desc(bankbook.id))
           .limit(1)
           .for('update');
 
@@ -240,6 +253,10 @@ export class PaymentModel {
         bankAccount: bankAccount || undefined
       };
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async recordVendorPayment(
@@ -255,15 +272,24 @@ export class PaymentModel {
       notes?: string 
     }
   ): Promise<VendorPaymentDistributionResult> {
-    return await db.transaction(async (tx) => {
-      // Validate vendor exists
-      const vendor = await tx.select().from(vendors)
-        .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)))
-        .limit(1);
+    // Add business logic validation
+    const totalPaymentAmount = parseFloat(paymentData.amount);
+    if (isNaN(totalPaymentAmount) || totalPaymentAmount <= 0) {
+      throw new ValidationError('Invalid payment amount', {
+        amount: 'Payment amount must be a positive number'
+      });
+    }
 
-      if (vendor.length === 0) {
-        throw new Error('Vendor not found');
-      }
+    try {
+      return await db.transaction(async (tx) => {
+        // Validate vendor exists
+        const vendor = await tx.select().from(vendors)
+          .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)))
+          .limit(1);
+
+        if (vendor.length === 0) {
+          throw new NotFoundError('Vendor');
+        }
 
       // Fetch outstanding invoices (FIFO)
       const outstandingInvoices = await tx.select().from(purchaseInvoices)
@@ -278,7 +304,9 @@ export class PaymentModel {
         .orderBy(asc(purchaseInvoices.invoiceDate), asc(purchaseInvoices.createdAt));
 
       if (outstandingInvoices.length === 0) {
-        throw new Error('No outstanding invoices found for this vendor');
+        throw new ValidationError('No outstanding invoices found for this vendor', {
+          vendorId: 'This vendor has no unpaid or partially paid invoices'
+        });
       }
 
       let remainingPaymentAmount = parseFloat(paymentData.amount);
@@ -367,12 +395,13 @@ export class PaymentModel {
 
           // Update tenant cash balance
           await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
-        } else if (paymentData.paymentMode === 'Bank' && paymentData.bankAccountId) {
+        } else if ((paymentData.paymentMode === 'Bank' || paymentData.paymentMode === 'UPI' || paymentData.paymentMode === 'Cheque') && paymentData.bankAccountId) {
           // Get current bank balance
           const lastBankEntry = await tx.select().from(bankbook)
             .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, paymentData.bankAccountId)))
-            .orderBy(desc(bankbook.createdAt))
-            .limit(1);
+            .orderBy(desc(bankbook.date), desc(bankbook.id))
+            .limit(1)
+            .for('update');
 
           const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
           const newBalance = currentBalance - (distributedAmount - remainingPaymentAmount);
@@ -402,6 +431,10 @@ export class PaymentModel {
         vendorBalanceAfter: newVendorBalance.toFixed(2),
       };
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async getOutstandingInvoicesForVendor(tenantId: string, vendorId: string): Promise<PurchaseInvoice[]> {
@@ -415,5 +448,235 @@ export class PaymentModel {
         gt(purchaseInvoices.balanceAmount, '0')
       )))
       .orderBy(asc(purchaseInvoices.invoiceDate));
+  }
+
+  async deletePayment(tenantId: string, paymentId: string): Promise<boolean> {
+    try {
+      return await db.transaction(async (tx) => {
+      // Fetch the payment record with tenant filtering
+      const [payment] = await tx.select().from(payments)
+        .where(withTenant(payments, tenantId, eq(payments.id, paymentId)));
+      
+      if (!payment) {
+        return false;
+      }
+
+      // Comment 1: Batch detection for purchase payments
+      // Find all payments that could be part of the same batch distribution
+      // Payments in the same batch have same vendor, payment mode, date, and bank account
+      const batchPayments = await tx.select().from(payments)
+        .where(withTenant(payments, tenantId, and(
+          eq(payments.vendorId, payment.vendorId),
+          eq(payments.paymentMode, payment.paymentMode),
+          eq(payments.paymentDate, payment.paymentDate),
+          payment.bankAccountId ? eq(payments.bankAccountId, payment.bankAccountId) : sql`${payments.bankAccountId} IS NULL`
+        )));
+
+      let paymentsToDelete = [payment];
+      let isBatchDistribution = false;
+      let firstPaymentId = payment.id;
+
+      if (batchPayments.length > 1) {
+        // This is likely a batch distribution - check if they share a ledger entry
+        const ledgerEntry = await tx.select().from(payment.paymentMode === 'Cash' ? cashbook : bankbook)
+          .where(withTenant(
+            payment.paymentMode === 'Cash' ? cashbook : bankbook, 
+            tenantId, 
+            and(
+              eq((payment.paymentMode === 'Cash' ? cashbook : bankbook).referenceType, 'Payment'),
+              inArray((payment.paymentMode === 'Cash' ? cashbook : bankbook).referenceId, batchPayments.map(p => p.id))
+            )
+          ));
+
+        if (ledgerEntry.length === 1 && ledgerEntry[0].referenceId) {
+          // Confirmed batch distribution - all payments share one ledger entry
+          paymentsToDelete = batchPayments;
+          isBatchDistribution = true;
+          firstPaymentId = ledgerEntry[0].referenceId;
+        }
+      }
+
+      // Store payment details for later use - sum up all amounts for batch
+      const paymentAmount = paymentsToDelete.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const invoiceId = payment.invoiceId;
+      const vendorId = payment.vendorId;
+      const paymentMode = payment.paymentMode;
+      const bankAccountId = payment.bankAccountId;
+
+      // Fetch the invoice
+      const [invoice] = await tx.select().from(purchaseInvoices)
+        .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoiceId)));
+      
+      if (!invoice) {
+        throw new NotFoundError('Purchase invoice');
+      }
+
+      // Fetch the vendor
+      const [vendor] = await tx.select().from(vendors)
+        .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)));
+      
+      if (!vendor) {
+        throw new NotFoundError('Vendor');
+      }
+
+      // Comment 1: Delete all payments in batch and handle affected invoices
+      if (isBatchDistribution) {
+        // Delete all payments in the batch
+        await tx.delete(payments)
+          .where(withTenant(payments, tenantId, inArray(payments.id, paymentsToDelete.map(p => p.id))));
+
+        // Collect all affected invoices and update them
+        const affectedInvoiceIds = Array.from(new Set(paymentsToDelete.map(p => p.invoiceId)));
+        
+        for (const affectedInvoiceId of affectedInvoiceIds) {
+          // Fetch remaining payments for this invoice (after deletion)
+          const remainingPayments = await tx.select().from(payments)
+            .where(withTenant(payments, tenantId, eq(payments.invoiceId, affectedInvoiceId)));
+
+          // Fetch the invoice  
+          const [affectedInvoice] = await tx.select().from(purchaseInvoices)
+            .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, affectedInvoiceId)));
+          
+          if (affectedInvoice) {
+            // Calculate new invoice amounts
+            const newPaidAmount = remainingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            const newBalanceAmount = parseFloat(affectedInvoice.netAmount) - newPaidAmount;
+            
+            // Use epsilon (0.005) to determine new status
+            const epsilon = 0.005;
+            let newStatus: string;
+            if (newBalanceAmount <= epsilon) {
+              newStatus = 'Paid';
+            } else if (newPaidAmount > epsilon) {
+              newStatus = 'Partially Paid';
+            } else {
+              newStatus = 'Unpaid';
+            }
+            
+            // Update the affected invoice
+            await tx.update(purchaseInvoices)
+              .set({
+                paidAmount: newPaidAmount.toFixed(2),
+                balanceAmount: Math.max(0, newBalanceAmount).toFixed(2),
+                status: newStatus as any
+              })
+              .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, affectedInvoiceId)));
+          }
+        }
+      } else {
+        // Single payment deletion (original logic)
+        await tx.delete(payments)
+          .where(withTenant(payments, tenantId, eq(payments.id, paymentId)));
+
+        // Calculate new invoice amounts for single payment
+        const remainingPayments = await tx.select().from(payments)
+          .where(withTenant(payments, tenantId, eq(payments.invoiceId, invoiceId)));
+
+        const newPaidAmount = remainingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+        const newBalanceAmount = parseFloat(invoice.netAmount) - newPaidAmount;
+        
+        // Use epsilon (0.005) to determine new status
+        const epsilon = 0.005;
+        let newStatus: string;
+        if (newBalanceAmount <= epsilon) {
+          newStatus = 'Paid';
+        } else if (newPaidAmount > epsilon) {
+          newStatus = 'Partially Paid';
+        } else {
+          newStatus = 'Unpaid';
+        }
+
+        // Update the invoice with new amounts and status
+        await tx.update(purchaseInvoices)
+          .set({
+            paidAmount: newPaidAmount.toFixed(2),
+            balanceAmount: Math.max(0, newBalanceAmount).toFixed(2),
+            status: newStatus as any
+          })
+          .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoiceId)));
+      }
+
+      // Comment 2: Update vendor balance using applied amount from ledger entry
+      let appliedAmount = paymentAmount; // Default fallback
+      
+      // Read the ledger entry to get the actual applied amount
+      if (paymentMode === 'Cash') {
+        const [ledgerEntry] = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId, and(
+            eq(cashbook.referenceType, 'Payment'),
+            eq(cashbook.referenceId, firstPaymentId)
+          )));
+        if (ledgerEntry && ledgerEntry.outflow) {
+          appliedAmount = parseFloat(ledgerEntry.outflow);
+        }
+      } else if (paymentMode === 'Bank' || paymentMode === 'UPI' || paymentMode === 'Cheque') {
+        const [ledgerEntry] = await tx.select().from(bankbook)
+          .where(withTenant(bankbook, tenantId, and(
+            eq(bankbook.referenceType, 'Payment'),
+            eq(bankbook.referenceId, firstPaymentId)
+          )));
+        if (ledgerEntry && ledgerEntry.credit) {
+          appliedAmount = parseFloat(ledgerEntry.credit);
+        }
+      }
+      
+      const newVendorBalance = parseFloat(vendor.balance || '0') + appliedAmount;
+      await tx.update(vendors)
+        .set({
+          balance: newVendorBalance.toFixed(2)
+        })
+        .where(withTenant(vendors, tenantId, eq(vendors.id, vendorId)));
+
+      // Comment 1: Delete ledger entry for batch (single entry references first payment)
+      if (paymentMode === 'Cash') {
+        await tx.delete(cashbook)
+          .where(withTenant(cashbook, tenantId, and(
+            eq(cashbook.referenceType, 'Payment'),
+            eq(cashbook.referenceId, firstPaymentId)
+          )));
+      } else if (paymentMode === 'Bank' || paymentMode === 'UPI' || paymentMode === 'Cheque') {
+        await tx.delete(bankbook)
+          .where(withTenant(bankbook, tenantId, and(
+            eq(bankbook.referenceType, 'Payment'),
+            eq(bankbook.referenceId, firstPaymentId)
+          )));
+      }
+
+      // Recalculate running balance
+      if (paymentMode === 'Cash') {
+        // For Cash: fetch last cashbook entry, get its balance, update tenant cash balance
+        const [lastCashEntry] = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(desc(cashbook.id))
+          .limit(1);
+        
+        const newCashBalance = lastCashEntry ? lastCashEntry.balance : '0.00';
+        await TenantModel.setCashBalance(tx, tenantId, newCashBalance);
+
+        // Comment 3 Fix: Recalculate running balances for all subsequent cashbook entries
+        const allCashEntries = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(asc(cashbook.date), asc(cashbook.id));
+        
+        let runningBalance = 0.00;
+        for (const entry of allCashEntries) {
+          runningBalance += parseFloat(entry.inflow || '0') - parseFloat(entry.outflow || '0');
+          
+          await tx.update(cashbook)
+            .set({ balance: runningBalance.toFixed(2) })
+            .where(withTenant(cashbook, tenantId, eq(cashbook.id, entry.id)));
+        }
+        
+      } else if (bankAccountId && (paymentMode === 'Bank' || paymentMode === 'UPI' || paymentMode === 'Cheque')) {
+        // For Bank/UPI/Cheque: recalculate bankbook running balances
+        await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, bankAccountId);
+      }
+
+      return true;
+    });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 }

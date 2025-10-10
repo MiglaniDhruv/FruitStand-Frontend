@@ -15,6 +15,7 @@ export interface AuthenticatedRequest extends Request {
   user?: { id: string; username: string; role: UserRole; tenantId: string };
   tenantId?: string;
   tenant?: Tenant;
+  requestId?: string;
 }
 
 // Common API response structures
@@ -224,5 +225,12 @@ export class InternalServerError extends AppError {
   constructor(message: string = "Internal server error") {
     super(message, 500, ERROR_CODES.SYSTEM_INTERNAL_ERROR, false);
     this.name = 'InternalServerError';
+  }
+}
+
+export class TimeoutError extends AppError {
+  constructor(message: string = "Request timeout") {
+    super(message, 408, ERROR_CODES.REQUEST_TIMEOUT, true);
+    this.name = 'TimeoutError';
   }
 }

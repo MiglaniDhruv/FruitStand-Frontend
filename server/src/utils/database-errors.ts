@@ -25,6 +25,12 @@ export function handleDatabaseError(error: any): never {
         throw new ValidationError('Required field missing', { [column]: `${column} is required` });
 
       case '22P02': // invalid_text_representation
+        // Check if it's a UUID format error
+        if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+          throw new ValidationError('Invalid UUID format', { 
+            uuid: 'One or more ID fields contain invalid UUID format. Please check invoiceId, retailerId, and bankAccountId fields.' 
+          });
+        }
         throw new BadRequestError('Invalid data type provided');
 
       case '42P01': // undefined_table

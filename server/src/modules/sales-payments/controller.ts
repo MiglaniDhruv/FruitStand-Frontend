@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { insertSalesPaymentSchema } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { SalesPaymentModel } from './model';
-import { type AuthenticatedRequest, ForbiddenError, BadRequestError } from '../../types';
+import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError, ValidationError } from '../../types';
 import { whatsAppService } from '../../services/whatsapp/index.js';
 
 export class SalesPaymentController extends BaseController {
@@ -40,7 +40,20 @@ export class SalesPaymentController extends BaseController {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
     
-    const validatedData = this.validateZodSchema(insertSalesPaymentSchema, req.body);
+    // Sanitize UUID fields before validation
+    const uuidFields = ['invoiceId', 'retailerId', 'bankAccountId'];
+    const sanitizedBody = this.sanitizeUUIDs(req.body, uuidFields);
+    
+    const validatedData = this.validateZodSchema(insertSalesPaymentSchema, sanitizedBody);
+    
+    // Additional business validation
+    if (['Bank Transfer', 'UPI', 'Cheque'].includes(validatedData.paymentMode)) {
+      if (!validatedData.bankAccountId) {
+        throw new ValidationError('Bank account is required for non-cash payments', {
+          bankAccountId: 'Bank account ID is required for Bank Transfer, UPI, and Cheque payments'
+        });
+      }
+    }
     
     // Ensure paymentDate is a Date object
     const paymentData = {
@@ -65,5 +78,22 @@ export class SalesPaymentController extends BaseController {
     }
     
     res.status(201).json(salesPayment);
+  }
+
+  async deleteSalesPayment(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Payment ID is required');
+    this.validateUUID(id, 'Payment ID');
+
+    const success = await this.wrapDatabaseOperation(() => 
+      this.salesPaymentModel.deleteSalesPayment(tenantId, id)
+    );
+    
+    if (!success) throw new NotFoundError('Sales payment not found');
+    
+    res.status(204).send();
   }
 }

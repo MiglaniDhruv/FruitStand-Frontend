@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { InvoiceShareLinkModel } from '../invoice-share-links/model.js';
+import { InvoiceShareLinkModel } from '../invoice-share-links/model';
+import { NotFoundError, ValidationError, InternalServerError } from '../../types';
 
 const shareTokenParamsSchema = z.object({
   token: z.string().min(1, 'Share token is required')
@@ -14,38 +15,18 @@ export class PublicController {
    * Public endpoint - no authentication required
    */
   async getSharedInvoice(req: Request, res: Response) {
-    try {
-      const { token } = shareTokenParamsSchema.parse(req.params);
+    const { token } = shareTokenParamsSchema.parse(req.params);
 
-      const publicInvoiceData = await this.shareModel.getPublicInvoiceData(token);
+    const publicInvoiceData = await this.shareModel.getPublicInvoiceData(token);
 
-      if (!publicInvoiceData) {
-        return res.status(404).json({
-          error: 'Shared invoice not found or access expired',
-          details: 'The shared link may have been revoked or the invoice may no longer be available'
-        });
-      }
-
-      // Return the complete public invoice data
-      return res.json({
-        success: true,
-        data: publicInvoiceData
-      });
-    } catch (error) {
-      console.error('Error fetching shared invoice:', error);
-      
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          error: 'Invalid request parameters',
-          details: error.errors
-        });
-      }
-      
-      return res.status(500).json({
-        error: 'Failed to fetch shared invoice',
-        details: 'An unexpected error occurred while retrieving the shared invoice'
-      });
+    if (!publicInvoiceData) {
+      throw new NotFoundError('Shared invoice not found or access expired');
     }
+
+    return res.json({
+      success: true,
+      data: publicInvoiceData
+    });
   }
 
   /**

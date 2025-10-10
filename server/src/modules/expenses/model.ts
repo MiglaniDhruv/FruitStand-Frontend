@@ -249,8 +249,9 @@ export class ExpenseModel {
         // Query the last bankbook entry for this bank account
         const lastBankEntry = await tx.select().from(bankbook)
           .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, expenseData.bankAccountId)))
-          .orderBy(desc(bankbook.createdAt))
-          .limit(1);
+          .orderBy(desc(bankbook.date), desc(bankbook.id))
+          .limit(1)
+          .for('update');
 
         // Calculate current balance
         const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;

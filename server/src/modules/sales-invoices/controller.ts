@@ -110,19 +110,6 @@ export class SalesInvoiceController extends BaseController {
     res.json(result);
   }
 
-  async revertInvoiceStatus(req: AuthenticatedRequest, res: Response) {
-    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
-    const tenantId = req.tenantId;
-    const { id } = req.params;
-    
-    if (!id) throw new BadRequestError('Sales invoice ID is required');
-    this.validateUUID(id, 'Sales invoice ID');
-
-    const result = await this.salesInvoiceModel.revertInvoiceStatus(tenantId, id);
-    
-    res.json(result);
-  }
-
   async getSalesInvoicesPaginated(req: AuthenticatedRequest, res: Response) {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;

@@ -24,6 +24,8 @@ import {
   withTenantPagination
 } from "../../utils/pagination";
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
+import { ValidationError, AppError } from "../../types";
+import { handleDatabaseError } from "../../utils/database-errors";
 
 export class VendorModel {
   async getVendors(tenantId: string): Promise<Vendor[]> {
@@ -39,22 +41,59 @@ export class VendorModel {
   }
 
   async createVendor(tenantId: string, insertVendor: InsertVendor): Promise<Vendor> {
-    const vendorWithTenant = ensureTenantInsert(insertVendor, tenantId);
-    const [vendor] = await db.insert(vendors).values(vendorWithTenant).returning();
-    return vendor;
+    // Add business logic validation
+    if (!insertVendor.name || insertVendor.name.trim().length === 0) {
+      throw new ValidationError('Vendor name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    if (insertVendor.phone && insertVendor.phone.trim().length < 10) {
+      throw new ValidationError('Invalid phone number', {
+        phone: 'Phone number must be at least 10 characters'
+      });
+    }
+
+    try {
+      const vendorWithTenant = ensureTenantInsert(insertVendor, tenantId);
+      const [vendor] = await db.insert(vendors).values(vendorWithTenant).returning();
+      return vendor;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async updateVendor(tenantId: string, id: string, insertVendor: Partial<InsertVendor>): Promise<Vendor | undefined> {
-    const [vendor] = await db
-      .update(vendors)
-      .set(insertVendor)
-      .where(withTenant(vendors, tenantId, eq(vendors.id, id)))
-      .returning();
-    return vendor || undefined;
+    // Add business logic validation
+    if (insertVendor.name !== undefined && (!insertVendor.name || insertVendor.name.trim().length === 0)) {
+      throw new ValidationError('Vendor name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    if (insertVendor.phone !== undefined && insertVendor.phone && insertVendor.phone.trim().length < 10) {
+      throw new ValidationError('Invalid phone number', {
+        phone: 'Phone number must be at least 10 characters'
+      });
+    }
+
+    try {
+      const [vendor] = await db
+        .update(vendors)
+        .set(insertVendor)
+        .where(withTenant(vendors, tenantId, eq(vendors.id, id)))
+        .returning();
+      return vendor || undefined;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async deleteVendor(tenantId: string, id: string): Promise<boolean> {
-    return await db.transaction(async (tx) => {
+    try {
+      return await db.transaction(async (tx) => {
       // a. Delete whatsappMessages where recipientType='vendor' and recipientId=id
       await tx.delete(whatsappMessages)
         .where(and(
@@ -152,6 +191,10 @@ export class VendorModel {
 
       return !!deletedVendor;
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async getVendorsPaginated(tenantId: string, options: PaginationOptions): Promise<PaginatedResult<Vendor>> {

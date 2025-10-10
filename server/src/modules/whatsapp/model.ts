@@ -1,5 +1,5 @@
 import { eq, desc, and, or, ilike } from "drizzle-orm";
-import { db } from "../../../db.js";
+import { db } from "../../../db";
 import { 
   whatsappMessages, 
   type WhatsAppMessage, 
@@ -11,13 +11,13 @@ import {
   ensureTenantInsert, 
   withTenant, 
   withTenantPagination 
-} from "../../utils/tenant-scope.js";
+} from "../../utils/tenant-scope";
 import { 
   applySorting,
   applySearchFilter,
   getCountWithSearch,
   buildPaginationMetadata
-} from "../../utils/pagination.js";
+} from "../../utils/pagination";
 
 export class WhatsAppMessageModel {
   /**

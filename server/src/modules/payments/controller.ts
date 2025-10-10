@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { BaseController } from '../../utils/base';
 import { PaymentModel } from './model';
 import { insertPaymentSchema } from '@shared/schema';
-import { type AuthenticatedRequest, ForbiddenError, BadRequestError } from '../../types';
+import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
 import { whatsAppService } from '../../services/whatsapp/index.js';
 
 export class PaymentController extends BaseController {
@@ -63,5 +63,22 @@ export class PaymentController extends BaseController {
     }
     
     res.status(201).json(payment);
+  }
+
+  async deletePayment(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Payment ID is required');
+    this.validateUUID(id, 'Payment ID');
+
+    const success = await this.wrapDatabaseOperation(() => 
+      this.paymentModel.deletePayment(tenantId, id)
+    );
+    
+    if (!success) throw new NotFoundError('Payment not found');
+    
+    res.status(204).send();
   }
 }

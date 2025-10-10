@@ -1,4 +1,4 @@
-import { eq, desc, and, inArray, or, gt, asc } from 'drizzle-orm';
+import { eq, desc, and, inArray, or, gt, asc, sum } from 'drizzle-orm';
 import { db } from '../../../db';
 import { salesPayments, salesInvoices, retailers, bankAccounts, cashbook, bankbook, type SalesPayment, type InsertSalesPayment, type SalesPaymentWithDetails, type SalesInvoice, type RetailerPaymentDistributionResult } from '@shared/schema';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
@@ -218,7 +218,7 @@ export class SalesPaymentModel {
       else if ((payment.paymentMode === 'Bank' || payment.paymentMode === 'UPI' || payment.paymentMode === 'Cheque') && payment.bankAccountId) {
         const lastBankEntry = await tx.select().from(bankbook)
           .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, payment.bankAccountId)))
-          .orderBy(desc(bankbook.id))
+          .orderBy(desc(bankbook.date), desc(bankbook.id))
           .limit(1)
           .for('update');
 
@@ -411,12 +411,13 @@ export class SalesPaymentModel {
 
           // Update tenant cash balance
           await TenantModel.setCashBalance(tx, tenantId, newBalance.toFixed(2));
-        } else if (paymentData.paymentMode === 'Bank' && paymentData.bankAccountId) {
+        } else if ((paymentData.paymentMode === 'Bank' || paymentData.paymentMode === 'UPI' || paymentData.paymentMode === 'Cheque') && paymentData.bankAccountId) {
           // Get current bank balance
           const lastBankEntry = await tx.select().from(bankbook)
             .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, paymentData.bankAccountId)))
-            .orderBy(desc(bankbook.createdAt))
-            .limit(1);
+            .orderBy(desc(bankbook.date), desc(bankbook.id))
+            .limit(1)
+            .for('update');
 
           const currentBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
           const newBalance = currentBalance + (distributedAmount - remainingPaymentAmount);
@@ -459,5 +460,259 @@ export class SalesPaymentModel {
         gt(salesInvoices.udhaaarAmount, '0')
       )))
       .orderBy(asc(salesInvoices.invoiceDate));
+  }
+
+  async deleteSalesPayment(tenantId: string, paymentId: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      // Fetch the payment record with tenant filtering
+      const [payment] = await tx.select().from(salesPayments)
+        .where(withTenant(salesPayments, tenantId, eq(salesPayments.id, paymentId)));
+      
+      if (!payment) {
+        return false;
+      }
+
+      // Comment 2 Fix: Check if this payment is part of a batch distribution
+      let paymentsToDelete = [payment];
+      let isBatchDistribution = false;
+      
+      if (payment.paymentLinkId) {
+        // Find all payments in the same batch
+        const batchPayments = await tx.select().from(salesPayments)
+          .where(withTenant(salesPayments, tenantId, eq(salesPayments.paymentLinkId, payment.paymentLinkId)));
+        
+        if (batchPayments.length > 1) {
+          // This is a batch distribution - we need to delete all related payments
+          paymentsToDelete = batchPayments;
+          isBatchDistribution = true;
+        }
+      }
+
+      // Store payment details for later use - sum up all amounts for batch
+      const paymentAmount = paymentsToDelete.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const invoiceId = payment.invoiceId;
+      const retailerId = payment.retailerId;
+      const paymentMode = payment.paymentMode;
+      const bankAccountId = payment.bankAccountId;
+
+      // Fetch the invoice
+      const [invoice] = await tx.select().from(salesInvoices)
+        .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)));
+      
+      if (!invoice) {
+        throw new Error('Invoice not found');
+      }
+
+      // Fetch the retailer
+      const [retailer] = await tx.select().from(retailers)
+        .where(withTenant(retailers, tenantId, eq(retailers.id, retailerId)));
+      
+      if (!retailer) {
+        throw new Error('Retailer not found');
+      }
+
+      // Comment 2 Fix: Delete all payments in the batch
+      if (isBatchDistribution) {
+        // For batch distributions, delete all payments with the same paymentLinkId
+        await tx.delete(salesPayments)
+          .where(withTenant(salesPayments, tenantId, eq(salesPayments.paymentLinkId, payment.paymentLinkId!)));
+        
+        // Collect all affected invoices and update them
+        const affectedInvoiceIds = Array.from(new Set(paymentsToDelete.map(p => p.invoiceId)));
+        
+        for (const affectedInvoiceId of affectedInvoiceIds) {
+          // Fetch remaining payments for this invoice (after deletion)
+          const remainingPayments = await tx.select().from(salesPayments)
+            .where(withTenant(salesPayments, tenantId, eq(salesPayments.invoiceId, affectedInvoiceId)));
+
+          // Fetch the invoice  
+          const [affectedInvoice] = await tx.select().from(salesInvoices)
+            .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, affectedInvoiceId)));
+          
+          if (affectedInvoice) {
+            // Calculate new invoice amounts
+            const newPaidAmount = remainingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            const newUdhaaarAmount = parseFloat(affectedInvoice.totalAmount) - newPaidAmount;
+            
+            // Use epsilon (0.005) to determine new status
+            const epsilon = 0.005;
+            let newStatus: string;
+            if (Math.abs(newUdhaaarAmount) < epsilon) {
+              newStatus = 'Paid';
+            } else if (newPaidAmount > epsilon) {
+              newStatus = 'Partially Paid';
+            } else {
+              newStatus = 'Unpaid';
+            }
+            
+            // Update the affected invoice
+            await tx.update(salesInvoices)
+              .set({
+                paidAmount: newPaidAmount.toFixed(2),
+                udhaaarAmount: Math.max(0, newUdhaaarAmount).toFixed(2),
+                status: newStatus as any
+              })
+              .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, affectedInvoiceId)));
+          }
+        }
+      } else {
+        // Single payment deletion (original logic)
+        await tx.delete(salesPayments)
+          .where(withTenant(salesPayments, tenantId, eq(salesPayments.id, paymentId)));
+      }
+
+      // Fetch all remaining payments for the original invoice (for balance calculations)
+      // Skip this for batch distributions as we already handled all affected invoices
+      let newPaidAmount = 0;
+      let newUdhaaarAmount = 0;
+      
+      if (!isBatchDistribution) {
+        const remainingPayments = await tx.select().from(salesPayments)
+          .where(withTenant(salesPayments, tenantId, eq(salesPayments.invoiceId, invoiceId)));
+
+        // Calculate new invoice amounts
+        newPaidAmount = remainingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+        newUdhaaarAmount = parseFloat(invoice.totalAmount) - newPaidAmount;
+      } else {
+        // For batch distributions, use the original invoice data since we already updated it
+        newPaidAmount = parseFloat(invoice.paidAmount || '0') - paymentsToDelete
+          .filter(p => p.invoiceId === invoiceId)
+          .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+        newUdhaaarAmount = parseFloat(invoice.totalAmount) - newPaidAmount;
+      }
+      
+      // Only update original invoice for non-batch distributions
+      let newStatus = invoice.status;
+      let newShortfallAmount = parseFloat(invoice.shortfallAmount || '0');
+      
+      if (!isBatchDistribution) {
+        // Use epsilon (0.005) to determine new status
+        const epsilon = 0.005;
+        if (Math.abs(newUdhaaarAmount) < epsilon) {
+          newStatus = 'Paid';
+        } else if (newPaidAmount > epsilon) {
+          newStatus = 'Partially Paid';
+        } else {
+          newStatus = 'Unpaid';
+        }
+
+        // Calculate shortfall changes
+        if (invoice.status === 'Paid' && newStatus !== 'Paid') {
+          // Reverse existing shortfall
+          newShortfallAmount = 0;
+        } else if (newStatus === 'Paid') {
+          // Calculate shortfall as totalAmount - newPaidAmount (if > epsilon)
+          const shortfall = parseFloat(invoice.totalAmount) - newPaidAmount;
+          newShortfallAmount = shortfall > epsilon ? shortfall : 0;
+        } else {
+          newShortfallAmount = parseFloat(invoice.shortfallAmount || '0');
+        }
+
+        // Update the invoice with new amounts and status
+        await tx.update(salesInvoices)
+          .set({
+            paidAmount: newPaidAmount.toFixed(2),
+            udhaaarAmount: Math.max(0, newUdhaaarAmount).toFixed(2),
+            shortfallAmount: newShortfallAmount.toFixed(2),
+            status: newStatus as any
+          })
+          .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)));
+      }
+
+      // Update retailer balances
+      const newRetailerBalance = parseFloat(retailer.balance || '0') + paymentAmount;
+      
+      // Adjust udhaaarBalance based on invoice status changes
+      let udhaaarAdjustment = 0;
+      if (invoice.status === 'Paid' && newStatus !== 'Paid') {
+        udhaaarAdjustment = parseFloat(invoice.shortfallAmount || '0');
+      } else if (invoice.status !== 'Paid' && newStatus === 'Paid') {
+        udhaaarAdjustment = -newShortfallAmount;
+      }
+      
+      const currentUdhaaar = parseFloat(retailer.udhaaarBalance || '0');
+      const newUdhaaarBalance = (currentUdhaaar + paymentAmount + udhaaarAdjustment);
+      
+      // Adjust shortfallBalance based on shortfall changes
+      const shortfallDiff = newShortfallAmount - parseFloat(invoice.shortfallAmount || '0');
+      const newShortfallBalance = parseFloat(retailer.shortfallBalance || '0') + shortfallDiff;
+
+      await tx.update(retailers)
+        .set({
+          balance: newRetailerBalance.toFixed(2),
+          udhaaarBalance: newUdhaaarBalance.toFixed(2),
+          shortfallBalance: newShortfallBalance.toFixed(2)
+        })
+        .where(withTenant(retailers, tenantId, eq(retailers.id, retailerId)));
+
+      // Comment 2 Fix: Delete ledger entries for all payments in batch
+      if (isBatchDistribution) {
+        // Delete all cashbook entries for the batch
+        const paymentIds = paymentsToDelete.map(p => p.id);
+        await tx.delete(cashbook)
+          .where(withTenant(cashbook, tenantId, and(
+            eq(cashbook.referenceType, 'Sales Payment'),
+            inArray(cashbook.referenceId, paymentIds)
+          )));
+        
+        // Delete all bankbook entries for the batch
+        await tx.delete(bankbook)
+          .where(withTenant(bankbook, tenantId, and(
+            eq(bankbook.referenceType, 'Sales Payment'),
+            inArray(bankbook.referenceId, paymentIds)
+          )));
+      } else {
+        // Single payment deletion (original logic)
+        // Delete the cashbook entry if payment was Cash
+        if (paymentMode === 'Cash') {
+          await tx.delete(cashbook)
+            .where(withTenant(cashbook, tenantId, and(
+              eq(cashbook.referenceType, 'Sales Payment'),
+              eq(cashbook.referenceId, paymentId)
+            )));
+        }
+
+        // Delete the bankbook entry if payment was Bank/UPI/Cheque
+        if (paymentMode === 'Bank' || paymentMode === 'UPI' || paymentMode === 'Cheque') {
+          await tx.delete(bankbook)
+            .where(withTenant(bankbook, tenantId, and(
+              eq(bankbook.referenceType, 'Sales Payment'),
+              eq(bankbook.referenceId, paymentId)
+            )));
+        }
+      }
+
+      // Recalculate running balance
+      if (paymentMode === 'Cash') {
+        // For Cash: fetch last cashbook entry, get its balance, update tenant cash balance
+        const [lastCashEntry] = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(desc(cashbook.id))
+          .limit(1);
+        
+        const newCashBalance = lastCashEntry ? lastCashEntry.balance : '0.00';
+        await TenantModel.setCashBalance(tx, tenantId, newCashBalance);
+
+        // Comment 3 Fix: Recalculate running balances for all subsequent cashbook entries
+        const allCashEntries = await tx.select().from(cashbook)
+          .where(withTenant(cashbook, tenantId))
+          .orderBy(asc(cashbook.date), asc(cashbook.id));
+        
+        let runningBalance = 0.00;
+        for (const entry of allCashEntries) {
+          runningBalance += parseFloat(entry.inflow || '0') - parseFloat(entry.outflow || '0');
+          
+          await tx.update(cashbook)
+            .set({ balance: runningBalance.toFixed(2) })
+            .where(withTenant(cashbook, tenantId, eq(cashbook.id, entry.id)));
+        }
+        
+      } else if (bankAccountId && (paymentMode === 'Bank' || paymentMode === 'UPI' || paymentMode === 'Cheque')) {
+        // Recalculate bankbook running balances
+        await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, bankAccountId);
+      }
+
+      return true;
+    });
   }
 }

@@ -652,6 +652,8 @@ export const insertBankAccountSchema = createInsertSchema(bankAccounts, {
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  openingDate: z.date().optional()
 }).transform((data) => ({
   ...data,
   balance: data.balance || "0.00"

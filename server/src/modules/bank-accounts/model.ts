@@ -28,7 +28,7 @@ export class BankAccountModel {
     return bankAccount;
   }
 
-  async createBankAccount(tenantId: string, insertBankAccount: InsertBankAccount): Promise<BankAccount> {
+  async createBankAccount(tenantId: string, insertBankAccount: InsertBankAccount & { openingDate?: Date }): Promise<BankAccount> {
     return await db.transaction(async (tx) => {
       // Insert the bank account with the provided balance
       const [created] = await tx.insert(bankAccounts)
@@ -41,7 +41,7 @@ export class BankAccountModel {
         await tx.insert(bankbook)
           .values(ensureTenantInsert({
             bankAccountId: created.id,
-            date: new Date(),
+            date: insertBankAccount.openingDate || created.createdAt || new Date(),
             description: "Opening Balance",
             debit: balance.toFixed(2),
             credit: "0.00",
@@ -49,6 +49,9 @@ export class BankAccountModel {
             referenceType: "Opening Balance",
             referenceId: null
           }, tenantId));
+
+        // Recalculate balance to ensure consistency
+        await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, created.id);
       }
 
       return created;
@@ -195,5 +198,30 @@ export class BankAccountModel {
     if (result.rowCount === 0) {
       throw new Error('Bank account not found');
     }
+  }
+
+  static async recalculateBankAccountBalance(tx: any, tenantId: string, bankAccountId: string): Promise<string> {
+    // Fetch all bankbook entries for the given bank account ordered chronologically
+    const allBankEntries = await tx.select().from(bankbook)
+      .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, bankAccountId)))
+      .orderBy(asc(bankbook.date), asc(bankbook.id));
+    
+    let runningBalance = 0.00;
+    for (const entry of allBankEntries) {
+      // Calculate balance using formula: balance = previous_balance + debit - credit
+      runningBalance += parseFloat(entry.debit || '0') - parseFloat(entry.credit || '0');
+      
+      // Update the bankbook entry with corrected balance
+      await tx.update(bankbook)
+        .set({ balance: runningBalance.toFixed(2) })
+        .where(withTenant(bankbook, tenantId, eq(bankbook.id, entry.id)));
+    }
+    
+    const finalBalance = runningBalance.toFixed(2);
+    
+    // Update the bank account's balance to match the final bankbook balance
+    await this.setBankAccountBalance(tx, tenantId, bankAccountId, finalBalance);
+    
+    return finalBalance;
   }
 }

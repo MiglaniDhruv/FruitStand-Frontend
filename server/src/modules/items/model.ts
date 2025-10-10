@@ -19,6 +19,8 @@ import {
   withTenantPagination
 } from "../../utils/pagination";
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
+import { ValidationError, ConflictError, AppError } from "../../types";
+import { handleDatabaseError } from "../../utils/database-errors";
 
 export class ItemModel {
   async getItems(tenantId: string, isActive?: string): Promise<ItemWithVendor[]> {
@@ -72,53 +74,99 @@ export class ItemModel {
   }
 
   async createItem(tenantId: string, insertItem: InsertItem): Promise<Item> {
-    return await db.transaction(async (tx) => {
-      const itemWithTenant = ensureTenantInsert(insertItem, tenantId);
-      const [item] = await tx.insert(items).values(itemWithTenant).returning();
-      const stockWithTenant = ensureTenantInsert({ itemId: item.id }, tenantId);
-      await tx.insert(stock).values(stockWithTenant);
-      return item;
-    });
+    // Add business logic validation
+    if (!insertItem.name || insertItem.name.trim().length === 0) {
+      throw new ValidationError('Item name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    if (!insertItem.vendorId) {
+      throw new ValidationError('Vendor is required', {
+        vendorId: 'Vendor must be selected'
+      });
+    }
+
+    const allowedUnits = ['kg', 'gram', 'litre', 'piece', 'box', 'crate'];
+    if (insertItem.unit && !allowedUnits.includes(insertItem.unit)) {
+      throw new ValidationError('Invalid unit', {
+        unit: `Unit must be one of: ${allowedUnits.join(', ')}`
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
+        const itemWithTenant = ensureTenantInsert(insertItem, tenantId);
+        const [item] = await tx.insert(items).values(itemWithTenant).returning();
+        const stockWithTenant = ensureTenantInsert({ itemId: item.id }, tenantId);
+        await tx.insert(stock).values(stockWithTenant);
+        return item;
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async updateItem(tenantId: string, id: string, insertItem: Partial<InsertItem>): Promise<Item | undefined> {
-    const [item] = await db
-      .update(items)
-      .set(insertItem)
-      .where(withTenant(items, tenantId, eq(items.id, id)))
-      .returning();
-    return item || undefined;
+    // Add business logic validation
+    if (insertItem.name !== undefined && (!insertItem.name || insertItem.name.trim().length === 0)) {
+      throw new ValidationError('Item name is required', {
+        name: 'Name cannot be empty'
+      });
+    }
+
+    const allowedUnits = ['kg', 'gram', 'litre', 'piece', 'box', 'crate'];
+    if (insertItem.unit !== undefined && insertItem.unit && !allowedUnits.includes(insertItem.unit)) {
+      throw new ValidationError('Invalid unit', {
+        unit: `Unit must be one of: ${allowedUnits.join(', ')}`
+      });
+    }
+
+    try {
+      const [item] = await db
+        .update(items)
+        .set(insertItem)
+        .where(withTenant(items, tenantId, eq(items.id, id)))
+        .returning();
+      return item || undefined;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async deleteItem(tenantId: string, id: string): Promise<{ success: boolean; error?: string }> {
-    return await db.transaction(async (tx) => {
-      // Check if item has any stock quantities > 0 inside transaction with tenant filtering
-      const stockEntries = await tx.select().from(stock)
-        .where(withTenant(stock, tenantId, eq(stock.itemId, id)));
-      
-      for (const stockEntry of stockEntries) {
-        const hasStock = 
-          parseFloat(stockEntry.quantityInCrates || "0") > 0 ||
-          parseFloat(stockEntry.quantityInBoxes || "0") > 0 ||
-          parseFloat(stockEntry.quantityInKgs || "0") > 0;
+    try {
+      return await db.transaction(async (tx) => {
+        // Check if item has any stock quantities > 0 inside transaction with tenant filtering
+        const stockEntries = await tx.select().from(stock)
+          .where(withTenant(stock, tenantId, eq(stock.itemId, id)));
         
-        if (hasStock) {
-          return { 
-            success: false, 
-            error: "Cannot delete item with existing stock quantities. Please clear stock first." 
-          };
+        for (const stockEntry of stockEntries) {
+          const hasStock = 
+            parseFloat(stockEntry.quantityInCrates || "0") > 0 ||
+            parseFloat(stockEntry.quantityInBoxes || "0") > 0 ||
+            parseFloat(stockEntry.quantityInKgs || "0") > 0;
+          
+          if (hasStock) {
+            throw new ConflictError('Cannot delete item with existing stock quantities. Please clear stock first.');
+          }
         }
-      }
-      
-      // Proceed with soft deletion if no stock exists with tenant filtering
-      const [item] = await tx
-        .update(items)
-        .set({ isActive: false })
-        .where(withTenant(items, tenantId, eq(items.id, id)))
-        .returning();
-      
-      return { success: !!item };
-    });
+        
+        // Proceed with soft deletion if no stock exists with tenant filtering
+        const [item] = await tx
+          .update(items)
+          .set({ isActive: false })
+          .where(withTenant(items, tenantId, eq(items.id, id)))
+          .returning();
+        
+        return { success: !!item };
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async getItemsPaginated(tenantId: string, options: PaginationOptions & { isActive?: 'true' | 'false' }): Promise<PaginatedResult<ItemWithVendor>> {

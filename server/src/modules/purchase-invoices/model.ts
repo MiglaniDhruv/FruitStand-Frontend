@@ -5,6 +5,8 @@ import { normalizePaginationOptions, buildPaginationMetadata, withTenantPaginati
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { assertSameTenant } from '../../utils/tenant';
 import { InvoiceShareLinkModel } from '../invoice-share-links/model';
+import { NotFoundError, ValidationError, BadRequestError, ConflictError, AppError } from '../../types';
+import { handleDatabaseError } from '../../utils/database-errors';
 
 // Local type that extends InvoiceWithItems to include optional crate transaction
 type InvoiceWithItemsAndCrate = InvoiceWithItems & {
@@ -18,7 +20,7 @@ export class PurchaseInvoiceModel {
     // Verify the invoice exists and belongs to this tenant
     const invoice = await this.getPurchaseInvoice(tenantId, invoiceId);
     if (!invoice) {
-      throw new Error('Purchase invoice not found');
+      throw new NotFoundError('Purchase invoice');
     }
     
     return await this.shareModel.createOrGetShareLink(tenantId, invoiceId, 'purchase');
@@ -94,7 +96,7 @@ export class PurchaseInvoiceModel {
       .where(withTenant(vendors, tenantId, eq(vendors.id, invoice.vendorId)));
     
     if (!vendor) {
-      throw new Error('Invoice vendor not found');
+      throw new NotFoundError('Vendor');
     }
     
     // Join with items table to get item details including name, quality, and unit
@@ -125,7 +127,36 @@ export class PurchaseInvoiceModel {
     crateTransactionData?: InsertCrateTransaction,
     stockOutEntryIds?: string[]
   ): Promise<InvoiceWithItemsAndCrate> {
-    return await db.transaction(async (tx) => {
+    // Add business logic validation
+    if (!itemsData || itemsData.length === 0) {
+      throw new ValidationError('Invoice must contain at least one item', {
+        items: 'At least one item is required'
+      });
+    }
+
+    const netAmount = parseFloat(invoiceData.netAmount);
+    if (isNaN(netAmount) || netAmount <= 0) {
+      throw new ValidationError('Invalid invoice amount', {
+        netAmount: 'Net amount must be a positive number'
+      });
+    }
+
+    // Validate vendor ID is provided
+    if (!invoiceData.vendorId) {
+      throw new ValidationError('Vendor is required', {
+        vendorId: 'Vendor must be selected'
+      });
+    }
+
+    // Add preflight validation for stockOutEntryIds format
+    if (stockOutEntryIds && stockOutEntryIds.some(id => !id || typeof id !== 'string' || id.trim().length === 0)) {
+      throw new ValidationError('Invalid stock movement IDs provided', {
+        stockOutEntryIds: 'All stock movement IDs must be non-empty strings'
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
       // Validate tenant references
       await assertSameTenant(tx, tenantId, [
         { table: 'vendors', id: invoiceData.vendorId }
@@ -161,25 +192,31 @@ export class PurchaseInvoiceModel {
         
         // Validate all movements exist
         if (selectedMovements.length !== stockOutEntryIds.length) {
-          throw new Error('Some selected stock movements not found');
+          throw new ValidationError('Some selected stock movements not found', {
+            stockOutEntryIds: 'One or more stock movement IDs are invalid'
+          });
         }
         
         // Validate none are already allocated
         const alreadyAllocated = selectedMovements.filter(sm => sm.movement.purchaseInvoiceId !== null);
         if (alreadyAllocated.length > 0) {
-          throw new Error('Some selected stock movements are already allocated to another purchase invoice');
+          throw new ConflictError('Some selected stock movements are already allocated to another purchase invoice');
         }
         
         // Validate all belong to the correct vendor
         const wrongVendor = selectedMovements.filter(sm => sm.item.vendorId !== invoiceData.vendorId);
         if (wrongVendor.length > 0) {
-          throw new Error('Some selected stock movements do not belong to the selected vendor');
+          throw new ValidationError('Some selected stock movements do not belong to the selected vendor', {
+            stockOutEntryIds: 'All stock movements must belong to the selected vendor'
+          });
         }
         
         // Validate all movements are of type OUT
         const nonOutMovements = selectedMovements.filter(sm => sm.movement.movementType !== 'OUT');
         if (nonOutMovements.length > 0) {
-          throw new Error('Some selected stock movements are not of type OUT');
+          throw new ValidationError('Some selected stock movements are not of type OUT', {
+            stockOutEntryIds: 'Only OUT type stock movements can be linked to purchase invoices'
+          });
         }
         
         // Link movements to this invoice with concurrent protection
@@ -196,7 +233,7 @@ export class PurchaseInvoiceModel {
         
         // Verify all movements were updated (protect against concurrent allocation)
         if (updatedMovements.length !== stockOutEntryIds.length) {
-          throw new Error('Some stock movements were concurrently allocated to another purchase invoice');
+          throw new ConflictError('Some stock movements were concurrently allocated to another purchase invoice. Please refresh and try again.');
         }
       }
       
@@ -213,7 +250,7 @@ export class PurchaseInvoiceModel {
         .where(withTenant(vendors, tenantId, eq(vendors.id, invoice.vendorId)));
       
       if (!vendor) {
-        throw new Error('Invoice vendor not found');
+        throw new NotFoundError('Vendor');
       }
       
       // Create crate transaction if provided
@@ -263,6 +300,10 @@ export class PurchaseInvoiceModel {
         crateTransaction 
       };
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 
   async getPurchaseInvoicesPaginated(tenantId: string, options?: PaginationOptions & {
@@ -425,7 +466,8 @@ export class PurchaseInvoiceModel {
   }
 
   async deletePurchaseInvoice(tenantId: string, id: string): Promise<boolean> {
-    return await db.transaction(async (tx) => {
+    try {
+      return await db.transaction(async (tx) => {
       // Delete related records in cascade order (children first, then parent)
       
       // Delete invoice share links
@@ -467,5 +509,9 @@ export class PurchaseInvoiceModel {
       
       return !!deletedInvoice;
     });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
   }
 }

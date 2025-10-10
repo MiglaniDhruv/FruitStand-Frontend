@@ -1,6 +1,7 @@
 import { BaseRouter } from '../../utils/base';
 import { DashboardController } from './controller';
 import { authenticateToken, validateTenant, attachTenantContext } from '../../middleware/auth';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class DashboardRouter extends BaseRouter {
   private dashboardController: DashboardController;
@@ -15,9 +16,9 @@ export class DashboardRouter extends BaseRouter {
     // GET /dashboard/kpis - Get dashboard KPIs
     this.router.get('/dashboard/kpis', 
       authenticateToken, 
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.dashboardController.getKPIs.bind(this.dashboardController)
+      asyncHandler(this.dashboardController.getKPIs.bind(this.dashboardController))
     );
   }
 }

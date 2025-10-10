@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle } from "lucide-react";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
@@ -24,7 +24,6 @@ export default function SalesInvoiceDetailPage() {
   const queryClient = useQueryClient();
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [markingAsPaid, setMarkingAsPaid] = useState(false);
-  const [revertingStatus, setRevertingStatus] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -150,34 +149,6 @@ export default function SalesInvoiceDetailPage() {
     },
   });
 
-  // Revert Status mutation
-  const revertStatusMutation = useMutation({
-    mutationFn: async () => {
-      const response = await authenticatedApiRequest('PUT', `/api/sales-invoices/${invoiceId}/revert-status`);
-      return response.json();
-    },
-    onSuccess: async () => {
-      toast({
-        title: 'Invoice status reverted',
-        description: 'The sales invoice status has been reverted successfully',
-      });
-      // Refresh invoice data and wait for it to complete
-      await refetchInvoice();
-      setRevertingStatus(false);
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['/api/sales-invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/sales-payments'] });
-    },
-    onError: (error: any) => {
-      setRevertingStatus(false);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to revert invoice status',
-        variant: 'destructive',
-      });
-    },
-  });
-
   const handleBack = () => {
     setLocation(`/${slug}/sales-invoices`);
   };
@@ -219,11 +190,6 @@ export default function SalesInvoiceDetailPage() {
   const handleMarkAsPaid = () => {
     setMarkingAsPaid(true);
     markAsPaidMutation.mutate();
-  };
-
-  const handleRevertStatus = () => {
-    setRevertingStatus(true);
-    revertStatusMutation.mutate();
   };
 
   const handleAddPayment = () => {
@@ -414,26 +380,6 @@ export default function SalesInvoiceDetailPage() {
                       </Button>
                     </PermissionGuard>
                   )}
-                  {invoice?.status === "Paid" && (
-                    <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRevertStatus}
-                        disabled={revertingStatus}
-                        className="flex items-center space-x-2"
-                        title="Revert invoice status"
-                        data-testid="button-revert-status"
-                      >
-                        {revertingStatus ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RotateCcw className="h-4 w-4" />
-                        )}
-                        <span>Revert Status</span>
-                      </Button>
-                    </PermissionGuard>
-                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -459,6 +405,7 @@ export default function SalesInvoiceDetailPage() {
                 invoice={invoice}
                 payments={payments}
                 onAddPayment={handleAddPayment}
+                isPurchaseInvoice={false}
               />
             </div>
           </main>

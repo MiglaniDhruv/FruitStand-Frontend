@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +11,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
-import { CreditCard, FileText, User, Package } from "lucide-react";
+import { CreditCard, FileText, User, Package, Trash2, Loader2 } from "lucide-react";
+import { authenticatedApiRequest } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 
@@ -19,9 +33,15 @@ interface InvoiceDetailsViewProps {
   invoice: any;
   payments?: any[];
   onAddPayment?: () => void;
+  isPurchaseInvoice?: boolean;
 }
 
-export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: InvoiceDetailsViewProps) {
+export default function InvoiceDetailsView({ invoice, payments, onAddPayment, isPurchaseInvoice = false }: InvoiceDetailsViewProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
+  
   if (!invoice) return null;
 
   const getStatusColor = (status: string) => {
@@ -53,8 +73,60 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
     }
   };
 
-  // Check if this is a purchase invoice (has commission/labour fields)
-  const isPurchaseInvoice = invoice.commission !== undefined || invoice.labour !== undefined;
+  // Delete payment mutation
+  const deletePaymentMutation = useMutation({
+    mutationFn: async (paymentId: string) => {
+      const endpoint = isPurchaseInvoice ? `/api/payments/${paymentId}` : `/api/sales-payments/${paymentId}`;
+      const response = await authenticatedApiRequest('DELETE', endpoint);
+      // Handle 204 No Content responses safely
+      if (response.status === 204 || response.status === 200) {
+        try {
+          return await response.json();
+        } catch {
+          return {}; // Return empty object for 204 responses with no body
+        }
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Payment deleted',
+        description: 'Payment record has been deleted successfully',
+      });
+      // Invalidate only relevant queries based on invoice type
+      if (isPurchaseInvoice) {
+        queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/purchase-invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/purchase-invoices', invoice.id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['/api/sales-payments'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/sales-invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/sales-invoices', invoice.id] });
+      }
+      // Close dialog and clear state
+      setIsDeleteDialogOpen(false);
+      setPaymentToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete payment record',
+        variant: 'destructive',
+      });
+    },
+  });
+  
+  // Handler functions
+  const handleDeletePayment = (payment: any) => {
+    setPaymentToDelete(payment);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDelete = () => {
+    if (paymentToDelete) {
+      deletePaymentMutation.mutate(paymentToDelete.id);
+    }
+  };
   
   // Helper function to safely parse float values and avoid NaN
   const safeParseFloat = (value: any, fallback: number = 0): number => {
@@ -324,6 +396,7 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
                     <TableHead>Mode</TableHead>
                     <TableHead>Reference</TableHead>
                     <TableHead>Notes</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -344,6 +417,23 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
                       <TableCell className="text-sm text-muted-foreground">
                         {payment.notes || "-"}
                       </TableCell>
+                      <TableCell>
+                        <PermissionGuard permission={PERMISSIONS.DELETE_PAYMENTS}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeletePayment(payment)}
+                            disabled={deletePaymentMutation.isPending}
+                            className="text-destructive"
+                          >
+                            {deletePaymentMutation.isPending && paymentToDelete?.id === payment.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </PermissionGuard>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -352,6 +442,28 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment }: 
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payment Record</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this payment record of ₹{paymentToDelete?.amount ? safeParseFloat(paymentToDelete.amount).toLocaleString('en-IN') : '0'}? This will recalculate the invoice status and update balances. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deletePaymentMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deletePaymentMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

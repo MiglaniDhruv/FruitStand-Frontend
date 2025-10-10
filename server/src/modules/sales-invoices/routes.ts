@@ -1,6 +1,7 @@
 import { BaseRouter } from '../../utils/base';
 import { SalesInvoiceController } from './controller';
 import { authenticateToken, validateTenant, attachTenantContext } from '../../middleware/auth';
+import { asyncHandler } from "../../utils/async-handler";
 
 export class SalesInvoiceRouter extends BaseRouter {
   private salesInvoiceController: SalesInvoiceController;
@@ -15,64 +16,56 @@ export class SalesInvoiceRouter extends BaseRouter {
     // GET /sales-invoices - Get sales invoices (with pagination support)
     this.router.get('/sales-invoices', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.getSalesInvoicesPaginated.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'getSalesInvoicesPaginated')
     );
     
     this.router.get('/sales-invoices/paginated', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.getSalesInvoicesPaginated.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'getSalesInvoicesPaginated')
     );
 
     // GET /sales-invoices/:id - Get a specific sales invoice
     this.router.get('/sales-invoices/:id', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.getSalesInvoice.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'getSalesInvoice')
     );
 
     // POST /sales-invoices - Create a new sales invoice
     this.router.post('/sales-invoices', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.createSalesInvoice.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'createSalesInvoice')
     );
 
     // PUT /sales-invoices/:id/mark-paid - Mark sales invoice as paid
     this.router.put('/sales-invoices/:id/mark-paid', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.markSalesInvoiceAsPaid.bind(this.salesInvoiceController)
-    );
-
-    // PUT /sales-invoices/:id/revert-status - Revert sales invoice status from Paid to Partially Paid/Unpaid
-    this.router.put('/sales-invoices/:id/revert-status', 
-      authenticateToken,
-      validateTenant,
-      attachTenantContext,
-      this.salesInvoiceController.revertInvoiceStatus.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'markSalesInvoiceAsPaid')
     );
 
     // POST /sales-invoices/:id/share-link - Create share link for sales invoice
     this.router.post('/sales-invoices/:id/share-link', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.createShareLink.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'createShareLink')
     );
 
     // DELETE /sales-invoices/:id - Delete a sales invoice
     this.router.delete('/sales-invoices/:id', 
       authenticateToken,
-      validateTenant,
+      asyncHandler(validateTenant),
       attachTenantContext,
-      this.salesInvoiceController.delete.bind(this.salesInvoiceController)
+      this.ah(this.salesInvoiceController, 'delete')
     );
   }
 }

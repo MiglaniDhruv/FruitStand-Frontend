@@ -142,10 +142,11 @@ export default function BankAccounts() {
     }
   };
 
-  const formatBalance = (balance: string | null) => {
-    if (!balance) return "₹0.00";
-    const num = parseFloat(balance);
-    return `₹${num.toFixed(2)}`;
+  const formatBalance = (balance: string | number | null | undefined) => {
+    if (!balance && balance !== 0) return "₹0.00";
+    const num = parseFloat(String(balance));
+    if (isNaN(num)) return "₹0.00";
+    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const columns = [
@@ -164,55 +165,47 @@ export default function BankAccounts() {
     {
       accessorKey: "ifscCode",
       header: "IFSC Code",
-      cell: ({ row }: any) => {
-        return row.original.ifscCode || "-";
-      },
+      cell: (value: string) => value || "-",
     },
     {
       accessorKey: "balance",
       header: "Balance",
-      cell: ({ row }: any) => {
-        return formatBalance(row.original.balance);
-      },
+      cell: (value: string) => formatBalance(value),
     },
     {
       accessorKey: "isActive",
       header: "Status",
-      cell: ({ row }: any) => {
-        return (
-          <Badge variant={row.original.isActive ? "default" : "secondary"}>
-            {row.original.isActive ? "Active" : "Inactive"}
-          </Badge>
-        );
-      },
+      cell: (value: boolean) => (
+        <Badge variant={value ? "default" : "secondary"}>
+          {value ? "Active" : "Inactive"}
+        </Badge>
+      ),
     },
     {
-      accessorKey: "actions",
+      accessorKey: "id",
       header: "Actions",
-      cell: ({ row }: any) => {
-        return (
-          <div className="flex items-center gap-2">
-            <PermissionGuard permission={PERMISSIONS.EDIT_PAYMENTS}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleEdit(row.original)}
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-            </PermissionGuard>
-            <PermissionGuard permission={PERMISSIONS.DELETE_PAYMENTS}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(row.original)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </PermissionGuard>
-          </div>
-        );
-      },
+      cell: (value: string, item: BankAccount) => (
+        <div className="flex items-center gap-2">
+          <PermissionGuard permission={PERMISSIONS.EDIT_PAYMENTS}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEdit(item)}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+          </PermissionGuard>
+          <PermissionGuard permission={PERMISSIONS.DELETE_PAYMENTS}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(item)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </PermissionGuard>
+        </div>
+      ),
     },
   ];
 

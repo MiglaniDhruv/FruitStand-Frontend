@@ -4,6 +4,14 @@ import { setupVite, serveStatic, log } from "./vite";
 import { extractTenantSlug } from "./src/middleware/tenant-slug";
 import { SYSTEM_ROUTES } from "./src/constants/routes";
 import { ERROR_CODES } from "./src/constants/error-codes";
+import { logError } from "./src/utils/error-logger";
+import { AppError, ValidationError, InternalServerError } from "./src/types/index";
+import { handleDatabaseError } from "./src/utils/database-errors";
+import { ZodError } from 'zod';
+import { asyncHandler } from "./src/utils/async-handler";
+import { attachRequestId } from './src/middleware/request-id';
+import { requestTimeout } from './src/middleware/timeout';
+import { sanitizeInputs, sanitizeParam } from './src/middleware/sanitization';
 
 // Import all modular routers
 import { authRouter } from "./src/modules/auth";
@@ -25,9 +33,75 @@ import { tenantRouter } from "./src/modules/tenants";
 import { whatsappRouter } from "./src/modules/whatsapp";
 import { publicRouter } from "./src/modules/public/router";
 
+// Server reference for graceful shutdown
+let server: any = null;
+let isShuttingDown = false;
+
+// Shared shutdown function with idempotent guard
+const initiateShutdown = (exitCode: number) => {
+  if (isShuttingDown) {
+    return; // Prevent multiple shutdown attempts
+  }
+  isShuttingDown = true;
+
+  console.log(`Initiating graceful shutdown with exit code ${exitCode}...`);
+  
+  if (server) {
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(exitCode);
+    });
+    
+    // Force exit after 10 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.error('Forced exit after graceful shutdown timeout');
+      process.exit(exitCode);
+    }, 10000);
+  } else {
+    process.exit(exitCode);
+  }
+};
+
+// Process-level error handlers
+process.on('uncaughtException', (error: Error) => {
+  logError(error, { path: 'uncaughtException' });
+  console.error('CRITICAL: Uncaught Exception occurred. Performing graceful shutdown...');
+  initiateShutdown(1);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  logError(error, { path: 'unhandledRejection' });
+  console.error('CRITICAL: Unhandled Promise Rejection occurred. Performing graceful shutdown...');
+  initiateShutdown(1);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Performing graceful shutdown...');
+  initiateShutdown(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received. Performing graceful shutdown...');
+  initiateShutdown(0);
+});
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Apply request ID tracking first for tracing
+app.use(attachRequestId);
+
+// Apply timeout protection
+app.use(requestTimeout());
+
+// Apply input sanitization (after body parsing, before business logic)
+app.use(sanitizeInputs);
+
+// Sanitize common param names
+app.param('id', (req, _res, next, val) => { (req as any).params.id = sanitizeParam(val); next(); });
+app.param('slug', (req, _res, next, val) => { (req as any).params.slug = sanitizeParam(val); next(); });
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -89,7 +163,7 @@ app.use((req, res, next) => {
 });
 
 // Apply tenant slug middleware before route handlers
-app.use(extractTenantSlug);
+app.use(asyncHandler(extractTenantSlug));
 
 (async () => {
   // Initialize database with default data
@@ -97,7 +171,10 @@ app.use(extractTenantSlug);
     const { initializeDatabase } = await import("./initializeDatabase");
     await initializeDatabase();
   } catch (error) {
+    // Critical failure - database initialization must succeed for server to function
     console.error("Failed to initialize database:", error);
+    initiateShutdown(1);
+    return; // Prevent further startup steps
   }
 
   // Initialize WhatsApp payment reminder scheduler
@@ -106,7 +183,8 @@ app.use(extractTenantSlug);
     await initializePaymentReminderScheduler();
     console.log("WhatsApp payment reminder scheduler initialized");
   } catch (error) {
-    console.error("Failed to initialize WhatsApp scheduler:", error);
+    // Non-critical service - server can continue without WhatsApp scheduler
+    console.warn("Failed to initialize WhatsApp scheduler:", error);
   }
 
   // Mount public router first (no authentication required)
@@ -133,7 +211,7 @@ app.use(extractTenantSlug);
 
   // Setup server for WebSocket support (required for Vite HMR)
   const { createServer } = await import("http");
-  const server = createServer(app);
+  server = createServer(app);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -153,21 +231,18 @@ app.use(extractTenantSlug);
         message: "API route not found",
         code: ERROR_CODES.RESOURCE_NOT_FOUND,
         statusCode: 404
-      }
+      },
+      requestId: (req as any).requestId
     });
   });
 
   // Global error handling middleware (must be last)
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    // Import required utilities
-    const { AppError, ValidationError, InternalServerError } = require('./src/types');
-    const { logError } = require('./src/utils/error-logger');
-    const { handleDatabaseError } = require('./src/utils/database-errors');
-    const { ZodError } = require('zod');
+    // Use static imports that are already available at the top of the file
 
     let error = err;
 
-    // Handle Zod validation errors
+    // Handle Zod validation errors - map to 400 status with structured payload
     if (error instanceof ZodError) {
       error = new ValidationError('Validation failed', error);
     }
@@ -185,6 +260,7 @@ app.use(extractTenantSlug);
     if (error instanceof AppError) {
       // Extract context information from request
       const context = {
+        requestId: (req as any).requestId,
         userId: (req as any).user?.id,
         tenantId: (req as any).tenantId,
         method: req.method,
@@ -207,6 +283,7 @@ app.use(extractTenantSlug);
           code: error.code,
           statusCode: error.statusCode,
         },
+        requestId: (req as any).requestId,
       };
 
       // Include details for validation errors
@@ -225,6 +302,7 @@ app.use(extractTenantSlug);
     // Handle unknown errors
     const internalError = new InternalServerError('An unexpected error occurred');
     const context = {
+      requestId: (req as any).requestId,
       userId: (req as any).user?.id,
       tenantId: (req as any).tenantId,
       method: req.method,
@@ -245,6 +323,7 @@ app.use(extractTenantSlug);
         code: internalError.code,
         statusCode: internalError.statusCode,
       },
+      requestId: (req as any).requestId,
     };
 
     // Include original error details in development
@@ -268,4 +347,5 @@ app.use(extractTenantSlug);
   }, () => {
     log(`serving on port ${port}`);
   });
+
 })();

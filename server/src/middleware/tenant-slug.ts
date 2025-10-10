@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { TenantModel } from "../modules/tenants/model";
-import { AuthenticatedRequest } from "../types";
+import { AuthenticatedRequest, NotFoundError, ForbiddenError, InternalServerError, AppError, BadRequestError } from "../types";
 import { SYSTEM_ROUTES } from "../constants/routes";
 
 // Simple in-memory cache for tenant slugs to avoid repeated DB hits
@@ -77,17 +77,11 @@ export const extractTenantSlug = async (
     const tenant = await TenantModel.getTenantBySlug(slug);
 
     if (!tenant) {
-      return res.status(404).json({
-        message: "Tenant not found",
-        error: `No tenant found with slug: ${slug}`,
-      });
+      throw new NotFoundError(`Tenant '${slug}'`);
     }
 
     if (!tenant.isActive) {
-      return res.status(403).json({
-        message: "Tenant suspended",
-        error: "This organization's access has been suspended",
-      });
+      throw new ForbiddenError("This organization's access has been suspended");
     }
 
     // Cache the tenant for future requests
@@ -110,12 +104,9 @@ export const extractTenantSlug = async (
     req.tenantId = tenant.id;
 
     next();
-  } catch (error) {
-    console.error("Error in tenant slug middleware:", error);
-    res.status(500).json({
-      message: "Internal server error",
-      error: "Failed to validate tenant context",
-    });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new InternalServerError('Failed to validate tenant context');
   }
 };
 
@@ -128,10 +119,7 @@ export const requireTenantContext = (
   next: NextFunction
 ) => {
   if (!req.tenant) {
-    return res.status(400).json({
-      message: "Tenant context required",
-      error: "This endpoint requires a valid tenant slug in the URL",
-    });
+    throw new BadRequestError('This endpoint requires a valid tenant slug in the URL');
   }
 
   next();
