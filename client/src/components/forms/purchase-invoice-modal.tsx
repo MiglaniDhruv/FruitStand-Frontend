@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useTenant } from "@/hooks/use-tenant";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -93,13 +94,19 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [calculationError, setCalculationError] = useState<string | null>(null);
 
+  const { tenant, getTenantSettings } = useTenant();
+  const tenantSettings = getTenantSettings();
+  const rawCommissionRate = tenantSettings.commissionRate || "0";
+  const clampedRate = Math.max(0, Math.min(100, parseFloat(rawCommissionRate) || 0));
+  const defaultCommissionRate = clampedRate.toString();
+
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       vendorId: "",
       invoiceDate: new Date().toISOString().split('T')[0],
       items: [{ itemId: "", weight: "", crates: "", boxes: "", rate: "", amount: "0" }],
-      commission: "0",
+      commission: defaultCommissionRate,
       labour: "0",
       truckFreight: "0",
       crateFreight: "0",
@@ -126,6 +133,14 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       setCalculationError(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    const rate = getTenantSettings().commissionRate;
+    if (open && rate && form.getValues('commission') === '0') {
+      const clampedRate = Math.max(0, Math.min(100, parseFloat(rate) || 0));
+      form.setValue('commission', clampedRate.toString());
+    }
+  }, [open, tenant, form]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
