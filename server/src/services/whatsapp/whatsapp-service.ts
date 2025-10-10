@@ -5,11 +5,7 @@ import {
   buildSalesInvoiceVariables,
   buildPurchaseInvoiceVariables,
   buildPaymentReminderVariables,
-  buildPaymentNotificationVariables,
-  type SalesInvoiceVariables,
-  type PurchaseInvoiceVariables,
-  type PaymentReminderVariables,
-  type PaymentNotificationVariables
+  buildPaymentNotificationVariables
 } from './template-builder.js';
 import { TenantModel } from '../../modules/tenants/model.js';
 import { WhatsAppMessageModel } from '../../modules/whatsapp/model.js';
@@ -41,41 +37,13 @@ interface SendMessageParams {
 
 export class WhatsAppService {
   /**
-   * Validate and construct invoice URL from share link token
-   */
-  private constructInvoiceUrl(token: string): string | undefined {
-    try {
-      const baseUrl = process.env.BASE_URL;
-      
-      if (!baseUrl) {
-        console.warn('BASE_URL environment variable not configured - invoice URLs will not be included');
-        return undefined;
-      }
-      
-      // Basic URL validation
-      if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-        console.warn('BASE_URL must start with http:// or https:// - invoice URLs will not be included');
-        return undefined;
-      }
-      
-      // Remove trailing slash if present
-      const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-      
-      return `${normalizedBaseUrl}/api/public/invoices/${token}`;
-    } catch (error) {
-      console.warn('Error constructing invoice URL:', error);
-      return undefined;
-    }
-  }
-
-  /**
-   * Create or get share link and construct invoice URL
+   * Create or get share link and return token
    */
   private async createInvoiceShareLink(tenantId: string, invoiceId: string, invoiceType: 'sales' | 'purchase'): Promise<string | undefined> {
     try {
       const invoiceShareLinkModel = new InvoiceShareLinkModel();
       const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, invoiceId, invoiceType);
-      return this.constructInvoiceUrl(shareLink.token);
+      return shareLink.token;
     } catch (error) {
       console.warn(`Warning: Failed to create share link for invoice ${invoiceId}:`, error);
       return undefined;
@@ -270,10 +238,15 @@ export class WhatsAppService {
     }
 
     // Create or get share link for invoice
-    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, 'sales');
+    const invoiceToken = await this.createInvoiceShareLink(tenantId, invoiceId, 'sales');
+    
+    // Guard against missing invoice token
+    if (!invoiceToken) {
+      throw new Error('Unable to generate invoice share link. Please ensure the invoice is accessible and try again.');
+    }
 
     // Build template variables
-    const templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceUrl);
+    const templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceToken);
 
     // Send message
     return await this.sendMessage({
@@ -325,10 +298,15 @@ export class WhatsAppService {
     }
 
     // Create or get share link for invoice
-    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, 'purchase');
+    const invoiceToken = await this.createInvoiceShareLink(tenantId, invoiceId, 'purchase');
+    
+    // Guard against missing invoice token
+    if (!invoiceToken) {
+      throw new Error('Unable to generate invoice share link. Please ensure the invoice is accessible and try again.');
+    }
 
     // Build template variables
-    const templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceUrl);
+    const templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceToken);
 
     // Send message
     return await this.sendMessage({
@@ -393,10 +371,15 @@ export class WhatsAppService {
 
     // Create or get share link for invoice
     const shareInvoiceType = invoiceType === 'sales' ? 'sales' : 'purchase';
-    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoiceId, shareInvoiceType);
+    const invoiceToken = await this.createInvoiceShareLink(tenantId, invoiceId, shareInvoiceType);
+    
+    // Guard against missing invoice token
+    if (!invoiceToken) {
+      throw new Error('Unable to generate invoice share link. Please ensure the invoice is accessible and try again.');
+    }
 
     // Build template variables
-    const templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceUrl);
+    const templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceToken);
 
     // Send message
     return await this.sendMessage({
@@ -469,10 +452,15 @@ export class WhatsAppService {
 
     // Create or get share link for invoice
     const shareInvoiceType = paymentType === 'sales' ? 'sales' : 'purchase';
-    const invoiceUrl = await this.createInvoiceShareLink(tenantId, invoice.id, shareInvoiceType);
+    const invoiceToken = await this.createInvoiceShareLink(tenantId, invoice.id, shareInvoiceType);
+    
+    // Guard against missing invoice token
+    if (!invoiceToken) {
+      throw new Error('Unable to generate invoice share link. Please ensure the invoice is accessible and try again.');
+    }
 
     // Build template variables
-    const templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceUrl);
+    const templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceToken);
 
     // Send message
     return await this.sendMessage({

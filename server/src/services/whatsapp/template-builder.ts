@@ -13,7 +13,7 @@ export interface SalesInvoiceVariables {
   contactPerson?: string;
   retailerAddress?: string;
   address?: string;
-  invoiceUrl?: string;
+  invoiceToken?: string;
 }
 
 export interface PurchaseInvoiceVariables {
@@ -28,7 +28,7 @@ export interface PurchaseInvoiceVariables {
   contactPerson?: string;
   vendorAddress?: string;
   address?: string;
-  invoiceUrl?: string;
+  invoiceToken?: string;
 }
 
 export interface PaymentReminderVariables {
@@ -42,7 +42,7 @@ export interface PaymentReminderVariables {
   contactPerson?: string;
   recipientAddress?: string;
   address?: string;
-  invoiceUrl?: string;
+  invoiceToken?: string;
 }
 
 export interface PaymentNotificationVariables {
@@ -57,7 +57,7 @@ export interface PaymentNotificationVariables {
   contactPerson?: string;
   recipientAddress?: string;
   address?: string;
-  invoiceUrl?: string;
+  invoiceToken?: string;
 }
 
 // Formatting helpers
@@ -100,7 +100,7 @@ export function formatAddress(address: string | null | undefined, maxLength: num
 }
 
 // Builder functions
-export function buildSalesInvoiceVariables(invoice: any, retailer: any, tenant?: any, invoiceUrl?: string): SalesInvoiceVariables {
+export function buildSalesInvoiceVariables(invoice: any, retailer: any, tenant?: any, invoiceToken?: string): SalesInvoiceVariables {
   return {
     retailerName: truncateText(retailer.name || 'Customer'),
     invoiceNumber: invoice.invoiceNumber || '',
@@ -113,11 +113,11 @@ export function buildSalesInvoiceVariables(invoice: any, retailer: any, tenant?:
     contactPerson: retailer?.contactPerson ? truncateText(retailer.contactPerson, 50) : undefined,
     retailerAddress: retailer?.address ? formatAddress(retailer.address) : undefined,
     address: retailer?.address ? formatAddress(retailer.address) : undefined,
-    invoiceUrl
+    invoiceToken
   };
 }
 
-export function buildPurchaseInvoiceVariables(invoice: any, vendor: any, tenant?: any, invoiceUrl?: string): PurchaseInvoiceVariables {
+export function buildPurchaseInvoiceVariables(invoice: any, vendor: any, tenant?: any, invoiceToken?: string): PurchaseInvoiceVariables {
   return {
     vendorName: truncateText(vendor.name || 'Vendor'),
     invoiceNumber: invoice.invoiceNumber || '',
@@ -130,7 +130,7 @@ export function buildPurchaseInvoiceVariables(invoice: any, vendor: any, tenant?
     contactPerson: vendor?.contactPerson ? truncateText(vendor.contactPerson, 50) : undefined,
     vendorAddress: vendor?.address ? formatAddress(vendor.address) : undefined,
     address: vendor?.address ? formatAddress(vendor.address) : undefined,
-    invoiceUrl
+    invoiceToken
   };
 }
 
@@ -139,7 +139,7 @@ export function buildPaymentReminderVariables(
   recipient: any, 
   recipientType: 'vendor' | 'retailer',
   tenant?: any,
-  invoiceUrl?: string
+  invoiceToken?: string
 ): PaymentReminderVariables {
   // Calculate due date (assume 7 days from invoice date if not specified)
   const invoiceDate = new Date(invoice.invoiceDate);
@@ -157,7 +157,7 @@ export function buildPaymentReminderVariables(
     contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
     recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
     address: recipient?.address ? formatAddress(recipient.address) : undefined,
-    invoiceUrl
+    invoiceToken
   };
 }
 
@@ -166,7 +166,7 @@ export function buildPaymentNotificationVariables(
   invoice: any, 
   recipient: any,
   tenant?: any,
-  invoiceUrl?: string
+  invoiceToken?: string
 ): PaymentNotificationVariables {
   return {
     recipientName: truncateText(recipient.name || 'Customer'),
@@ -180,6 +180,6 @@ export function buildPaymentNotificationVariables(
     contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
     recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
     address: recipient?.address ? formatAddress(recipient.address) : undefined,
-    invoiceUrl
+    invoiceToken
   };
 }

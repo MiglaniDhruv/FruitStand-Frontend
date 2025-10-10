@@ -196,6 +196,7 @@ export class WhatsAppController extends BaseController {
       let templateVariables: any;
       let recipientInfo: any;
       let referenceData: any;
+      const warnings: string[] = [];
       
       if (messageType === 'sales_invoice') {
         // Mirror logic from sendSalesInvoice method
@@ -219,24 +220,18 @@ export class WhatsAppController extends BaseController {
         }
         
         // Create or get share link for invoice
-        let invoiceUrl: string | undefined;
+        let invoiceToken: string | undefined;
         try {
           const invoiceShareLinkModel = new InvoiceShareLinkModel();
           const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, 'sales');
-          
-          const baseUrl = process.env.BASE_URL;
-          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
-            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
-          } else {
-            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
-          }
+          invoiceToken = shareLink.token;
         } catch (error) {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+          warnings.push('Invoice share link could not be generated. The message template will not include a link to the invoice.');
         }
         
         const { buildSalesInvoiceVariables } = await import('../../services/whatsapp/template-builder');
-        templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceUrl);
+        templateVariables = buildSalesInvoiceVariables(invoice, invoice.retailer, tenant, invoiceToken);
         
         recipientInfo = {
           name: invoice.retailer.name,
@@ -272,24 +267,18 @@ export class WhatsAppController extends BaseController {
         }
         
         // Create or get share link for invoice
-        let invoiceUrl: string | undefined;
+        let invoiceToken: string | undefined;
         try {
           const invoiceShareLinkModel = new InvoiceShareLinkModel();
           const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, 'purchase');
-          
-          const baseUrl = process.env.BASE_URL;
-          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
-            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
-          } else {
-            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
-          }
+          invoiceToken = shareLink.token;
         } catch (error) {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+          warnings.push('Invoice share link could not be generated. The message template will not include a link to the invoice.');
         }
         
         const { buildPurchaseInvoiceVariables } = await import('../../services/whatsapp/template-builder');
-        templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceUrl);
+        templateVariables = buildPurchaseInvoiceVariables(invoice, invoice.vendor, tenant, invoiceToken);
         
         recipientInfo = {
           name: invoice.vendor.name,
@@ -342,25 +331,19 @@ export class WhatsAppController extends BaseController {
         }
         
         // Create or get share link for invoice
-        let invoiceUrl: string | undefined;
+        let invoiceToken: string | undefined;
         try {
           const invoiceShareLinkModel = new InvoiceShareLinkModel();
           const shareInvoiceType = invoiceType === 'sales' ? 'sales' : 'purchase';
           const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, referenceId, shareInvoiceType);
-          
-          const baseUrl = process.env.BASE_URL;
-          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
-            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
-          } else {
-            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
-          }
+          invoiceToken = shareLink.token;
         } catch (error) {
           console.warn(`Warning: Failed to create share link for invoice ${referenceId}:`, error);
+          warnings.push('Invoice share link could not be generated. The message template will not include a link to the invoice.');
         }
         
         const { buildPaymentReminderVariables } = await import('../../services/whatsapp/template-builder');
-        templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceUrl);
+        templateVariables = buildPaymentReminderVariables(invoice, recipient, recipientType, tenant, invoiceToken);
         
         recipientInfo = {
           name: recipient.name,
@@ -417,25 +400,19 @@ export class WhatsAppController extends BaseController {
         }
         
         // Create or get share link for invoice
-        let invoiceUrl: string | undefined;
+        let invoiceToken: string | undefined;
         try {
           const invoiceShareLinkModel = new InvoiceShareLinkModel();
           const shareInvoiceType = paymentType === 'sales' ? 'sales' : 'purchase';
           const shareLink = await invoiceShareLinkModel.createOrGetShareLink(tenantId, invoice.id, shareInvoiceType);
-          
-          const baseUrl = process.env.BASE_URL;
-          if (baseUrl && (baseUrl.startsWith('http://') || baseUrl.startsWith('https://'))) {
-            const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-            invoiceUrl = `${normalizedBaseUrl}/api/public/invoices/${shareLink.token}`;
-          } else {
-            console.warn('BASE_URL not configured or invalid - invoice URL will not be included in preview');
-          }
+          invoiceToken = shareLink.token;
         } catch (error) {
           console.warn(`Warning: Failed to create share link for invoice ${invoice.id}:`, error);
+          warnings.push('Invoice share link could not be generated. The message template will not include a link to the invoice.');
         }
         
         const { buildPaymentNotificationVariables } = await import('../../services/whatsapp/template-builder');
-        templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceUrl);
+        templateVariables = buildPaymentNotificationVariables(payment, invoice, recipient, tenant, invoiceToken);
         
         recipientInfo = {
           name: recipient.name,
@@ -458,6 +435,7 @@ export class WhatsAppController extends BaseController {
           templateVariables,
           recipientInfo,
           referenceData,
+          warnings,
           preview: {
             note: 'This shows the template variables that would be sent to WhatsApp. The actual message format depends on your Twilio WhatsApp template configuration.'
           }
