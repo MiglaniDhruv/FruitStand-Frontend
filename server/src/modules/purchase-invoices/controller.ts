@@ -1,9 +1,13 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { BaseController } from '../../utils/base';
 import { PurchaseInvoiceModel } from './model';
-import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
+import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema, insertCrateTransactionSchema, payments } from '@shared/schema';
 import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
+import { invoiceGenerator } from '../../services/pdf';
+import { TenantModel } from '../tenants/model';
+import { db } from '../../../db';
+import { and, eq } from 'drizzle-orm';
 
 const createPurchaseInvoiceBodySchema = z.object({
   invoice: insertPurchaseInvoiceSchema.omit({ tenantId: true }),
@@ -170,5 +174,40 @@ export class PurchaseInvoiceController extends BaseController {
     }
 
     res.status(204).send();
+  }
+
+  async downloadPDF(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+
+    const { id } = req.params;
+    if (!id) throw new BadRequestError('Purchase invoice ID is required');
+    this.validateUUID(id, 'Purchase invoice ID');
+
+    const invoice = await this.wrapDatabaseOperation(() =>
+      this.purchaseInvoiceModel.getPurchaseInvoice(tenantId, id)
+    );
+    this.ensureResourceExists(invoice, 'Purchase invoice');
+
+    const paymentsData = await db.select().from(payments).where(
+      and(eq(payments.tenantId, tenantId), eq(payments.invoiceId, id))
+    );
+
+    const invoiceWithPayments = { ...invoice!, payments: paymentsData };
+
+    const tenant = await TenantModel.getTenant(tenantId);
+    if (!tenant) throw new NotFoundError('Tenant');
+
+    const { doc, stream } = await invoiceGenerator.generatePurchaseInvoicePDF(invoiceWithPayments, tenant);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="purchase-invoice-${invoice!.invoiceNumber}.pdf"`);
+
+    stream.on('error', (err) => {
+      if (!res.headersSent) return next(err);
+      res.destroy(err);
+    });
+
+    stream.pipe(res);
   }
 }

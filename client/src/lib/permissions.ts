@@ -51,6 +51,7 @@ export const permissionService = {
       '/vendors': [PERMISSIONS.VIEW_VENDORS],
       '/items': [PERMISSIONS.VIEW_ITEMS],
       '/purchase-invoices': [PERMISSIONS.VIEW_PURCHASE_INVOICES],
+      '/sales-invoices': [PERMISSIONS.VIEW_SALES_INVOICES],
       '/payments': [PERMISSIONS.VIEW_PAYMENTS],
       '/stock': [PERMISSIONS.VIEW_STOCK],
       '/ledgers': [PERMISSIONS.VIEW_LEDGERS],

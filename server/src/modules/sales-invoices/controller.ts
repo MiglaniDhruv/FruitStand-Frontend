@@ -1,9 +1,11 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { SalesInvoiceModel } from './model';
 import { type AuthenticatedRequest, NotFoundError, ValidationError, BadRequestError, ForbiddenError } from '../../types';
+import { invoiceGenerator } from '../../services/pdf';
+import { TenantModel } from '../tenants/model';
 
 const salesInvoiceValidation = {
   createSalesInvoice: z.object({
@@ -174,5 +176,34 @@ export class SalesInvoiceController extends BaseController {
     if (!success) throw new NotFoundError('Sales invoice not found');
 
     res.status(204).send();
+  }
+
+  async downloadPDF(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+
+    const { id } = req.params;
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
+    this.validateUUID(id, 'Sales invoice ID');
+
+    const salesInvoice = await this.wrapDatabaseOperation(() =>
+      this.salesInvoiceModel.getSalesInvoice(tenantId, id)
+    );
+    this.ensureResourceExists(salesInvoice, 'Sales invoice');
+
+    const tenant = await TenantModel.getTenant(tenantId);
+    if (!tenant) throw new NotFoundError('Tenant');
+
+    const { doc, stream } = await invoiceGenerator.generateSalesInvoicePDF(salesInvoice!, tenant);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="sales-invoice-${salesInvoice!.invoiceNumber}.pdf"`);
+
+    stream.on('error', (err) => {
+      if (!res.headersSent) return next(err);
+      res.destroy(err);
+    });
+
+    stream.pipe(res);
   }
 }

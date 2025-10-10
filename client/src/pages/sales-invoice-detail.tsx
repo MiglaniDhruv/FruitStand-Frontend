@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, Bell } from "lucide-react";
+import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, Bell, Download } from "lucide-react";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
@@ -28,6 +28,7 @@ export default function SalesInvoiceDetailPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
 
   // Fetch invoice data
   const { data: invoice, isLoading: invoiceLoading, error: invoiceError, refetch: refetchInvoice } = useQuery({
@@ -242,6 +243,51 @@ export default function SalesInvoiceDetailPage() {
     }
     
     sendPaymentReminderMutation.mutate();
+  };
+
+  const handleDownloadPDF = async () => {
+    setDownloadingPDF(true);
+    try {
+      const response = await authenticatedApiRequest('GET', `/api/sales-invoices/${invoiceId}/pdf`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Failed to download PDF');
+      }
+      const blob = await response.blob();
+      
+      // Create a temporary URL for the blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Sanitize filename and provide fallback
+      const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '-');
+      const invoiceNum = invoice?.invoiceNumber ? sanitize(invoice.invoiceNumber) : invoiceId;
+      const cd = response.headers.get('Content-Disposition');
+      const serverName = cd && /filename="?([^";]+)"?/.exec(cd)?.[1];
+      
+      // Create a temporary anchor element and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = serverName || `sales-invoice-${invoiceNum}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'PDF Downloaded',
+        description: 'Invoice PDF has been downloaded successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Download Failed',
+        description: error instanceof Error ? error.message : 'Failed to download PDF',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingPDF(false);
+    }
   };
 
   const handleMarkAsPaid = () => {
@@ -472,6 +518,19 @@ export default function SalesInvoiceDetailPage() {
                     )}
                     <span>Share</span>
                   </Button>
+                  <PermissionGuard permission={PERMISSIONS.VIEW_SALES_INVOICES}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDownloadPDF}
+                      disabled={downloadingPDF}
+                      className="flex items-center space-x-2"
+                      data-testid="button-download-pdf"
+                    >
+                      {downloadingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      <span>Download PDF</span>
+                    </Button>
+                  </PermissionGuard>
                 </div>
               </div>
             </div>

@@ -60,6 +60,14 @@ export class SalesInvoiceRouter extends BaseRouter {
       this.ah(this.salesInvoiceController, 'createShareLink')
     );
 
+    // GET /sales-invoices/:id/pdf - Download sales invoice as PDF
+    this.router.get('/sales-invoices/:id/pdf', 
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.salesInvoiceController, 'downloadPDF')
+    );
+
     // DELETE /sales-invoices/:id - Delete a sales invoice
     this.router.delete('/sales-invoices/:id', 
       authenticateToken,

@@ -48,6 +48,14 @@ export class PurchaseInvoiceRouter extends BaseRouter {
       this.ah(this.purchaseInvoiceController, 'createShareLink')
     );
 
+    // GET /purchase-invoices/:id/pdf - Download purchase invoice as PDF
+    this.router.get('/purchase-invoices/:id/pdf', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.purchaseInvoiceController, 'downloadPDF')
+    );
+
     // DELETE /purchase-invoices/:id - Delete a purchase invoice (Admin/Operator only)
     this.router.delete('/purchase-invoices/:id', 
       authenticateToken,
