@@ -67,43 +67,23 @@ export class TenantModel {
   }
 
   /**
-   * Build atomic JSONB update SQL for partial settings
-   */
-  private static buildAtomicSettingsUpdate(partialSettings: any): any {
-    let updateSql = sql`${tenants.settings}`;
-    
-    const processObject = (obj: any, path: string[] = []) => {
-      for (const [key, value] of Object.entries(obj)) {
-        if (key === 'accountSid' || key === 'authToken' || key === 'phoneNumber') {
-          // Skip legacy WhatsApp credentials
-          continue;
-        }
-        
-        const currentPath = [...path, key];
-        const jsonPath = `{${currentPath.join(',')}}`;
-        
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          // For nested objects, recursively process
-          processObject(value, currentPath);
-        } else {
-          // For primitive values, create jsonb_set
-          updateSql = sql`jsonb_set(${updateSql}, ${jsonPath}, to_jsonb(${value}), true)`;
-        }
-      }
-    };
-    
-    processObject(partialSettings);
-    return updateSql;
-  }
-
-  /**
    * Update tenant settings with atomic JSON updates
    */
   static async updateTenantSettings(tenantId: string, newSettings: any, cashBalanceKnown?: string, tx?: any): Promise<Tenant | null> {
     const dbConnection = tx || db;
     
-    // Build atomic JSONB update to avoid overwriting concurrent changes
-    const settingsUpdate = this.buildAtomicSettingsUpdate(newSettings);
+    // Get current settings first for proper deep merging
+    const currentTenant = await this.getTenant(tenantId);
+    const currentSettings = currentTenant?.settings || {};
+    
+    // Deep merge the new settings with current settings
+    const mergedSettings = this.deepMerge(currentSettings, newSettings);
+    
+    // Clean up legacy credentials
+    if (mergedSettings.whatsapp) {
+      const { accountSid, authToken, phoneNumber, ...cleanWhatsApp } = mergedSettings.whatsapp;
+      mergedSettings.whatsapp = cleanWhatsApp;
+    }
     
     // Build where clause with optimistic concurrency check for cashBalance
     let whereClause = eq(tenants.id, tenantId);
@@ -115,7 +95,7 @@ export class TenantModel {
     }
     
     const result = await dbConnection.update(tenants)
-      .set({ settings: settingsUpdate })
+      .set({ settings: mergedSettings })
       .where(whereClause)
       .returning();
     

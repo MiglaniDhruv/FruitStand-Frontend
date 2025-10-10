@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, Bell } from "lucide-react";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
@@ -121,6 +121,50 @@ export default function SalesInvoiceDetailPage() {
     },
   });
 
+  // Send Payment Reminder mutation
+  const sendPaymentReminderMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authenticatedApiRequest('POST', '/api/whatsapp/send/payment-reminder', {
+        invoiceId: invoiceId,
+        invoiceType: 'sales',
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Payment reminder sent',
+        description: 'Payment reminder has been sent via WhatsApp successfully',
+      });
+      // Invalidate WhatsApp messages query to refresh logs
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/messages'] });
+      
+      // Show credit warning if applicable
+      if (data.creditWarning) {
+        toast({
+          title: 'Low Credit Warning',
+          description: `${data.creditWarning}. Remaining credits: ${data.remainingCredits}`,
+          variant: 'default',
+        });
+      }
+    },
+    onError: (error: any) => {
+      // Handle insufficient credits error
+      if (error.message?.includes('Insufficient') || error.message?.includes('credits')) {
+        toast({
+          title: 'Insufficient Credits',
+          description: 'You do not have enough WhatsApp credits. Please contact your administrator.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to send payment reminder',
+          variant: 'destructive',
+        });
+      }
+    },
+  });
+
   // Mark as Paid mutation
   const markAsPaidMutation = useMutation({
     mutationFn: async () => {
@@ -185,6 +229,19 @@ export default function SalesInvoiceDetailPage() {
     
     setSendingWhatsApp(true);
     sendWhatsAppMutation.mutate();
+  };
+
+  const handleSendPaymentReminder = () => {
+    if (!invoice?.retailer?.phone) {
+      toast({
+        title: 'No phone number',
+        description: 'Retailer does not have a phone number configured',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    sendPaymentReminderMutation.mutate();
   };
 
   const handleMarkAsPaid = () => {
@@ -360,6 +417,26 @@ export default function SalesInvoiceDetailPage() {
                       <span>WhatsApp</span>
                     </Button>
                   </PermissionGuard>
+                  {invoice?.status !== "Paid" && invoice?.retailer?.phone && (
+                    <PermissionGuard permission={PERMISSIONS.SEND_WHATSAPP_MESSAGES}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSendPaymentReminder}
+                        disabled={sendPaymentReminderMutation.isPending}
+                        className="flex items-center space-x-2"
+                        title="Send payment reminder via WhatsApp"
+                        data-testid="button-send-payment-reminder"
+                      >
+                        {sendPaymentReminderMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Bell className="h-4 w-4" />
+                        )}
+                        <span>Reminder</span>
+                      </Button>
+                    </PermissionGuard>
+                  )}
                   {invoice?.status !== "Paid" && (
                     <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
                       <Button
