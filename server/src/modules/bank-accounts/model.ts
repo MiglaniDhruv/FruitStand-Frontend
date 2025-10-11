@@ -1,16 +1,18 @@
-import { eq, asc, and, count, sum, sql } from 'drizzle-orm';
+import { eq, asc, and, count, sum, sql, desc } from 'drizzle-orm';
 import { db } from '../../../db';
 import { 
   bankAccounts, 
   payments,
   salesPayments,
   bankbook,
+  cashbook,
   expenses,
   type BankAccount, 
   type InsertBankAccount,
   type PaginationOptions,
   type PaginatedResult
 } from '@shared/schema';
+import { TenantModel } from '../tenants/model';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { applySorting, applySearchFilter, getCountWithSearch, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { BadRequestError } from '../../types';
@@ -223,5 +225,156 @@ export class BankAccountModel {
     await this.setBankAccountBalance(tx, tenantId, bankAccountId, finalBalance);
     
     return finalBalance;
+  }
+
+  async createDeposit(tenantId: string, bankAccountId: string, depositData: { amount: string, date: Date, description: string, source: 'cash' | 'external' }): Promise<void> {
+    try {
+      await db.transaction(async (tx) => {
+        // Validate that bank account exists
+        const bankAccount = await tx.select().from(bankAccounts)
+          .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, bankAccountId)))
+          .limit(1);
+        
+        if (!bankAccount.length) {
+          throw new BadRequestError('Bank account not found');
+        }
+
+        // Parse and validate amount
+        const depositAmount = parseFloat(depositData.amount);
+        if (isNaN(depositAmount) || depositAmount <= 0) {
+          throw new BadRequestError('Invalid deposit amount');
+        }
+
+        // Handle cash deposits - create cashbook entry and update cash balance
+        if (depositData.source === 'cash') {
+          // Get current cash balance using consistent method
+          const currentCashBalance = await TenantModel.getCashBalance(tenantId);
+          const newCashBalance = currentCashBalance - depositAmount;
+
+          // Validate sufficient cash balance
+          if (newCashBalance < 0) {
+            throw new BadRequestError('Insufficient cash balance for deposit');
+          }
+
+          // Create cashbook entry
+          await tx.insert(cashbook).values(ensureTenantInsert({
+            date: depositData.date,
+            description: `Transfer to Bank - ${bankAccount[0].name}`,
+            outflow: depositAmount.toFixed(2),
+            inflow: '0.00',
+            balance: newCashBalance.toFixed(2),
+            referenceType: 'Bank Deposit',
+            referenceId: null
+          }, tenantId));
+
+          // Update tenant cash balance
+          await TenantModel.setCashBalance(tx, tenantId, newCashBalance.toFixed(2));
+        }
+
+        // Get last bankbook entry for current balance with row locking
+        const lastBankEntry = await tx.select()
+          .from(bankbook)
+          .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, bankAccountId)))
+          .orderBy(desc(bankbook.date), desc(bankbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBankBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+        const newBankBalance = currentBankBalance + depositAmount;
+
+        // Create bankbook entry
+        await tx.insert(bankbook).values(ensureTenantInsert({
+          bankAccountId,
+          date: depositData.date,
+          description: depositData.source === 'cash' ? `Deposit from Cash - ${depositData.description}` : depositData.description,
+          debit: depositAmount.toFixed(2),
+          credit: '0.00',
+          balance: newBankBalance.toFixed(2),
+          referenceType: 'Bank Deposit',
+          referenceId: null
+        }, tenantId));
+
+        // Check if entry is back-dated and recompute balances if needed
+        const isBackDated = lastBankEntry.length > 0 && depositData.date < lastBankEntry[0].date;
+        
+        if (isBackDated) {
+          // Recompute all balances from this date forward
+          await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, bankAccountId);
+        } else {
+          // Update bank account balance normally
+          await BankAccountModel.setBankAccountBalance(tx, tenantId, bankAccountId, newBankBalance.toFixed(2));
+        }
+      });
+    } catch (error) {
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      throw new BadRequestError(`Failed to record deposit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async createWithdrawal(tenantId: string, bankAccountId: string, withdrawalData: { amount: string, date: Date, description: string }): Promise<void> {
+    try {
+      await db.transaction(async (tx) => {
+        // Validate that bank account exists
+        const bankAccount = await tx.select().from(bankAccounts)
+          .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, bankAccountId)))
+          .limit(1);
+        
+        if (!bankAccount.length) {
+          throw new BadRequestError('Bank account not found');
+        }
+
+        // Parse and validate amount
+        const withdrawalAmount = parseFloat(withdrawalData.amount);
+        if (isNaN(withdrawalAmount) || withdrawalAmount <= 0) {
+          throw new BadRequestError('Invalid withdrawal amount');
+        }
+
+        // Get last bankbook entry for current balance with row locking
+        const lastBankEntry = await tx.select()
+          .from(bankbook)
+          .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, bankAccountId)))
+          .orderBy(desc(bankbook.date), desc(bankbook.id))
+          .limit(1)
+          .for('update');
+
+        const currentBankBalance = lastBankEntry.length > 0 ? parseFloat(lastBankEntry[0].balance) : 0;
+        const newBankBalance = currentBankBalance - withdrawalAmount;
+
+        // Validate sufficient bank balance
+        if (newBankBalance < 0) {
+          throw new BadRequestError('Insufficient bank account balance for withdrawal');
+        }
+
+        // Create bankbook entry
+        await tx.insert(bankbook).values(ensureTenantInsert({
+          bankAccountId,
+          date: withdrawalData.date,
+          description: withdrawalData.description,
+          credit: withdrawalAmount.toFixed(2),
+          debit: '0.00',
+          balance: newBankBalance.toFixed(2),
+          referenceType: 'Bank Withdrawal',
+          referenceId: null
+        }, tenantId));
+
+        // Check if entry is back-dated and recompute balances if needed
+        const isBackDated = lastBankEntry.length > 0 && withdrawalData.date < lastBankEntry[0].date;
+        
+        if (isBackDated) {
+          // Recompute all balances from this date forward
+          await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, bankAccountId);
+        } else {
+          // Update bank account balance normally
+          await BankAccountModel.setBankAccountBalance(tx, tenantId, bankAccountId, newBankBalance.toFixed(2));
+        }
+      });
+    } catch (error) {
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      throw new BadRequestError(`Failed to record withdrawal: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 }

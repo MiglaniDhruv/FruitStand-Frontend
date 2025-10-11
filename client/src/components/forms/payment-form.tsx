@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -101,6 +102,45 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
   const invoices = invoicesResult?.data || [];
   const bankAccounts = bankAccountsResult || [];
 
+  // Auto-prefill vendor and invoice when preSelectedInvoiceId is provided
+  React.useEffect(() => {
+    if (preSelectedInvoiceId && invoices && open) {
+      let invoice = invoices.find((inv: any) => inv.id === preSelectedInvoiceId);
+      
+      // If preselected invoice not found in current list, fetch it individually
+      if (!invoice) {
+        const fetchInvoiceById = async () => {
+          try {
+            const response = await authenticatedApiRequest('GET', `/api/purchase-invoices/${preSelectedInvoiceId}`);
+            const fetchedInvoice = await response.json();
+            
+            setSelectedVendor(fetchedInvoice.vendorId);
+            setSelectedInvoice(fetchedInvoice);
+            form.setValue("vendorId", fetchedInvoice.vendorId);
+            form.setValue("invoiceId", preSelectedInvoiceId);
+            
+            // Normalize amount formatting
+            const amt = Number(fetchedInvoice.balanceAmount ?? 0);
+            form.setValue("amount", amt.toFixed(2));
+          } catch (error) {
+            console.error('Failed to fetch preselected invoice:', error);
+          }
+        };
+        
+        fetchInvoiceById();
+      } else {
+        setSelectedVendor(invoice.vendorId);
+        setSelectedInvoice(invoice);
+        form.setValue("vendorId", invoice.vendorId);
+        form.setValue("invoiceId", preSelectedInvoiceId);
+        
+        // Normalize amount formatting
+        const amt = Number(invoice.balanceAmount ?? 0);
+        form.setValue("amount", amt.toFixed(2));
+      }
+    }
+  }, [preSelectedInvoiceId, invoices, form, open]);
+
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
       const paymentData = {
@@ -135,10 +175,21 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
 
   const getUnpaidInvoices = () => {
     if (!selectedVendor) return [];
-    return invoices?.filter((invoice: any) => 
+    
+    let filtered = invoices?.filter((invoice: any) => 
       invoice.vendorId === selectedVendor && 
       invoice.status !== "Paid"
     ) || [];
+
+    // Ensure preselected invoice is always included, even if it would be filtered out
+    if (preSelectedInvoiceId) {
+      const preselectedInvoice = invoices?.find((invoice: any) => invoice.id === preSelectedInvoiceId);
+      if (preselectedInvoice && !filtered.some((invoice: any) => invoice.id === preSelectedInvoiceId)) {
+        filtered = [preselectedInvoice, ...filtered];
+      }
+    }
+
+    return filtered;
   };
 
   const handleVendorChange = (vendorId: string) => {
@@ -177,7 +228,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Vendor *</FormLabel>
-                    <Select onValueChange={handleVendorChange} value={field.value}>
+                    <Select onValueChange={handleVendorChange} value={field.value} disabled={!!preSelectedInvoiceId}>
                       <FormControl>
                         <SelectTrigger data-testid="select-payment-vendor">
                           <SelectValue placeholder="Select vendor" />
@@ -202,24 +253,33 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Invoice *</FormLabel>
-                    <Select 
-                      onValueChange={handleInvoiceChange} 
-                      value={field.value}
-                      disabled={!selectedVendor}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-payment-invoice">
-                          <SelectValue placeholder="Select invoice" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {getUnpaidInvoices().map((invoice: any) => (
-                          <SelectItem key={invoice.id} value={invoice.id}>
-                            {invoice.invoiceNumber} - Balance: ₹{parseFloat(invoice.balanceAmount).toLocaleString('en-IN')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {preSelectedInvoiceId && selectedInvoice ? (
+                      <>
+                        <div className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                          {selectedInvoice.invoiceNumber} - Balance: ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString('en-IN')}
+                        </div>
+                        <input type="hidden" {...field} value={preSelectedInvoiceId} />
+                      </>
+                    ) : (
+                      <Select 
+                        onValueChange={handleInvoiceChange} 
+                        value={field.value}
+                        disabled={!selectedVendor}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-invoice">
+                            <SelectValue placeholder="Select invoice" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {getUnpaidInvoices().map((invoice: any) => (
+                            <SelectItem key={invoice.id} value={invoice.id}>
+                              {invoice.invoiceNumber} - Balance: ₹{parseFloat(invoice.balanceAmount).toLocaleString('en-IN')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

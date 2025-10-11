@@ -127,13 +127,27 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
   });
 
   // Filter invoices for selected retailer
-  const availableInvoices = invoices?.filter((invoice) => {
-    if (!selectedRetailer) return [];
-    return (
-      invoice.retailerId === selectedRetailer && 
-      invoice.status !== "Paid"
-    );
-  }) || [];
+  const availableInvoices = (() => {
+    if (!invoices) return [];
+    
+    let filtered = invoices.filter((invoice) => {
+      if (!selectedRetailer) return false;
+      return (
+        invoice.retailerId === selectedRetailer && 
+        invoice.status !== "Paid"
+      );
+    });
+
+    // Ensure preselected invoice is always included, even if it would be filtered out
+    if (preSelectedInvoiceId) {
+      const preselectedInvoice = invoices.find(invoice => invoice.id === preSelectedInvoiceId);
+      if (preselectedInvoice && !filtered.some(invoice => invoice.id === preSelectedInvoiceId)) {
+        filtered = [preselectedInvoice, ...filtered];
+      }
+    }
+
+    return filtered;
+  })();
 
   const handleRetailerChange = (retailerId: string) => {
     setSelectedRetailer(retailerId);
@@ -233,9 +247,9 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Retailer *</FormLabel>
-                  <Select onValueChange={handleRetailerChange} value={field.value}>
+                  <Select onValueChange={handleRetailerChange} value={field.value} disabled={!!preSelectedInvoiceId}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-payment-retailer">
+                      <SelectTrigger data-testid="select-payment-retailer" disabled={!!preSelectedInvoiceId}>
                         <SelectValue placeholder="Select retailer" />
                       </SelectTrigger>
                     </FormControl>
@@ -258,9 +272,9 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Invoice *</FormLabel>
-                  <Select onValueChange={handleInvoiceChange} value={field.value}>
+                  <Select onValueChange={handleInvoiceChange} value={field.value} disabled={!!preSelectedInvoiceId}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-payment-invoice">
+                      <SelectTrigger data-testid="select-payment-invoice" disabled={!!preSelectedInvoiceId}>
                         <SelectValue placeholder="Select invoice" />
                       </SelectTrigger>
                     </FormControl>

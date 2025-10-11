@@ -86,20 +86,38 @@ export default function Stock() {
 
   const { data: stockMovements, isLoading: movementsLoading } = useQuery<any[]>({
     queryKey: ["/api/stock-movements"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/stock-movements");
+      return response.json();
+    },
   });
 
   const { data: itemMovements } = useQuery<any[]>({
     queryKey: ["/api/stock-movements/item", selectedItem?.itemId],
     enabled: !!selectedItem?.itemId,
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", `/api/stock-movements/item/${selectedItem?.itemId}`);
+      return response.json();
+    },
   });
 
   const { data: items, isError: itemsError } = useQuery<ItemWithVendor[]>({
     queryKey: ["/api/items"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/items");
+      return response.json();
+    },
   });
 
-  const { data: vendors } = useQuery<any[]>({
+  const { data: vendorsResult } = useQuery({
     queryKey: ["/api/vendors"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=100");
+      return response.json();
+    },
   });
+
+  const vendors = vendorsResult?.data || [];
 
   const updateStockMutation = useMutation({
     mutationFn: async ({ itemId, data }: { itemId: string; data: any }) => {

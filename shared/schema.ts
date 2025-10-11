@@ -801,6 +801,47 @@ export const insertRetailerPaymentSchema = z.object({
 export type InsertVendorPayment = z.infer<typeof insertVendorPaymentSchema>;
 export type InsertRetailerPayment = z.infer<typeof insertRetailerPaymentSchema>;
 
+// Bank transaction schemas
+export const insertBankDepositSchema = z.object({
+  amount: z.string().min(1, "Amount is required"),
+  date: z.union([z.date(), z.string()]).transform((val) => {
+    if (typeof val === 'string') {
+      return new Date(val);
+    }
+    return val;
+  }),
+  description: z.string().min(1, "Description is required"),
+  source: z.enum(['cash', 'external'], {
+    errorMap: () => ({ message: "Source must be either 'cash' or 'external'" })
+  })
+}).refine((data) => {
+  const amount = parseFloat(data.amount);
+  return !isNaN(amount) && amount > 0;
+}, {
+  message: "Amount must be a positive number",
+  path: ["amount"]
+});
+
+export const insertBankWithdrawalSchema = z.object({
+  amount: z.string().min(1, "Amount is required"),
+  date: z.union([z.date(), z.string()]).transform((val) => {
+    if (typeof val === 'string') {
+      return new Date(val);
+    }
+    return val;
+  }),
+  description: z.string().min(1, "Description is required")
+}).refine((data) => {
+  const amount = parseFloat(data.amount);
+  return !isNaN(amount) && amount > 0;
+}, {
+  message: "Amount must be a positive number",
+  path: ["amount"]
+});
+
+export type InsertBankDeposit = z.infer<typeof insertBankDepositSchema>;
+export type InsertBankWithdrawal = z.infer<typeof insertBankWithdrawalSchema>;
+
 export type VendorPaymentDistributionResult = {
   totalAmount: string;
   distributedAmount: string;

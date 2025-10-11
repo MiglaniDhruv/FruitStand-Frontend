@@ -56,5 +56,23 @@ export class BankAccountRouter extends BaseRouter {
       asyncHandler(requireRole([UserRole.ADMIN])),
       this.ah(this.bankAccountController, 'delete')
     );
+
+    // POST /bank-accounts/:id/deposit - Record bank deposit (Admin/Operator only)
+    this.router.post('/bank-accounts/:id/deposit', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])),
+      this.ah(this.bankAccountController, 'deposit')
+    );
+
+    // POST /bank-accounts/:id/withdrawal - Record bank withdrawal (Admin/Operator only)
+    this.router.post('/bank-accounts/:id/withdrawal', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])),
+      this.ah(this.bankAccountController, 'withdrawal')
+    );
   }
 }

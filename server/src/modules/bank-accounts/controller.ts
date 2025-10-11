@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { BaseController } from '../../utils/base';
 import { BankAccountModel } from './model';
 import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
-import { insertBankAccountSchema, updateBankAccountSchema } from '@shared/schema';
+import { insertBankAccountSchema, updateBankAccountSchema, insertBankDepositSchema, insertBankWithdrawalSchema } from '@shared/schema';
 
 export class BankAccountController extends BaseController {
   private bankAccountModel: BankAccountModel;
@@ -109,5 +109,51 @@ export class BankAccountController extends BaseController {
     }
     
     res.json({ message: "Bank account deleted successfully" });
+  }
+
+  async deposit(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+
+    const bankAccountId = this.sanitizeAndValidateUUID(req.params.id, 'Bank Account ID');
+    const validatedData = this.validateZodSchema(insertBankDepositSchema, req.body);
+
+    // Verify bank account exists
+    const bankAccount = await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.getBankAccountById(tenantId, bankAccountId)
+    );
+    this.ensureResourceExists(bankAccount, 'Bank Account');
+
+    await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.createDeposit(tenantId, bankAccountId, {
+        ...validatedData,
+        date: validatedData.date instanceof Date ? validatedData.date : new Date(validatedData.date)
+      })
+    );
+
+    res.json({ message: 'Deposit recorded successfully' });
+  }
+
+  async withdrawal(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+
+    const bankAccountId = this.sanitizeAndValidateUUID(req.params.id, 'Bank Account ID');
+    const validatedData = this.validateZodSchema(insertBankWithdrawalSchema, req.body);
+
+    // Verify bank account exists
+    const bankAccount = await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.getBankAccountById(tenantId, bankAccountId)
+    );
+    this.ensureResourceExists(bankAccount, 'Bank Account');
+
+    await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.createWithdrawal(tenantId, bankAccountId, {
+        ...validatedData,
+        date: validatedData.date instanceof Date ? validatedData.date : new Date(validatedData.date)
+      })
+    );
+
+    res.json({ message: 'Withdrawal recorded successfully' });
   }
 }

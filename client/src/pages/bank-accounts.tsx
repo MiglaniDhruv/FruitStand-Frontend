@@ -23,8 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import BankAccountForm from "@/components/forms/bank-account-form";
+import ManualBankTransactionForm from "@/components/forms/manual-bank-transaction-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PaginationOptions, PaginatedResult, BankAccount } from "@shared/schema";
@@ -47,6 +48,9 @@ export default function BankAccounts() {
   const [selectedBankAccount, setSelectedBankAccount] = useState<BankAccount | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [bankAccountToDelete, setBankAccountToDelete] = useState<BankAccount | null>(null);
+  const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
+  const [selectedBankAccountForTransaction, setSelectedBankAccountForTransaction] = useState<BankAccount | null>(null);
+  const [selectedTransactionType, setSelectedTransactionType] = useState<'deposit' | 'withdrawal' | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -136,6 +140,26 @@ export default function BankAccounts() {
     setIsDeleteDialogOpen(true);
   };
 
+  const handleDeposit = (bankAccount: BankAccount) => {
+    setSelectedBankAccountForTransaction(bankAccount);
+    setSelectedTransactionType('deposit');
+    setIsTransactionFormOpen(true);
+  };
+
+  const handleWithdraw = (bankAccount: BankAccount) => {
+    setSelectedBankAccountForTransaction(bankAccount);
+    setSelectedTransactionType('withdrawal');
+    setIsTransactionFormOpen(true);
+  };
+
+  const handleCloseTransactionForm = (open: boolean) => {
+    setIsTransactionFormOpen(open);
+    if (!open) {
+      setSelectedBankAccountForTransaction(null);
+      setSelectedTransactionType(null);
+    }
+  };
+
   const confirmDelete = () => {
     if (bankAccountToDelete) {
       deleteAccountMutation.mutate(bankAccountToDelete.id);
@@ -186,6 +210,30 @@ export default function BankAccounts() {
       header: "Actions",
       cell: (value: string, item: BankAccount) => (
         <div className="flex items-center gap-2">
+          {item.isActive && (
+            <>
+              <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeposit(item)}
+                  title="Deposit"
+                >
+                  <ArrowDownToLine className="h-4 w-4" />
+                </Button>
+              </PermissionGuard>
+              <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleWithdraw(item)}
+                  title="Withdraw"
+                >
+                  <ArrowUpFromLine className="h-4 w-4" />
+                </Button>
+              </PermissionGuard>
+            </>
+          )}
           <PermissionGuard permission={PERMISSIONS.EDIT_PAYMENTS}>
             <Button
               variant="ghost"
@@ -230,26 +278,28 @@ export default function BankAccounts() {
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex-1 flex flex-col">
-          <div className="p-6">
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold">Bank Accounts</h1>
-              <p className="text-muted-foreground">
-                Manage your bank accounts and track balances
-              </p>
+          <header className="bg-card border-b border-border px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground">Bank Accounts</h2>
+                <p className="text-sm text-muted-foreground">
+                  Manage your bank accounts and track balances
+                </p>
+              </div>
+              <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
+                <Button onClick={handleCreate}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Bank Account
+                </Button>
+              </PermissionGuard>
             </div>
+          </header>
 
+          <main className="flex-1 overflow-auto p-6">
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle>All Bank Accounts</CardTitle>
-                    <PermissionGuard permission={PERMISSIONS.CREATE_PAYMENTS}>
-                      <Button onClick={handleCreate}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Bank Account
-                      </Button>
-                    </PermissionGuard>
-                  </div>
+                  <CardTitle>All Bank Accounts</CardTitle>
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1 max-w-sm">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -297,13 +347,20 @@ export default function BankAccounts() {
                 )}
               </CardContent>
             </Card>
-          </div>
+          </main>
         </div>
 
         <BankAccountForm
           open={isFormOpen}
           onOpenChange={setIsFormOpen}
           bankAccount={selectedBankAccount}
+        />
+
+        <ManualBankTransactionForm
+          open={isTransactionFormOpen}
+          onOpenChange={handleCloseTransactionForm}
+          preSelectedBankAccountId={selectedBankAccountForTransaction?.id}
+          preSelectedTransactionType={selectedTransactionType || undefined}
         />
 
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
