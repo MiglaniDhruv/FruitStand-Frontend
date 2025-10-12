@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { BANK_REQUIRED_MODES } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +63,7 @@ const retailerPaymentFormSchema = z.object({
   paymentLinkId: z.string().optional(),
   notes: z.string().optional(),
 }).refine((data) => {
-  if (data.paymentMode === 'Bank' && !data.bankAccountId) {
+  if (BANK_REQUIRED_MODES.includes(data.paymentMode as any) && !data.bankAccountId) {
     return false;
   }
   if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
@@ -76,7 +77,8 @@ const retailerPaymentFormSchema = z.object({
   }
   return true;
 }, {
-  message: "Required fields missing for selected payment mode",
+  message: "Bank account is required for Bank Transfer, UPI, and Cheque payments",
+  path: ['bankAccountId'],
 });
 
 type RetailerPaymentFormData = z.infer<typeof retailerPaymentFormSchema>;
@@ -404,7 +406,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
                 )}
               />
 
-              {paymentMode === 'Bank' && (
+              {BANK_REQUIRED_MODES.includes(paymentMode as any) && (
                 <FormField
                   control={form.control}
                   name="bankAccountId"
@@ -420,7 +422,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
                         <SelectContent>
                           {bankAccountsData?.map((account: any) => (
                             <SelectItem key={account.id} value={account.id}>
-                              {account.accountName} - {account.accountNumber}
+                              {account.bankName} - {account.name} - {account.accountNumber}
                             </SelectItem>
                           ))}
                         </SelectContent>

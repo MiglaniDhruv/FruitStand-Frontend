@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2, DollarSign } from "lucide-react";
+import { Search, Plus, Edit, DollarSign } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
-import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
+import { logEventHandlerError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
 
@@ -38,7 +38,6 @@ export default function Vendors() {
   const [showVendorPaymentModal, setShowVendorPaymentModal] = useState(false);
   const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: vendorsResult, isLoading, isError, error } = useQuery<PaginatedResult<Vendor>>({
     queryKey: ["/api/vendors", paginationOptions],
@@ -57,26 +56,7 @@ export default function Vendors() {
     placeholderData: keepPreviousData,
   });
 
-  const deleteVendorMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/vendors/${id}`);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Vendor deleted",
-        description: "Vendor has been deleted successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-    },
-    onError: (error) => {
-      logMutationError(error, 'deleteVendor');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete vendor",
-        variant: "destructive",
-      });
-    },
-  });
+
 
   const handlePageChange = (page: number) => {
     setPaginationOptions(prev => ({ ...prev, page }));
@@ -112,14 +92,18 @@ export default function Vendors() {
       cell: (value: string) => <div className="font-medium">{value}</div>,
     },
     {
-      accessorKey: "contactPerson",
-      header: "Contact Person",
-      cell: (value: string) => value || "-",
-    },
-    {
       accessorKey: "phone",
       header: "Phone",
       cell: (value: string) => value || "-",
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: (value: string) => (
+        <div className="max-w-xs truncate" title={value || ""}>
+          {value || "-"}
+        </div>
+      ),
     },
     {
       accessorKey: "balance",
@@ -138,7 +122,7 @@ export default function Vendors() {
     {
       accessorKey: "id",
       header: "Actions",
-      cell: (value: string, vendor: any) => (
+      cell: (_: string, vendor: any) => (
         <div className="flex space-x-2">
           <Button
             variant="ghost"
@@ -157,15 +141,7 @@ export default function Vendors() {
           >
             <Edit className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDelete(vendor.id)}
-            data-testid={`button-delete-vendor-${vendor.id}`}
-            disabled={deleteVendorMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+
         </div>
       ),
     },
@@ -188,24 +164,7 @@ export default function Vendors() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      if (!id) {
-        throw new Error('Invalid vendor ID');
-      }
-      
-      if (confirm("Are you sure you want to delete this vendor?")) {
-        await deleteVendorMutation.mutateAsync(id);
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { vendorId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete vendor",
-        variant: "destructive",
-      });
-    }
-  };
+
 
   const handleCloseForm = () => {
     try {

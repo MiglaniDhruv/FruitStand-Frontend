@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { BANK_REQUIRED_MODES } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,14 @@ const paymentFormSchema = z.object({
   chequeNumber: z.string().optional(),
   upiReference: z.string().optional(),
   notes: z.string().optional(),
+}).refine((data) => {
+  if (BANK_REQUIRED_MODES.includes(data.paymentMode as any) && !data.bankAccountId) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Bank account is required for Bank Transfer, UPI, and Cheque payments",
+  path: ['bankAccountId'],
 });
 
 type PaymentFormData = z.infer<typeof paymentFormSchema>;
@@ -348,13 +357,13 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                 )}
               />
 
-              {(watchedPaymentMode === "Bank" || watchedPaymentMode === "UPI") && (
+              {BANK_REQUIRED_MODES.includes(watchedPaymentMode as any) && (
                 <FormField
                   control={form.control}
                   name="bankAccountId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Bank Account</FormLabel>
+                      <FormLabel>Bank Account *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger data-testid="select-bank-account">
@@ -364,7 +373,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                         <SelectContent>
                           {bankAccounts?.map((account: any) => (
                             <SelectItem key={account.id} value={account.id}>
-                              {account.name} - {account.accountNumber}
+                              {account.bankName} - {account.name} - {account.accountNumber}
                             </SelectItem>
                           ))}
                         </SelectContent>

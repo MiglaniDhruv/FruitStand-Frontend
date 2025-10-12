@@ -49,7 +49,6 @@ export const vendors = pgTable("vendors", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
-  contactPerson: text("contact_person"),
   phone: text("phone"),
   address: text("address"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
@@ -291,7 +290,6 @@ export const retailers = pgTable("retailers", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
-  contactPerson: text("contact_person"),
   phone: text("phone"),
   address: text("address"),
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
@@ -568,6 +566,10 @@ export const phoneNumberSchema = z.string()
   .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
   .transform(val => val.startsWith('+') ? val : `+91${val}`);
 
+export const indianTenDigitPhone = z.string().trim()
+  .regex(/^\d{10}$/, "Phone number must be exactly 10 digits")
+  .transform(val => `+91${val}`);
+
 // Tenant Settings Schema - defines the expected structure for tenant settings
 export const tenantSettingsSchema = z.object({
   // Company Information
@@ -623,12 +625,9 @@ export const tenantSettingsSchema = z.object({
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
-export const insertVendorSchema = createInsertSchema(vendors).omit({
-  id: true,
-  balance: true,
-  crateBalance: true, // Add this line
-  createdAt: true,
-});
+export const insertVendorSchema = createInsertSchema(vendors)
+  .omit({ id: true, balance: true, crateBalance: true, createdAt: true })
+  .extend({ phone: indianTenDigitPhone });
 
 export const insertItemSchema = createInsertSchema(items, {
   unit: z.enum(["box", "crate", "kgs"], {
@@ -706,14 +705,9 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements, {
   createdAt: true,
 });
 
-export const insertRetailerSchema = createInsertSchema(retailers).omit({
-  id: true,
-  balance: true,
-  udhaaarBalance: true,
-  shortfallBalance: true,
-  crateBalance: true,
-  createdAt: true,
-});
+export const insertRetailerSchema = createInsertSchema(retailers)
+  .omit({ id: true, balance: true, udhaaarBalance: true, shortfallBalance: true, crateBalance: true, createdAt: true })
+  .extend({ phone: indianTenDigitPhone });
 
 export const insertSalesInvoiceSchema = createInsertSchema(salesInvoices, {
   invoiceDate: z.union([z.string(), z.date()]).transform((val) => 
@@ -1138,7 +1132,6 @@ export interface UdhaaarBookEntry {
   tenantId: string;
   retailerId: string;
   retailerName: string;
-  contactPerson: string | null;
   phone: string | null;
   address: string | null;
   udhaarBalance: number;
@@ -1155,7 +1148,6 @@ export interface CrateLedgerEntry {
   tenantId: string;
   retailerId: string;
   retailerName: string | null;
-  contactPerson: string | null;
   phone: string | null;
   transactionType: string;
   quantity: number;

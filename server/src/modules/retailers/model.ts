@@ -69,10 +69,15 @@ export class RetailerModel {
       });
     }
 
+    // Filter out undefined values to preserve existing data
+    const updateData = Object.fromEntries(
+      Object.entries(insertRetailer).filter(([_, value]) => value !== undefined)
+    ) as Partial<InsertRetailer>;
+
     try {
       const [retailer] = await db
         .update(retailers)
-        .set(insertRetailer)
+        .set(updateData)
         .where(withTenant(retailers, tenantId, eq(retailers.id, id)))
         .returning();
       return retailer || undefined;

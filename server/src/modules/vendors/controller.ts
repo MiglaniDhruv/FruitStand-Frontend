@@ -52,7 +52,7 @@ export class VendorController extends BaseController {
     }
     
     // Validate sortBy if provided
-    const validSortFields = ['name', 'contactPerson', 'createdAt'];
+    const validSortFields = ['name', 'createdAt'];
     if (opts.sortBy && !validSortFields.includes(opts.sortBy)) {
       throw new BadRequestError("Invalid sortBy field");
     }

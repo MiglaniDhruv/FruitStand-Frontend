@@ -169,11 +169,6 @@ export function drawPartyDetails(doc: InstanceType<typeof PDFDocument>, party: R
 
   yPosition += 15;
 
-  if (party.contactPerson) {
-    doc.font('Helvetica').text(`Contact: ${party.contactPerson}`, 50, yPosition);
-    yPosition += 12;
-  }
-
   if (party.phone) {
     doc.font('Helvetica').text(`Phone: ${party.phone}`, 50, yPosition);
     yPosition += 12;

@@ -78,10 +78,15 @@ export class VendorModel {
       });
     }
 
+    // Filter out undefined values to preserve existing data
+    const updateData = Object.fromEntries(
+      Object.entries(insertVendor).filter(([_, value]) => value !== undefined)
+    ) as Partial<InsertVendor>;
+
     try {
       const [vendor] = await db
         .update(vendors)
-        .set(insertVendor)
+        .set(updateData)
         .where(withTenant(vendors, tenantId, eq(vendors.id, id)))
         .returning();
       return vendor || undefined;
@@ -203,11 +208,10 @@ export class VendorModel {
     // Define table columns for sorting and searching
     const tableColumns = {
       name: vendors.name,
-      contactPerson: vendors.contactPerson,
       createdAt: vendors.createdAt
     };
     
-    const searchableColumns = [vendors.name, vendors.contactPerson];
+    const searchableColumns = [vendors.name];
     
     // Build WHERE conditions array starting with tenant filtering
     const whereConditions = [tenantCondition];

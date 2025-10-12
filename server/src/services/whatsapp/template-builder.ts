@@ -25,7 +25,6 @@ export interface PurchaseInvoiceVariables {
   businessName?: string;
   businessPhone?: string;
   businessAddress?: string;
-  contactPerson?: string;
   vendorAddress?: string;
   address?: string;
   invoiceToken?: string;
@@ -39,7 +38,6 @@ export interface PaymentReminderVariables {
   businessName?: string;
   businessPhone?: string;
   businessAddress?: string;
-  contactPerson?: string;
   recipientAddress?: string;
   address?: string;
   invoiceToken?: string;
@@ -54,7 +52,6 @@ export interface PaymentNotificationVariables {
   businessName?: string;
   businessPhone?: string;
   businessAddress?: string;
-  contactPerson?: string;
   recipientAddress?: string;
   address?: string;
   invoiceToken?: string;
@@ -110,7 +107,6 @@ export function buildSalesInvoiceVariables(invoice: any, retailer: any, tenant?:
     businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
     businessPhone: tenant?.settings?.phone || undefined,
     businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
-    contactPerson: retailer?.contactPerson ? truncateText(retailer.contactPerson, 50) : undefined,
     retailerAddress: retailer?.address ? formatAddress(retailer.address) : undefined,
     address: retailer?.address ? formatAddress(retailer.address) : undefined,
     invoiceToken
@@ -127,7 +123,6 @@ export function buildPurchaseInvoiceVariables(invoice: any, vendor: any, tenant?
     businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
     businessPhone: tenant?.settings?.phone || undefined,
     businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
-    contactPerson: vendor?.contactPerson ? truncateText(vendor.contactPerson, 50) : undefined,
     vendorAddress: vendor?.address ? formatAddress(vendor.address) : undefined,
     address: vendor?.address ? formatAddress(vendor.address) : undefined,
     invoiceToken
@@ -154,7 +149,6 @@ export function buildPaymentReminderVariables(
     businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
     businessPhone: tenant?.settings?.phone || undefined,
     businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
-    contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
     recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
     address: recipient?.address ? formatAddress(recipient.address) : undefined,
     invoiceToken
@@ -177,7 +171,6 @@ export function buildPaymentNotificationVariables(
     businessName: tenant?.name ? truncateText(tenant.name, 50) : undefined,
     businessPhone: tenant?.settings?.phone || undefined,
     businessAddress: tenant?.settings?.address ? formatAddress(tenant.settings.address) : undefined,
-    contactPerson: recipient?.contactPerson ? truncateText(recipient.contactPerson, 50) : undefined,
     recipientAddress: recipient?.address ? formatAddress(recipient.address) : undefined,
     address: recipient?.address ? formatAddress(recipient.address) : undefined,
     invoiceToken

@@ -33,8 +33,7 @@ import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 
 const retailerSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  contactPerson: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string().trim().min(1, "Phone number is required").regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
   address: z.string().optional(),
 });
 
@@ -65,9 +64,10 @@ export default function RetailerManagement() {
 
   const form = useForm<RetailerFormData>({
     resolver: zodResolver(retailerSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       name: "",
-      contactPerson: "",
       phone: "",
       address: "",
     },
@@ -174,8 +174,7 @@ export default function RetailerManagement() {
       setEditingRetailer(retailer);
       form.reset({
         name: retailer.name,
-        contactPerson: retailer.contactPerson || "",
-        phone: retailer.phone || "",
+        phone: retailer.phone?.replace(/^\+91/, "") || "",
         address: retailer.address || "",
       });
       setOpen(true);
@@ -312,11 +311,6 @@ export default function RetailerManagement() {
       accessorKey: "name",
       header: "Name",
       cell: (value: string) => <div className="font-medium">{value}</div>,
-    },
-    {
-      accessorKey: "contactPerson",
-      header: "Contact Person",
-      cell: (value: string) => value || "-",
     },
     {
       accessorKey: "phone",
@@ -579,26 +573,33 @@ export default function RetailerManagement() {
               
               <FormField
                 control={form.control}
-                name="contactPerson"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contact Person</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter contact person" {...field} data-testid="input-contact" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>Phone *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter phone number" {...field} data-testid="input-phone" />
+                      <div className="flex items-center gap-0">
+                        <div className="flex h-10 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
+                          +91
+                        </div>
+                        <Input 
+                          placeholder="Enter 10-digit number" 
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            const sanitized = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            field.onChange(sanitized);
+                          }}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          data-testid="input-phone"
+                          className="rounded-l-none"
+                          maxLength={10}
+                          type="tel"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

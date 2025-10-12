@@ -29,8 +29,7 @@ import { AlertTriangle } from "lucide-react";
 
 const vendorSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  contactPerson: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string().trim().min(1, "Phone number is required").regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
   address: z.string().optional(),
   isActive: z.boolean().default(true),
 });
@@ -51,10 +50,11 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       name: vendor?.name || "",
-      contactPerson: vendor?.contactPerson || "",
-      phone: vendor?.phone || "",
+      phone: vendor?.phone?.replace(/^\+91/, "") || "",
       address: vendor?.address || "",
       isActive: vendor?.isActive ?? true,
     },
@@ -66,8 +66,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
       setSubmissionError(null);
       form.reset({
         name: vendor?.name || "",
-        contactPerson: vendor?.contactPerson || "",
-        phone: vendor?.phone || "",
+        phone: vendor?.phone?.replace(/^\+91/, "") || "",
         address: vendor?.address || "",
         isActive: vendor?.isActive ?? true,
       });
@@ -175,26 +174,33 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
 
               <FormField
                 control={form.control}
-                name="contactPerson"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contact Person</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter contact person name" {...field} data-testid="input-contact-person" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
+                    <FormLabel>Phone Number *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter phone number" {...field} data-testid="input-phone" />
+                      <div className="flex items-center gap-0">
+                        <div className="flex h-10 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
+                          +91
+                        </div>
+                        <Input 
+                          placeholder="Enter 10-digit number" 
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            const sanitized = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            field.onChange(sanitized);
+                          }}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          data-testid="input-phone"
+                          className="rounded-l-none"
+                          maxLength={10}
+                          type="tel"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
