@@ -6,6 +6,11 @@ import { ValidationError, BadRequestError, ConflictError, DatabaseError } from '
 import { ERROR_CODES } from '../constants/error-codes';
 
 export function handleDatabaseError(error: any): never {
+  // Handle Neon-specific errors first
+  if (isNeonError(error)) {
+    handleNeonError(error);
+  }
+
   // Handle Postgres error codes
   if (error && error.code) {
     switch (error.code) {
@@ -145,4 +150,44 @@ function extractTableFromMessage(message: string): string | null {
   // Try to extract table name from error message
   const tableMatch = message.match(/table "([^"]+)"/i);
   return tableMatch ? tableMatch[1] : null;
+}
+
+function isNeonError(error: any): boolean {
+  if (!error) return false;
+  
+  const message = error.message || '';
+  
+  // Check for Neon-specific error patterns
+  return (
+    // Database termination errors
+    message.includes('{:shutdown, :db_termination}') ||
+    message.includes('db_termination') ||
+    // Connection errors
+    message.includes('WebSocket connection') ||
+    message.includes('serverless') ||
+    // Neon service errors
+    message.includes('neon') ||
+    // Stack trace contains Neon serverless package
+    (error.stack && error.stack.includes('@neondatabase/serverless'))
+  );
+}
+
+function handleNeonError(error: any): never {
+  const message = error.message || '';
+  
+  // Handle database termination specifically
+  if (message.includes('{:shutdown, :db_termination}') || message.includes('db_termination')) {
+    console.warn('Neon database connection terminated, connection will be automatically retried');
+    throw new DatabaseError('Database connection was terminated by the server. Please try again.', error);
+  }
+  
+  // Handle WebSocket connection errors
+  if (message.includes('WebSocket connection')) {
+    console.warn('Neon WebSocket connection error, connection will be automatically retried');
+    throw new DatabaseError('Database connection error. Please try again.', error);
+  }
+  
+  // Handle general Neon serverless errors
+  console.warn('Neon serverless database error:', message);
+  throw new DatabaseError('Database service temporarily unavailable. Please try again.', error);
 }

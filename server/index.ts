@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import "dotenv/config";
 import { setupVite, serveStatic, log } from "./vite";
+import { closeDatabase } from "./db";
 import { extractTenantSlug } from "./src/middleware/tenant-slug";
 import { SYSTEM_ROUTES } from "./src/constants/routes";
 import { ERROR_CODES } from "./src/constants/error-codes";
@@ -12,6 +13,8 @@ import { asyncHandler } from "./src/utils/async-handler";
 import { attachRequestId } from './src/middleware/request-id';
 import { requestTimeout } from './src/middleware/timeout';
 import { sanitizeInputs, sanitizeParam } from './src/middleware/sanitization';
+import { databaseHealthMiddleware, databaseErrorHandler } from './src/middleware/database-health';
+import { startDatabaseHealthMonitoring, getDatabaseHealthEndpoint } from './src/utils/database-health';
 
 // Import all modular routers
 import { authRouter } from "./src/modules/auth";
@@ -37,14 +40,37 @@ import { publicRouter } from "./src/modules/public/router";
 let server: any = null;
 let isShuttingDown = false;
 
+// Helper function to check if error is a recoverable database connection error
+function isDatabaseConnectionError(error: Error): boolean {
+  const message = error.message || '';
+  const stack = error.stack || '';
+  
+  return (
+    // Neon database termination (recoverable)
+    message.includes('{:shutdown, :db_termination}') ||
+    message.includes('db_termination') ||
+    // WebSocket connection errors (recoverable)
+    message.includes('WebSocket connection') ||
+    // Check stack trace for Neon serverless package
+    stack.includes('@neondatabase/serverless')
+  );
+}
+
 // Shared shutdown function with idempotent guard
-const initiateShutdown = (exitCode: number) => {
+const initiateShutdown = async (exitCode: number) => {
   if (isShuttingDown) {
     return; // Prevent multiple shutdown attempts
   }
   isShuttingDown = true;
 
   console.log(`Initiating graceful shutdown with exit code ${exitCode}...`);
+  
+  // Close database connections first
+  try {
+    await closeDatabase();
+  } catch (error) {
+    console.error('Error during database shutdown:', error);
+  }
   
   if (server) {
     server.close(() => {
@@ -65,6 +91,14 @@ const initiateShutdown = (exitCode: number) => {
 // Process-level error handlers
 process.on('uncaughtException', (error: Error) => {
   logError(error, { path: 'uncaughtException' });
+  
+  // Check if it's a database connection error that can be recovered from
+  if (isDatabaseConnectionError(error)) {
+    console.error('Database connection error detected. Attempting to continue...');
+    // Don't shut down for recoverable database errors
+    return;
+  }
+  
   console.error('CRITICAL: Uncaught Exception occurred. Performing graceful shutdown...');
   initiateShutdown(1);
 });
@@ -72,6 +106,14 @@ process.on('uncaughtException', (error: Error) => {
 process.on('unhandledRejection', (reason: any) => {
   const error = reason instanceof Error ? reason : new Error(String(reason));
   logError(error, { path: 'unhandledRejection' });
+  
+  // Check if it's a database connection error that can be recovered from
+  if (isDatabaseConnectionError(error)) {
+    console.error('Database connection promise rejection detected. Attempting to continue...');
+    // Don't shut down for recoverable database errors
+    return;
+  }
+  
   console.error('CRITICAL: Unhandled Promise Rejection occurred. Performing graceful shutdown...');
   initiateShutdown(1);
 });
@@ -98,6 +140,9 @@ app.use(requestTimeout());
 
 // Apply input sanitization (after body parsing, before business logic)
 app.use(sanitizeInputs);
+
+// Apply database health middleware
+app.use(asyncHandler(databaseHealthMiddleware));
 
 // Sanitize common param names
 app.param('id', (req, _res, next, val) => { (req as any).params.id = sanitizeParam(val); next(); });
@@ -187,6 +232,22 @@ app.use(asyncHandler(extractTenantSlug));
     console.warn("Failed to initialize WhatsApp scheduler:", error);
   }
 
+  // Add health check endpoint (no authentication required)
+  app.get("/api/health", asyncHandler(async (req: Request, res: Response) => {
+    const health = await getDatabaseHealthEndpoint();
+    
+    // Add additional system health information
+    const systemHealth = {
+      ...health,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.version,
+    };
+    
+    res.status(health.status === 'healthy' ? 200 : 503).json(systemHealth);
+  }));
+
   // Mount public router first (no authentication required)
   app.use("/api/public", publicRouter);
 
@@ -235,6 +296,9 @@ app.use(asyncHandler(extractTenantSlug));
       requestId: (req as any).requestId
     });
   });
+
+  // Database error handling middleware (before general error handler)
+  app.use(databaseErrorHandler);
 
   // Global error handling middleware (must be last)
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
@@ -346,6 +410,9 @@ app.use(asyncHandler(extractTenantSlug));
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Start database health monitoring after server is up
+    startDatabaseHealthMonitoring(30000); // Check every 30 seconds
   });
 
 })();
