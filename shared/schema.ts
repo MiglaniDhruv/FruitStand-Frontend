@@ -1158,6 +1158,45 @@ export interface CrateLedgerEntry {
   createdAt: Date | null;
 }
 
+// Dashboard Types
+export interface RecentPurchase {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  vendorName: string;
+  netAmount: string;
+  status: string;
+}
+
+export interface RecentSale {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  retailerName: string;
+  totalAmount: string;
+  status: string;
+}
+
+export interface TopRetailerByUdhaar {
+  id: string;
+  name: string;
+  phone: string | null;
+  udhaaarBalance: string;
+}
+
+export interface DashboardKPIs {
+  totalCashBalance: string;
+  totalBankBalance: string;
+  todaysSales: string;
+  todaysPurchases: string;
+  totalUdhaar: string;
+  totalShortfall: string;
+  todaysCommission: string;
+  recentPurchases: RecentPurchase[];
+  recentSales: RecentSale[];
+  topRetailersByUdhaar: TopRetailerByUdhaar[];
+}
+
 // Authentication Schemas
 export const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),

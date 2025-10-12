@@ -36,14 +36,8 @@ export interface TenantSessionContext {
   tenantId: string;
 }
 
-export interface DashboardKPIs {
-  todaySales: string;
-  pendingPayments: string;
-  pendingInvoicesCount: number;
-  activeVendors: number;
-  stockValue: string;
-  totalStockKgs: string;
-}
+// Re-export dashboard types from shared schema to keep server and client types in sync
+export type { DashboardKPIs, RecentPurchase, RecentSale, TopRetailerByUdhaar } from '@shared/schema';
 
 export interface CreateInvoiceItem {
   commodityId: string;

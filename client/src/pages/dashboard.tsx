@@ -2,12 +2,34 @@ import Sidebar from "@/components/layout/sidebar";
 import { useTenant } from "@/hooks/use-tenant";
 import { AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { authenticatedApiRequest } from "@/lib/auth";
+import { DashboardKPIs } from "@/types";
+import DashboardCards from "@/components/dashboard/dashboard-cards";
+import RecentPurchasesTable from "@/components/dashboard/recent-purchases-table";
+import RecentSalesTable from "@/components/dashboard/recent-sales-table";
+import TopUdhaarRetailers from "@/components/dashboard/top-udhaar-retailers";
 
 export default function Dashboard() {
   const { tenant, isLoading, error } = useTenant();
   const isError = !!error;
 
-  if (isLoading) {
+  // Fetch dashboard KPIs data
+  const {
+    data: kpis,
+    isLoading: dashboardLoading,
+    isError: dashboardIsError,
+    error: dashboardError
+  } = useQuery<DashboardKPIs>({
+    queryKey: ['/api/dashboard/kpis', tenant?.id],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest('GET', '/api/dashboard/kpis');
+      return response.json();
+    },
+    enabled: !!tenant?.id && !isError, // Only fetch if tenant is loaded and no tenant error
+  });
+
+  if (isLoading || dashboardLoading) {
     return (
       <div className="flex h-screen">
         <Sidebar />
@@ -26,15 +48,18 @@ export default function Dashboard() {
     );
   }
 
+  // Only tenant errors trigger full-page error
   if (isError) {
     return (
       <div className="flex h-screen">
         <Sidebar />
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Dashboard</h2>
+            <h2 className="text-2xl font-semibold text-red-600">Error Loading Tenant</h2>
             <p className="text-gray-600 max-w-md">
-              {error instanceof Error ? error.message : "Failed to load dashboard. Please try again."}
+              {error instanceof Error 
+                ? error.message 
+                : "Failed to load tenant data. Please try again."}
             </p>
             <button
               onClick={() => window.location.reload()}
@@ -76,16 +101,44 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Empty Dashboard Content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h3 className="text-lg font-medium text-muted-foreground">Dashboard Content Removed</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                All dashboard components have been cleared.
-              </p>
+        {/* Dashboard Content */}
+        <main className="flex-1 overflow-auto p-6 space-y-6">
+          {/* KPI Cards Section */}
+          {dashboardIsError ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600">Failed to load KPI data. Please refresh to try again.</p>
             </div>
+          ) : (
+            <DashboardCards kpis={kpis} loading={dashboardLoading} />
+          )}
+
+          {/* Tables Grid Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {dashboardIsError ? (
+              <>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-600">Failed to load purchase data.</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-600">Failed to load sales data.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <RecentPurchasesTable purchases={kpis?.recentPurchases} loading={dashboardLoading} />
+                <RecentSalesTable sales={kpis?.recentSales} loading={dashboardLoading} />
+              </>
+            )}
           </div>
+
+          {/* Top Retailers Section */}
+          {dashboardIsError ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600">Failed to load top retailers data.</p>
+            </div>
+          ) : (
+            <TopUdhaarRetailers retailers={kpis?.topRetailersByUdhaar} loading={dashboardLoading} />
+          )}
         </main>
       </div>
     </div>
