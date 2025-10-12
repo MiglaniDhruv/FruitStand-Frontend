@@ -112,7 +112,7 @@ export default function CrateManagement() {
   });
 
   // Fetch data
-  const { data: transactionsResult, isLoading: transactionsLoading, isError, error } = useQuery<PaginatedResult<CrateTransactionWithParty>>({
+  const { data: transactionsResult, isLoading: transactionsLoading, isFetching: transactionsFetching, isError, error } = useQuery<PaginatedResult<CrateTransactionWithParty>>({
     queryKey: ["/api/crate-transactions", paginationOptions, selectedRetailer, selectedTransactionType, selectedPartyType],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -569,7 +569,7 @@ export default function CrateManagement() {
                     onPageSizeChange={handlePageSizeChange}
                     onSearchChange={handleSearchChange}
                     onSortChange={handleSortChange}
-                    isLoading={transactionsLoading}
+                    isLoading={transactionsFetching}
                     enableRowSelection={true}
                     rowKey="id"
                   />

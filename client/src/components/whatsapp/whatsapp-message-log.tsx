@@ -70,7 +70,7 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>('all');
 
   // Data fetching with React Query
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['/api/whatsapp/messages', paginationOptions, statusFilter, messageTypeFilter, referenceType, referenceId],
     queryFn: async () => {
       const params = new URLSearchParams(buildPaginationParams(paginationOptions));
@@ -307,6 +307,7 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
         data={data?.data || []}
         paginationMetadata={data?.pagination}
         onPageChange={handlePageChange}
+        isLoading={isFetching}
         emptyMessage={
           paginationOptions.search || statusFilter !== 'all' || messageTypeFilter !== 'all'
             ? 'No messages match your filters'

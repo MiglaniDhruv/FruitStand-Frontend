@@ -67,7 +67,7 @@ export default function Stock() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: stockResult, isLoading, isError, error } = useQuery<PaginatedResult<StockWithItem>>({
+  const { data: stockResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<StockWithItem>>({
     queryKey: ["/api/stock", paginationOptions],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -508,7 +508,7 @@ export default function Stock() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

@@ -109,7 +109,7 @@ export default function ExpenseManagement() {
   });
 
   // Fetch data
-  const { data: expensesResult, isLoading: expensesLoading, isError, error } = useQuery<PaginatedResult<ExpenseWithCategory>>({
+  const { data: expensesResult, isLoading: expensesLoading, isFetching: expensesFetching, isError, error } = useQuery<PaginatedResult<ExpenseWithCategory>>({
     queryKey: ["/api/expenses", paginationOptions, selectedCategory, selectedPaymentMode],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -127,7 +127,7 @@ export default function ExpenseManagement() {
     },
   });
 
-  const { data: categories = [], isLoading: categoriesLoading, isError: categoriesError, error: categoriesErrorMessage } = useQuery({
+  const { data: categories = [], isLoading: categoriesLoading, isFetching: categoriesFetching, isError: categoriesError, error: categoriesErrorMessage } = useQuery({
     queryKey: ["/api/expense-categories"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expense-categories");
@@ -714,7 +714,7 @@ export default function ExpenseManagement() {
                     onPageSizeChange={handlePageSizeChange}
                     onSearchChange={handleSearchChange}
                     onSortChange={handleSortChange}
-                    isLoading={expensesLoading}
+                    isLoading={expensesFetching}
                     enableRowSelection={true}
                     rowKey="id"
                   />
@@ -733,7 +733,7 @@ export default function ExpenseManagement() {
                   <DataTable
                     data={categories}
                     columns={categoryColumns}
-                    isLoading={categoriesLoading}
+                    isLoading={categoriesFetching}
                     enableRowSelection={true}
                     rowKey="id"
                   />

@@ -82,7 +82,7 @@ export default function PurchaseInvoices() {
   };
 
   // Fetch data
-  const { data: invoicesResult, isLoading, isError, error } = useQuery<PaginatedResult<InvoiceWithItems>>({
+  const { data: invoicesResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<InvoiceWithItems>>({
     queryKey: ["/api/purchase-invoices", paginationOptions, statusFilter],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -343,7 +343,7 @@ export default function PurchaseInvoices() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

@@ -39,7 +39,7 @@ export default function Vendors() {
   const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
   const { toast } = useToast();
 
-  const { data: vendorsResult, isLoading, isError, error } = useQuery<PaginatedResult<Vendor>>({
+  const { data: vendorsResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<Vendor>>({
     queryKey: ["/api/vendors", paginationOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -310,7 +310,7 @@ export default function Vendors() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

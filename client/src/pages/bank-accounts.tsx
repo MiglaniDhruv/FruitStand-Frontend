@@ -55,8 +55,9 @@ export default function BankAccounts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: bankAccountsResult, isLoading, isError, error } = useQuery<PaginatedResult<BankAccount>>({
+  const { data: bankAccountsResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<BankAccount>>({
     queryKey: ["/api/bank-accounts", paginationOptions, statusFilter],
+    placeholderData: (prev) => prev,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('paginated', 'true');
@@ -342,6 +343,7 @@ export default function BankAccounts() {
                       onPageChange={handlePageChange}
                       onPageSizeChange={handlePageSizeChange}
                       onSortChange={(column: string, direction: string) => handleSortChange(column, direction)}
+                      isLoading={isFetching}
                     />
                   </>
                 )}

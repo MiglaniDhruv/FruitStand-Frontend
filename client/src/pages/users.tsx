@@ -96,7 +96,7 @@ export default function UserManagement() {
     },
   });
 
-  const { data: usersResult, isLoading, isError, error } = useQuery<PaginatedResult<User>>({
+  const { data: usersResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<User>>({
     queryKey: ["/api/users", paginationOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -541,7 +541,7 @@ export default function UserManagement() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

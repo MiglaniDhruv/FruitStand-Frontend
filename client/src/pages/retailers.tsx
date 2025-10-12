@@ -73,7 +73,7 @@ export default function RetailerManagement() {
     },
   });
 
-  const { data: retailersResult, isLoading, isError, error } = useQuery<PaginatedResult<Retailer>>({
+  const { data: retailersResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<Retailer>>({
     queryKey: ["/api/retailers", paginationOptions],
     placeholderData: (prevData) => prevData,
     queryFn: async () => {
@@ -536,7 +536,7 @@ export default function RetailerManagement() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

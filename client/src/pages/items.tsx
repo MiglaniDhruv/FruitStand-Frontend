@@ -38,7 +38,7 @@ export default function Items() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: itemsResult, isLoading, isError, error } = useQuery<PaginatedResult<ItemWithVendor>>({
+  const { data: itemsResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<ItemWithVendor>>({
     queryKey: ["/api/items", paginationOptions, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -345,7 +345,7 @@ export default function Items() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />

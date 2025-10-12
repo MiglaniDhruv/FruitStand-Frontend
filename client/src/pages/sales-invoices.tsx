@@ -198,6 +198,7 @@ export default function SalesInvoiceManagement() {
   const {
     data: invoicesResult,
     isLoading,
+    isFetching,
     isError,
     error,
   } = useQuery<PaginatedResult<SalesInvoiceWithDetails>>({
@@ -826,7 +827,7 @@ export default function SalesInvoiceManagement() {
                 onPageSizeChange={handlePageSizeChange}
                 onSearchChange={handleSearchChange}
                 onSortChange={handleSortChange}
-                isLoading={isLoading}
+                isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
               />
