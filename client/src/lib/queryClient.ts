@@ -1,6 +1,25 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { authenticatedApiRequest } from './auth';
+import { authenticatedApiRequest, authService } from './auth';
+import { AuthError } from './api-errors';
 import { logApiError } from './error-logger';
+import { redirectToLoginOnce } from './redirect-utils';
+
+/**
+ * Global error handler to catch token expiration across all React Query operations
+ */
+function handleGlobalError(error: unknown): void {
+  if (error instanceof AuthError && error.statusCode === 401 && error.code === 'AUTH_TOKEN_EXPIRED') {
+    // Capture current tenant slug before logout
+    const tenantSlug = localStorage.getItem('currentTenantSlug');
+    
+    // Logout user
+    authService.logout();
+    
+    // Redirect to tenant login page using shared helper
+    const loginPath = tenantSlug ? `/${tenantSlug}/login` : '/login';
+    redirectToLoginOnce(loginPath);
+  }
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -44,9 +63,11 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: Infinity,
       retry: false,
-    },
+      onError: handleGlobalError,
+    } as any,
     mutations: {
       retry: false,
-    },
+      onError: handleGlobalError,
+    } as any,
   },
 });

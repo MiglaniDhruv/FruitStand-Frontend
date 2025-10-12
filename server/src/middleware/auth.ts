@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { Response, NextFunction } from "express";
 import { AuthenticatedRequest, UserRole, UnauthorizedError, ForbiddenError, InternalServerError } from "../types";
+import { ERROR_CODES } from "../constants/error-codes";
 
 // Enforce JWT_SECRET in production
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
@@ -32,7 +33,10 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   try {
     return jwt.verify(token, JWT_REFRESH_SECRET) as RefreshTokenPayload;
   } catch (error) {
-    throw new UnauthorizedError('Invalid refresh token');
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new UnauthorizedError('Refresh token expired', ERROR_CODES.AUTH_TOKEN_EXPIRED);
+    }
+    throw new UnauthorizedError('Invalid refresh token', ERROR_CODES.AUTH_TOKEN_INVALID);
   }
 };
 
@@ -50,7 +54,10 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     req.user = decoded;
     next();
   } catch (err) {
-    throw new UnauthorizedError('Invalid token');
+    if (err instanceof jwt.TokenExpiredError) {
+      throw new UnauthorizedError('Token expired', ERROR_CODES.AUTH_TOKEN_EXPIRED);
+    }
+    throw new UnauthorizedError('Invalid token', ERROR_CODES.AUTH_TOKEN_INVALID);
   }
 };
 

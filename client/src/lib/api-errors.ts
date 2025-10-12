@@ -64,8 +64,8 @@ export class ValidationError extends ApiError {
 }
 
 export class AuthError extends ApiError {
-  constructor(message: string, statusCode: 401 | 403, originalError?: Error) {
-    super(message, statusCode, 'AUTH_ERROR', originalError);
+  constructor(message: string, statusCode: 401 | 403, originalError?: Error, code?: string) {
+    super(message, statusCode, code || 'AUTH_ERROR', originalError);
     this.name = 'AuthError';
     this.isRetryable = false;
   }

@@ -15,6 +15,56 @@ import { fetchWithTimeout, DEFAULT_REQUEST_TIMEOUT } from "./request-timeout";
 import { withRetry, shouldRetry } from "./retry-logic";
 import { getUserFriendlyMessage, getToastConfig, shouldShowToast } from "./error-messages";
 import { logApiError } from "./error-logger";
+import { redirectToLoginOnce } from "./redirect-utils";
+
+/**
+ * Helper function to parse error response from server
+ */
+async function parseErrorResponse(response: Response): Promise<{ message: string; code?: string; statusCode: number }> {
+  try {
+    const errorData = await response.json();
+    return {
+      message: errorData?.error?.message || errorData?.message || 'An error occurred',
+      code: errorData?.error?.code,
+      statusCode: response.status
+    };
+  } catch {
+    return {
+      message: `HTTP ${response.status} - ${response.statusText || 'Unknown error'}`,
+      statusCode: response.status
+    };
+  }
+}
+
+/**
+ * Helper function to check if error indicates token expiration
+ */
+function isTokenExpiredError(code?: string, message?: string): boolean {
+  if (code === 'AUTH_TOKEN_EXPIRED') return true;
+  if (message) {
+    const lowerMessage = message.toLowerCase();
+    if (lowerMessage.includes('token expired') || lowerMessage.includes('jwt expired')) return true;
+  }
+  return false;
+}
+
+/**
+ * Helper function to handle token expiration with logout and redirect
+ */
+function handleTokenExpiration(message: string = 'Your session has expired', code: string = 'AUTH_TOKEN_EXPIRED'): never {
+  // Capture current tenant slug before logout
+  const tenantSlug = localStorage.getItem('currentTenantSlug');
+  
+  // Logout user
+  authService.logout();
+  
+  // Redirect to tenant login page using shared helper
+  const loginPath = tenantSlug ? `/${tenantSlug}/login` : '/login';
+  redirectToLoginOnce(loginPath);
+  
+  // Throw error for consistency
+  throw new AuthError(message, 401, undefined, code);
+}
 
 // Add helper at top of file
 const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD']);
@@ -158,7 +208,13 @@ export const authService = {
 
     if (!res.ok) {
       if (res.status === 401) {
-        throw new Error('Refresh token expired or invalid');
+        const errorDetails = await parseErrorResponse(res);
+        throw new AuthError(
+          errorDetails.message || 'Refresh token expired or invalid', 
+          401, 
+          undefined, 
+          errorDetails.code
+        );
       }
       throw new Error(`Token refresh failed: ${res.statusText}`);
     }
@@ -216,6 +272,15 @@ const makeAuthenticatedRequest = async (
     if (!res.ok) {
       // Handle authentication/authorization errors
       if (res.status === 401) {
+        // Parse error response to check for token expiration
+        const errorDetails = await parseErrorResponse(res);
+        
+        // Check if this is a token expiration error
+        if (isTokenExpiredError(errorDetails.code, errorDetails.message)) {
+          // Token expired - handle immediately without attempting refresh
+          handleTokenExpiration(errorDetails.message, errorDetails.code);
+        }
+        
         // If this is a retry attempt, proceed with logout
         if (isRetrying) {
           // Capture tenant slug BEFORE invoking logout()
@@ -226,10 +291,11 @@ const makeAuthenticatedRequest = async (
           
           // Always redirect to tenant login page
           if (typeof window !== 'undefined') {
-            window.location.href = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+            const loginPath = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+            redirectToLoginOnce(loginPath);
           }
           
-          const authError = new AuthError('Authentication failed', 401);
+          const authError = new AuthError('Authentication failed', 401, undefined, errorDetails.code);
           throw authError;
         }
 
@@ -248,7 +314,8 @@ const makeAuthenticatedRequest = async (
             authService.logout();
             
             if (typeof window !== 'undefined') {
-              window.location.href = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+              const loginPath = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+              redirectToLoginOnce(loginPath);
             }
             
             throw error;
@@ -281,10 +348,11 @@ const makeAuthenticatedRequest = async (
             authService.logout();
             
             if (typeof window !== 'undefined') {
-              window.location.href = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+              const loginPath = currentTenantSlug ? `/${currentTenantSlug}/login` : '/login';
+              redirectToLoginOnce(loginPath);
             }
             
-            const authError = new AuthError('Authentication failed', 401);
+            const authError = new AuthError('Authentication failed', 401, undefined, errorDetails.code);
             throw authError;
           }
         }
@@ -293,54 +361,34 @@ const makeAuthenticatedRequest = async (
       if (res.status === 403) {
         // Don't logout for 403 errors - return rejected promise with parsed error
         // Let guards/pages handle navigation appropriately
-        try {
-          const errorData = await res.json();
-          const authError = new AuthError(errorData.message || "Access denied", 403);
-          logApiError(authError, url, method);
-          if (shouldShowToast(authError, 'api')) {
-            const toastConfig = getToastConfig(authError);
-            toast(toastConfig);
-          }
-          throw authError;
-        } catch (parseError) {
-          const authError = new AuthError("Access denied", 403);
-          logApiError(authError, url, method);
-          if (shouldShowToast(authError, 'api')) {
-            const toastConfig = getToastConfig(authError);
-            toast(toastConfig);
-          }
-          throw authError;
+        const errorDetails = await parseErrorResponse(res);
+        const authError = new AuthError(errorDetails.message || "Access denied", 403, undefined, errorDetails.code);
+        logApiError(authError, url, method);
+        if (shouldShowToast(authError, 'api')) {
+          const toastConfig = getToastConfig(authError);
+          toast(toastConfig);
         }
+        throw authError;
       }
       
       // Handle 400 validation errors
       if (res.status === 400) {
-        try {
-          const errorData = await res.json();
-          const validationError = new ValidationError(
-            errorData.message || "Invalid data provided", 
-            errorData.errors || errorData.validationErrors
-          );
-          logApiError(validationError, url, method);
-          if (shouldShowToast(validationError, 'api')) {
-            const toastConfig = getToastConfig(validationError);
-            toast(toastConfig);
-          }
-          throw validationError;
-        } catch (parseError) {
-          const validationError = new ValidationError("Invalid data provided");
-          logApiError(validationError, url, method);
-          if (shouldShowToast(validationError, 'api')) {
-            const toastConfig = getToastConfig(validationError);
-            toast(toastConfig);
-          }
-          throw validationError;
+        const errorDetails = await parseErrorResponse(res);
+        const validationError = new ValidationError(
+          errorDetails.message || "Invalid data provided"
+        );
+        logApiError(validationError, url, method);
+        if (shouldShowToast(validationError, 'api')) {
+          const toastConfig = getToastConfig(validationError);
+          toast(toastConfig);
         }
+        throw validationError;
       }
       
       // Handle 404 errors
       if (res.status === 404) {
-        const notFoundError = new NotFoundError("Resource not found");
+        const errorDetails = await parseErrorResponse(res);
+        const notFoundError = new NotFoundError(errorDetails.message || "Resource not found");
         logApiError(notFoundError, url, method);
         if (shouldShowToast(notFoundError, 'api')) {
           const toastConfig = getToastConfig(notFoundError);

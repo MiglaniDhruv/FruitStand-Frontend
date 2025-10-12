@@ -38,6 +38,12 @@ export function getUserFriendlyMessage(error: unknown): string {
   
   if (error instanceof AuthError) {
     if (error.statusCode === 401) {
+      if (error.code === 'AUTH_TOKEN_EXPIRED') {
+        return "Your session has expired. Please log in again.";
+      }
+      if (error.code === 'AUTH_TOKEN_INVALID') {
+        return "Invalid authentication token. Please log in again.";
+      }
       return "Your session has expired. Please log in again.";
     }
     if (error.statusCode === 403) {
@@ -79,8 +85,8 @@ export function getToastConfig(error: unknown): { title: string; description: st
 }
 
 export function shouldShowToast(error: unknown, context?: string): boolean {
-  // Don't show toast for 401 errors (handled by redirect to login)
-  if (error instanceof AuthError && error.statusCode === 401) {
+  // Don't show toast for token expiration errors (handled by redirect to login)
+  if (error instanceof AuthError && error.statusCode === 401 && error.code === 'AUTH_TOKEN_EXPIRED') {
     return false;
   }
   

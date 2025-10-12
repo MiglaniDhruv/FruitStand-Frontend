@@ -27,6 +27,7 @@ export interface ApiResponse<T = any> {
 
 export interface ApiErrorResponse {
   message: string;
+  code?: ErrorCode;
   error?: string;
   errors?: any;
 }
@@ -183,8 +184,8 @@ export class NotFoundError extends AppError {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message: string = "Unauthorized access") {
-    super(message, 401, ERROR_CODES.AUTH_UNAUTHORIZED, true);
+  constructor(message: string = "Unauthorized access", code: ErrorCode = ERROR_CODES.AUTH_UNAUTHORIZED) {
+    super(message, 401, code, true);
     this.name = 'UnauthorizedError';
   }
 }
