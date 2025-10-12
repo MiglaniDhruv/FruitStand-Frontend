@@ -62,7 +62,8 @@ export default function Reports() {
     queryKey: ["/api/purchase-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/purchase-invoices");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -70,7 +71,8 @@ export default function Reports() {
     queryKey: ["/api/sales-invoices"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-invoices");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -78,7 +80,8 @@ export default function Reports() {
     queryKey: ["/api/expenses"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expenses");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -86,7 +89,8 @@ export default function Reports() {
     queryKey: ["/api/payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/payments");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -94,7 +98,8 @@ export default function Reports() {
     queryKey: ["/api/sales-payments"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/sales-payments");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -102,7 +107,8 @@ export default function Reports() {
     queryKey: ["/api/retailers"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/retailers");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -110,7 +116,8 @@ export default function Reports() {
     queryKey: ["/api/vendors"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/vendors");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -118,7 +125,8 @@ export default function Reports() {
     queryKey: ["/api/expense-categories"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/expense-categories");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -126,7 +134,8 @@ export default function Reports() {
     queryKey: ["/api/stock"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/stock");
-      return response.json();
+      const result = await response.json();
+      return result.data || result; // Extract data array from response
     },
   });
 
@@ -198,7 +207,7 @@ export default function Reports() {
 
   const topRetailers = Object.entries(retailerSales)
     .map(([retailerId, amount]) => ({
-      retailer: retailers.find((r: any) => r.id === retailerId),
+      retailer: Array.isArray(retailers) ? retailers.find((r: any) => r.id === retailerId) : null,
       amount: amount as number,
     }))
     .filter(item => item.retailer)
@@ -214,7 +223,7 @@ export default function Reports() {
 
   const topVendors = Object.entries(vendorPurchases)
     .map(([vendorId, amount]) => ({
-      vendor: vendors.find((v: any) => v.id === vendorId),
+      vendor: Array.isArray(vendors) ? vendors.find((v: any) => v.id === vendorId) : null,
       amount: amount as number,
     }))
     .filter(item => item.vendor)
@@ -231,7 +240,7 @@ export default function Reports() {
 
   const topExpenseCategories = Object.entries(expenseBreakdown)
     .map(([categoryId, amount]) => ({
-      category: expenseCategories.find((c: any) => c.id === categoryId),
+      category: Array.isArray(expenseCategories) ? expenseCategories.find((c: any) => c.id === categoryId) : null,
       amount: amount as number,
     }))
     .filter(item => item.category)
@@ -859,7 +868,7 @@ export default function Reports() {
                         .sort((a, b) => parseFloat(b.udhaaarAmount || "0") - parseFloat(a.udhaaarAmount || "0"))
                         .slice(0, 5)
                         .map((sale) => {
-                          const retailer = retailers.find((r: any) => r.id === sale.retailerId);
+                          const retailer = Array.isArray(retailers) ? retailers.find((r: any) => r.id === sale.retailerId) : null;
                           return (
                             <div key={sale.id} className="flex justify-between items-center text-sm">
                               <span>{retailer?.name || "Unknown"}</span>
@@ -889,7 +898,7 @@ export default function Reports() {
                         .sort((a, b) => parseFloat(b.balanceAmount || "0") - parseFloat(a.balanceAmount || "0"))
                         .slice(0, 5)
                         .map((purchase) => {
-                          const vendor = vendors.find((v: any) => v.id === purchase.vendorId);
+                          const vendor = Array.isArray(vendors) ? vendors.find((v: any) => v.id === purchase.vendorId) : null;
                           return (
                             <div key={purchase.id} className="flex justify-between items-center text-sm">
                               <span>{vendor?.name || "Unknown"}</span>

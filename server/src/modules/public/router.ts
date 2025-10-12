@@ -18,6 +18,9 @@ export class PublicRouter {
     
     // Get shared invoice by token
     this.router.get('/invoices/:token', asyncHandler(this.controller.getSharedInvoice.bind(this.controller)));
+    
+    // Download shared invoice as PDF
+    this.router.get('/invoices/:token/pdf', asyncHandler(this.controller.downloadPDF.bind(this.controller)));
   }
 
   getRouter(): Router {

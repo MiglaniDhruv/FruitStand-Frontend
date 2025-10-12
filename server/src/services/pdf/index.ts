@@ -12,7 +12,8 @@ export {
   drawFinancialSummary,
   drawPaymentHistory,
   drawFooter,
-  type PurchaseInvoiceWithPayments
+  type PurchaseInvoiceWithPayments,
+  type SalesInvoiceWithDetails
 } from './pdf-templates';
 
 // Default export is the service instance

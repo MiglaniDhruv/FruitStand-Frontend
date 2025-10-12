@@ -553,3 +553,6 @@ export function renderPurchaseInvoiceTemplate(
   
   drawFooter(doc);
 }
+
+// Export types for external use
+export type { SalesInvoiceWithDetails };

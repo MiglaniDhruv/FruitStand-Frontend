@@ -53,6 +53,14 @@ export class LedgerRouter extends BaseRouter {
       this.ah(this.ledgerController, 'getUdhaaarBook')
     );
 
+    // GET /ledgers/kpi - Get KPI data (cash and bank balances)
+    this.router.get('/ledgers/kpi', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.ledgerController, 'getKpi')
+    );
+
     // GET /ledgers/crates - Get crate ledger (with optional retailerId filter)
     this.router.get('/ledgers/crates', 
       authenticateToken, 

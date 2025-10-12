@@ -1141,7 +1141,8 @@ export interface UdhaaarBookEntry {
   contactPerson: string | null;
   phone: string | null;
   address: string | null;
-  udhaaarBalance: number;
+  udhaarBalance: number;
+  udhaaarBalance?: number; // Keep legacy field for backward compatibility
   totalBalance: number;
   shortfallBalance: number;
   crateBalance: number;

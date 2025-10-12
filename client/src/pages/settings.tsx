@@ -55,8 +55,6 @@ export default function SettingsPage() {
   const [liveCreditBalance, setLiveCreditBalance] = useState<number | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [cashBalanceDirty, setCashBalanceDirty] = useState(false);
-  const [cashBalanceKnown, setCashBalanceKnown] = useState<string>("");
 
   const { toast } = useToast();
   const { tenant, isLoading } = useTenant();
@@ -110,7 +108,6 @@ export default function SettingsPage() {
         commissionRate: tenantSettings.commissionRate || "5",
         currency: tenantSettings.currency || "INR",
         dateFormat: tenantSettings.dateFormat || "DD/MM/YYYY",
-        cashBalance: tenantSettings.cashBalance || "0.00",
         whatsapp: {
           enabled: tenantSettings.whatsapp?.enabled ?? false,
           creditBalance: tenantSettings.whatsapp?.creditBalance ?? 0,
@@ -124,7 +121,6 @@ export default function SettingsPage() {
         }
       };
       setSettings(mapped);
-      setCashBalanceKnown(mapped.cashBalance);
       localStorage.setItem('tenantSettings', JSON.stringify(mapped));
     } catch (error) {
       logApiError(error, '/api/tenants/current/settings', 'GET');
@@ -237,19 +233,8 @@ export default function SettingsPage() {
       const payload = JSON.parse(JSON.stringify(settings));
       if (payload.whatsapp) delete payload.whatsapp.creditBalance;
       
-      // Handle cashBalance dirty tracking to prevent stale overwrites
-      if (!cashBalanceDirty) delete (payload as any).cashBalance;
-      if (cashBalanceDirty) {
-        (payload as any).__updateCashBalance = true;
-        (payload as any).__cashBalanceKnown = cashBalanceKnown;
-      }
-      
       const response = await authenticatedApiRequest("PUT", "/api/tenants/current/settings", payload);
       if (!response.ok) {
-        if (response.status === 409) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Cash balance has been modified by another operation. Please refresh and try again.');
-        }
         throw new Error(`HTTP ${response.status}: Failed to save settings`);
       }
       
@@ -257,9 +242,6 @@ export default function SettingsPage() {
         title: "Settings saved",
         description: "Organization settings have been updated successfully",
       });
-      
-      // Reset dirty flag after successful save
-      setCashBalanceDirty(false);
     } catch (error) {
       logApiError(error, '/api/tenants/current/settings', 'PUT');
       const errorMessage = error instanceof Error ? error.message : 'Failed to save organization settings';
@@ -532,39 +514,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Current Cash Balance */}
-              <Separator />
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Current Cash Balance</Label>
-                  <p className="text-sm text-muted-foreground">
-                    The current cash balance for your organization.
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cashBalance">Cash Balance</Label>
-                    <Input
-                      id="cashBalance"
-                      type="number"
-                      step="0.01"
-                      value={settings.cashBalance || "0.00"}
-                      onChange={(e) => {
-                        handleSettingChange("cashBalance", e.target.value);
-                        setCashBalanceDirty(true);
-                      }}
-                      placeholder="0.00"
-                      data-testid="input-cash-balance"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Description</Label>
-                    <div className="p-2 bg-muted rounded text-sm">
-                      Current cash balance in {settings.currency || "INR"}
-                    </div>
-                  </div>
-                </div>
-              </div>
+
             </CardContent>
           </Card>
 

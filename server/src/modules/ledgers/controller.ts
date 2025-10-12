@@ -1,8 +1,84 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { BaseController } from '../../utils/base';
 import { LedgerModel } from './model';
 import { TenantModel } from '../tenants/model';
 import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
+
+const ledgerValidation = {
+  getCashbook: z.object({
+    fromDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for fromDate'),
+    toDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for toDate'),
+  }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+    message: 'fromDate must be before or equal to toDate'
+  }),
+  getBankbook: z.object({
+    bankAccountId: z.string().uuid(),
+    fromDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for fromDate'),
+    toDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for toDate'),
+  }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+    message: 'fromDate must be before or equal to toDate'
+  }),
+  getVendorLedger: z.object({
+    fromDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for fromDate'),
+    toDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for toDate'),
+  }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+    message: 'fromDate must be before or equal to toDate'
+  }),
+  getRetailerLedger: z.object({
+    fromDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for fromDate'),
+    toDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for toDate'),
+  }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+    message: 'fromDate must be before or equal to toDate'
+  }),
+  getCrateLedger: z.object({
+    retailerId: z.string().uuid().optional(),
+    fromDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for fromDate'),
+    toDate: z.string().optional().refine(val => {
+      if (!val) return true;
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, 'Invalid date format for toDate'),
+  }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+    message: 'fromDate must be before or equal to toDate'
+  })
+};
 
 export class LedgerController extends BaseController {
   private ledgerModel: LedgerModel;
@@ -16,7 +92,10 @@ export class LedgerController extends BaseController {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
     
-    const cashbook = await this.ledgerModel.getCashbook(tenantId);
+    const validatedQuery = ledgerValidation.getCashbook.parse(req.query);
+    const { fromDate, toDate } = validatedQuery;
+    
+    const cashbook = await this.ledgerModel.getCashbook(tenantId, fromDate, toDate);
     res.json(cashbook);
   }
 
@@ -24,15 +103,19 @@ export class LedgerController extends BaseController {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
     
-    const { bankAccountId } = req.query;
+    const validatedQuery = ledgerValidation.getBankbook.parse(req.query);
+    const { bankAccountId, fromDate, toDate } = validatedQuery;
     
-    const bankbook = await this.ledgerModel.getBankbook(tenantId, bankAccountId as string);
+    const bankbook = await this.ledgerModel.getBankbook(tenantId, bankAccountId!, fromDate, toDate);
     res.json(bankbook);
   }
 
   async getVendorLedger(req: AuthenticatedRequest, res: Response) {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
+    
+    const validatedQuery = ledgerValidation.getVendorLedger.parse(req.query);
+    const { fromDate, toDate } = validatedQuery;
     
     const { vendorId } = req.params;
     this.validateUUID(vendorId, 'Vendor ID');
@@ -41,13 +124,16 @@ export class LedgerController extends BaseController {
     const vendor = await this.ledgerModel.getVendorById(tenantId, vendorId);
     this.ensureResourceExists(vendor, 'Vendor');
 
-    const ledger = await this.ledgerModel.getVendorLedger(tenantId, vendorId);
+    const ledger = await this.ledgerModel.getVendorLedger(tenantId, vendorId, fromDate, toDate);
     res.json(ledger);
   }
 
   async getRetailerLedger(req: AuthenticatedRequest, res: Response) {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
+    
+    const validatedQuery = ledgerValidation.getRetailerLedger.parse(req.query);
+    const { fromDate, toDate } = validatedQuery;
     
     const { retailerId } = req.params;
     this.validateUUID(retailerId, 'Retailer ID');
@@ -56,7 +142,7 @@ export class LedgerController extends BaseController {
     const retailer = await this.ledgerModel.getRetailerById(tenantId, retailerId);
     this.ensureResourceExists(retailer, 'Retailer');
 
-    const ledger = await this.ledgerModel.getRetailerLedger(tenantId, retailerId);
+    const ledger = await this.ledgerModel.getRetailerLedger(tenantId, retailerId, fromDate, toDate);
     res.json(ledger);
   }
 
@@ -72,16 +158,17 @@ export class LedgerController extends BaseController {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
     
-    const { retailerId } = req.query;
+    const validatedQuery = ledgerValidation.getCrateLedger.parse(req.query);
+    const { retailerId, fromDate, toDate } = validatedQuery;
     
     // If retailerId is provided, validate UUID format and existence
     if (retailerId) {
-      this.validateUUID(retailerId as string, 'Retailer ID');
-      const retailer = await this.ledgerModel.getRetailerById(tenantId, retailerId as string);
+      this.validateUUID(retailerId, 'Retailer ID');
+      const retailer = await this.ledgerModel.getRetailerById(tenantId, retailerId);
       this.ensureResourceExists(retailer, 'Retailer');
     }
     
-    const crateLedger = await this.ledgerModel.getCrateLedger(tenantId, retailerId as string);
+    const crateLedger = await this.ledgerModel.getCrateLedger(tenantId, retailerId, fromDate, toDate);
     res.json(crateLedger);
   }
 
@@ -96,6 +183,19 @@ export class LedgerController extends BaseController {
     res.json({
       hasEntries,
       currentBalance
+    });
+  }
+
+  async getKpi(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const cashBalance = await TenantModel.getCashBalance(tenantId);
+    const bankStats = await this.ledgerModel.getBankAccountStats(tenantId);
+    
+    res.json({
+      cashBalance: typeof cashBalance === 'string' ? parseFloat(cashBalance) : cashBalance,
+      totalBankBalance: parseFloat(bankStats.totalBalance)
     });
   }
 }

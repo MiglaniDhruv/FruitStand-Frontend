@@ -1,6 +1,7 @@
-import { eq, desc, asc, and, or } from 'drizzle-orm';
+import { eq, desc, asc, and, or, gte, lte, lt, sql } from 'drizzle-orm';
 import { db } from '../../../db';
 import { TenantModel } from '../tenants/model';
+import { BankAccountModel } from '../bank-accounts/model';
 import { 
   cashbook, 
   bankbook, 
@@ -22,10 +23,121 @@ import {
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 
 export class LedgerModel {
-  async getCashbook(tenantId: string): Promise<CashbookEntry[]> {
-    return await db.select().from(cashbook)
-      .where(withTenant(cashbook, tenantId))
-      .orderBy(desc(cashbook.date));
+  async getCashbook(tenantId: string, fromDate?: string, toDate?: string): Promise<any[]> {
+    // Get prior balance if fromDate is specified
+    let runningBalance = 0;
+    if (fromDate) {
+      const priorConditions = [withTenant(cashbook, tenantId), lt(cashbook.date, new Date(fromDate))];
+      const priorWhereExpr = priorConditions.length > 1 ? and(...priorConditions) : priorConditions[0];
+      
+      const [{ priorIn = 0, priorOut = 0 } = {}] = await db.select({
+        priorIn: sql<number>`coalesce(sum(${cashbook.inflow}::numeric),0)`,
+        priorOut: sql<number>`coalesce(sum(${cashbook.outflow}::numeric),0)`
+      }).from(cashbook).where(priorWhereExpr);
+      
+      runningBalance = Number(priorIn) - Number(priorOut);
+    }
+    
+    // Build where conditions for main query
+    const conditions = [withTenant(cashbook, tenantId)];
+    
+    if (fromDate) {
+      conditions.push(gte(cashbook.date, new Date(fromDate)));
+    }
+    
+    if (toDate) {
+      conditions.push(lte(cashbook.date, new Date(toDate)));
+    }
+    
+    // Fetch entries with date filtering
+    const whereExpr = conditions.length > 1 ? and(...conditions) : conditions[0];
+    const entries = await db.select().from(cashbook)
+      .where(whereExpr)
+      .orderBy(asc(cashbook.date), asc(cashbook.id));
+    
+    // Compute day-wise opening/closing balances
+    const entriesWithBalance = [];
+    let currentDate = '';
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      
+      if (!entry.date) {
+        continue;
+      }
+      
+      let entryDate;
+      try {
+        const dateObj = new Date(entry.date);
+        if (isNaN(dateObj.getTime())) {
+          continue;
+        }
+        entryDate = dateObj.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      } catch (error) {
+        continue;
+      }
+      
+      // Add closing balance for previous day and opening balance for new day
+      if (entryDate !== currentDate) {
+        if (currentDate !== '') {
+          // Add closing balance for previous day
+          entriesWithBalance.push({
+            date: new Date(currentDate).toISOString(),
+            description: 'Day Closing Balance',
+            debit: 0,
+            credit: 0,
+            balance: runningBalance,
+            referenceType: 'Balance',
+            type: 'Closing',
+            isBalanceEntry: true
+          });
+        }
+        
+        currentDate = entryDate;
+        
+        // Add opening balance for new day
+        entriesWithBalance.push({
+          date: new Date(entryDate).toISOString(),
+          description: 'Day Opening Balance',
+          debit: 0,
+          credit: 0,
+          balance: runningBalance,
+          referenceType: 'Balance',
+          type: 'Opening',
+          isBalanceEntry: true
+        });
+      }
+      
+      // Calculate new balance
+      runningBalance += parseFloat(entry.inflow || '0') - parseFloat(entry.outflow || '0');
+      
+      // Add actual entry with computed balance
+      const { inflow, outflow, ...rest } = entry as any;
+      entriesWithBalance.push({
+        ...rest,
+        date: new Date(entry.date).toISOString(),
+        debit: parseFloat(inflow || '0'),
+        credit: parseFloat(outflow || '0'),
+        balance: runningBalance,
+        isBalanceEntry: false,
+      });
+    }
+    
+    // Add final closing balance if there were entries
+    if (currentDate !== '') {
+      entriesWithBalance.push({
+        date: new Date(currentDate).toISOString(),
+        description: 'Day Closing Balance',
+        debit: 0,
+        credit: 0,
+        balance: runningBalance,
+        referenceType: 'Balance',
+        type: 'Closing',
+        isBalanceEntry: true
+      });
+    }
+    
+    return entriesWithBalance;
   }
 
   async getLatestCashbookEntry(tenantId: string): Promise<CashbookEntry | null> {
@@ -57,26 +169,189 @@ export class LedgerModel {
     }
   }
 
-  async getBankbook(tenantId: string, bankAccountId?: string): Promise<BankbookEntry[]> {
-    if (bankAccountId) {
-      return await db.select().from(bankbook)
-        .where(withTenant(bankbook, tenantId, eq(bankbook.bankAccountId, bankAccountId)))
-        .orderBy(desc(bankbook.date));
+  async getBankbook(tenantId: string, bankAccountId: string, fromDate?: string, toDate?: string): Promise<any[]> {
+    // Get prior balance if fromDate is specified
+    let runningBalance = 0;
+    if (fromDate) {
+      const priorConditions = [
+        withTenant(bankbook, tenantId),
+        eq(bankbook.bankAccountId, bankAccountId),
+        lt(bankbook.date, new Date(fromDate))
+      ];
+      const priorWhereExpr = priorConditions.length > 1 ? and(...priorConditions) : priorConditions[0];
+      
+      const [{ priorDebit = 0, priorCredit = 0 } = {}] = await db.select({
+        priorDebit: sql<number>`coalesce(sum(${bankbook.debit}::numeric),0)`,
+        priorCredit: sql<number>`coalesce(sum(${bankbook.credit}::numeric),0)`
+      }).from(bankbook).where(priorWhereExpr);
+      
+      runningBalance = Number(priorDebit) - Number(priorCredit);
     }
     
-    return await db.select().from(bankbook)
-      .where(withTenant(bankbook, tenantId))
-      .orderBy(desc(bankbook.date));
+    // Build where conditions for main query
+    const conditions = [
+      withTenant(bankbook, tenantId),
+      eq(bankbook.bankAccountId, bankAccountId)
+    ];
+    
+    if (fromDate) {
+      conditions.push(gte(bankbook.date, new Date(fromDate)));
+    }
+    
+    if (toDate) {
+      conditions.push(lte(bankbook.date, new Date(toDate)));
+    }
+    
+    // Fetch entries with filtering
+    const whereExpr = conditions.length > 1 ? and(...conditions) : conditions[0];
+    const entries = await db.select().from(bankbook)
+      .where(whereExpr)
+      .orderBy(asc(bankbook.date), asc(bankbook.id));
+    
+    // Compute day-wise opening/closing balances
+    const entriesWithBalance = [];
+    let currentDate = '';
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      
+      if (!entry.date) {
+        continue;
+      }
+      
+      let entryDate;
+      try {
+        const dateObj = new Date(entry.date);
+        if (isNaN(dateObj.getTime())) {
+          continue;
+        }
+        entryDate = dateObj.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      } catch (error) {
+        continue;
+      }
+      
+      // Add closing balance for previous day and opening balance for new day
+      if (entryDate !== currentDate) {
+        if (currentDate !== '') {
+          // Add closing balance for previous day
+          entriesWithBalance.push({
+            date: new Date(currentDate).toISOString(),
+            description: 'Day Closing Balance',
+            debit: 0,
+            credit: 0,
+            balance: runningBalance,
+            referenceType: 'Balance',
+            type: 'Closing',
+            isBalanceEntry: true,
+            bankAccountId: bankAccountId
+          });
+        }
+        
+        currentDate = entryDate;
+        
+        // Add opening balance for new day
+        entriesWithBalance.push({
+          date: new Date(entryDate).toISOString(),
+          description: 'Day Opening Balance',
+          debit: 0,
+          credit: 0,
+          balance: runningBalance,
+          referenceType: 'Balance',
+          type: 'Opening',
+          isBalanceEntry: true,
+          bankAccountId: bankAccountId
+        });
+      }
+      
+      // Calculate new balance
+      runningBalance += parseFloat(entry.debit || '0') - parseFloat(entry.credit || '0');
+      
+      // Add actual entry with computed balance
+      entriesWithBalance.push({
+        ...entry,
+        date: new Date(entry.date).toISOString(),
+        debit: parseFloat(entry.debit || '0'),
+        credit: parseFloat(entry.credit || '0'),
+        balance: runningBalance,
+        isBalanceEntry: false
+      });
+    }
+    
+    // Add final closing balance if there were entries
+    if (currentDate !== '') {
+      entriesWithBalance.push({
+        date: new Date(currentDate).toISOString(),
+        description: 'Day Closing Balance',
+        debit: 0,
+        credit: 0,
+        balance: runningBalance,
+        referenceType: 'Balance',
+        type: 'Closing',
+        isBalanceEntry: true,
+        bankAccountId: bankAccountId
+      });
+    }
+    
+    return entriesWithBalance;
   }
 
-  async getVendorLedger(tenantId: string, vendorId: string): Promise<VendorLedgerEntry[]> {
-    // Fetch all purchase invoices for the vendor with tenant filtering
-    const invoices = await db.select().from(purchaseInvoices)
-      .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.vendorId, vendorId)));
+  async getVendorLedger(tenantId: string, vendorId: string, fromDate?: string, toDate?: string): Promise<VendorLedgerEntry[]> {
+    // Calculate carry-forward balance if fromDate is provided
+    let carryForwardBalance = 0;
+    if (fromDate) {
+      // Get prior invoices
+      const priorInvoices = await db.select().from(purchaseInvoices)
+        .where(and(
+          withTenant(purchaseInvoices, tenantId),
+          eq(purchaseInvoices.vendorId, vendorId),
+          lt(purchaseInvoices.invoiceDate, new Date(fromDate))
+        ));
+      
+      // Get prior payments  
+      const priorPayments = await db.select().from(payments)
+        .where(and(
+          withTenant(payments, tenantId),
+          eq(payments.vendorId, vendorId),
+          lt(payments.paymentDate, new Date(fromDate))
+        ));
+      
+      // Calculate carry-forward balance
+      const totalInvoices = priorInvoices.reduce((sum, inv) => sum + Number(inv.netAmount || '0'), 0);
+      const totalPayments = priorPayments.reduce((sum, pay) => sum + Number(pay.amount || '0'), 0);
+      carryForwardBalance = totalInvoices - totalPayments;
+    }
 
-    // Fetch all payments for the vendor with tenant filtering
+    // Build conditions for invoices
+    const invoiceConditions = [withTenant(purchaseInvoices, tenantId), eq(purchaseInvoices.vendorId, vendorId)];
+    if (fromDate) {
+      invoiceConditions.push(gte(purchaseInvoices.invoiceDate, new Date(fromDate)));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      invoiceConditions.push(lte(purchaseInvoices.invoiceDate, endOfDay));
+    }
+    const invoiceWhereExpr = invoiceConditions.length > 1 ? and(...invoiceConditions) : invoiceConditions[0];
+    
+    // Fetch all purchase invoices for the vendor with tenant and date filtering
+    const invoices = await db.select().from(purchaseInvoices)
+      .where(invoiceWhereExpr);
+
+    // Build conditions for payments
+    const paymentConditions = [withTenant(payments, tenantId), eq(payments.vendorId, vendorId)];
+    if (fromDate) {
+      paymentConditions.push(gte(payments.paymentDate, new Date(fromDate)));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      paymentConditions.push(lte(payments.paymentDate, endOfDay));
+    }
+    const paymentWhereExpr = paymentConditions.length > 1 ? and(...paymentConditions) : paymentConditions[0];
+
+    // Fetch all payments for the vendor with tenant and date filtering
     const vendorPayments = await db.select().from(payments)
-      .where(withTenant(payments, tenantId, eq(payments.vendorId, vendorId)));
+      .where(paymentWhereExpr);
 
     // Normalize all entries into a single array
     const allEntries: (VendorLedgerEntry & { typeOrder: number })[] = [];
@@ -134,8 +409,25 @@ export class LedgerModel {
     });
 
     // Compute running balances in single pass
-    let runningBalance = 0;
-    const ledgerEntries: VendorLedgerEntry[] = allEntries.map(entry => {
+    let runningBalance = carryForwardBalance;
+    
+    // Add opening balance entry if fromDate is provided and there's a carry-forward balance
+    const ledgerEntries: VendorLedgerEntry[] = [];
+    if (fromDate && carryForwardBalance !== 0) {
+      ledgerEntries.push({
+        tenantId,
+        date: new Date(fromDate),
+        description: 'Opening Balance',
+        referenceType: 'Invoice' as const,
+        referenceId: 'opening-balance',
+        debit: carryForwardBalance > 0 ? carryForwardBalance : 0,
+        credit: carryForwardBalance < 0 ? Math.abs(carryForwardBalance) : 0,
+        balance: carryForwardBalance,
+        createdAt: new Date()
+      });
+    }
+    
+    const mappedEntries: VendorLedgerEntry[] = allEntries.map(entry => {
       runningBalance += (entry.debit - entry.credit);
       const { typeOrder, ...ledgerEntry } = entry; // Remove typeOrder from final result
       return {
@@ -144,21 +436,96 @@ export class LedgerModel {
       };
     });
 
+    ledgerEntries.push(...mappedEntries);
     return ledgerEntries;
   }
 
-  async getRetailerLedger(tenantId: string, retailerId: string): Promise<RetailerLedgerEntry[]> {
-    // Fetch all sales invoices for the retailer with tenant filtering
+  async getRetailerLedger(tenantId: string, retailerId: string, fromDate?: string, toDate?: string): Promise<RetailerLedgerEntry[]> {
+    // Calculate carry-forward balance if fromDate is provided
+    let carryForwardBalance = 0;
+    let carryForwardCrateBalance = 0;
+    if (fromDate) {
+      // Get prior sales invoices
+      const priorInvoices = await db.select().from(salesInvoices)
+        .where(and(
+          withTenant(salesInvoices, tenantId),
+          eq(salesInvoices.retailerId, retailerId),
+          lt(salesInvoices.invoiceDate, new Date(fromDate))
+        ));
+      
+      // Get prior sales payments  
+      const priorPayments = await db.select().from(salesPayments)
+        .where(and(
+          withTenant(salesPayments, tenantId),
+          eq(salesPayments.retailerId, retailerId),
+          lt(salesPayments.paymentDate, new Date(fromDate))
+        ));
+      
+      // Get prior crate transactions
+      const priorCrateTransactions = await db.select().from(crateTransactions)
+        .where(and(
+          withTenant(crateTransactions, tenantId),
+          eq(crateTransactions.retailerId, retailerId),
+          lt(crateTransactions.transactionDate, new Date(fromDate))
+        ));
+      
+      // Calculate carry-forward balances
+      const totalInvoices = priorInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || '0'), 0);
+      const totalPayments = priorPayments.reduce((sum, pay) => sum + Number(pay.amount || '0'), 0);
+      carryForwardBalance = totalInvoices - totalPayments;
+      
+      carryForwardCrateBalance = priorCrateTransactions.reduce((sum, trans) => {
+        return sum + (trans.transactionType === 'Given' ? trans.quantity : -trans.quantity);
+      }, 0);
+    }
+
+    // Build conditions for sales invoices
+    const invoiceConditions = [withTenant(salesInvoices, tenantId), eq(salesInvoices.retailerId, retailerId)];
+    if (fromDate) {
+      invoiceConditions.push(gte(salesInvoices.invoiceDate, new Date(fromDate)));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      invoiceConditions.push(lte(salesInvoices.invoiceDate, endOfDay));
+    }
+    const invoiceWhereExpr = invoiceConditions.length > 1 ? and(...invoiceConditions) : invoiceConditions[0];
+
+    // Fetch all sales invoices for the retailer with tenant and date filtering
     const invoices = await db.select().from(salesInvoices)
-      .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.retailerId, retailerId)));
+      .where(invoiceWhereExpr);
 
-    // Fetch all sales payments for the retailer with tenant filtering
+    // Build conditions for sales payments
+    const paymentConditions = [withTenant(salesPayments, tenantId), eq(salesPayments.retailerId, retailerId)];
+    if (fromDate) {
+      paymentConditions.push(gte(salesPayments.paymentDate, new Date(fromDate)));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      paymentConditions.push(lte(salesPayments.paymentDate, endOfDay));
+    }
+    const paymentWhereExpr = paymentConditions.length > 1 ? and(...paymentConditions) : paymentConditions[0];
+
+    // Fetch all sales payments for the retailer with tenant and date filtering
     const retailerPayments = await db.select().from(salesPayments)
-      .where(withTenant(salesPayments, tenantId, eq(salesPayments.retailerId, retailerId)));
+      .where(paymentWhereExpr);
 
-    // Fetch all crate transactions for the retailer with tenant filtering  
+    // Build conditions for crate transactions
+    const crateConditions = [withTenant(crateTransactions, tenantId), eq(crateTransactions.retailerId, retailerId)];
+    if (fromDate) {
+      crateConditions.push(gte(crateTransactions.transactionDate, new Date(fromDate)));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      crateConditions.push(lte(crateTransactions.transactionDate, endOfDay));
+    }
+    const crateWhereExpr = crateConditions.length > 1 ? and(...crateConditions) : crateConditions[0];
+
+    // Fetch all crate transactions for the retailer with tenant and date filtering  
     const crateTransactionsList = await db.select().from(crateTransactions)
-      .where(withTenant(crateTransactions, tenantId, eq(crateTransactions.retailerId, retailerId)));
+      .where(crateWhereExpr);
 
     // Normalize all entries into a single array
     const allEntries: (RetailerLedgerEntry & { typeOrder: number, crateQuantityDelta: number })[] = [];
@@ -240,10 +607,42 @@ export class LedgerModel {
     });
 
     // Compute running balances in single pass
-    let runningBalance = 0;
-    let crateBalance = 0;
+    let runningBalance = carryForwardBalance;
+    let crateBalance = carryForwardCrateBalance;
     
-    const ledgerEntries: RetailerLedgerEntry[] = allEntries.map(entry => {
+    // Add opening balance entries if fromDate is provided and there are carry-forward balances
+    const ledgerEntries: RetailerLedgerEntry[] = [];
+    if (fromDate && (carryForwardBalance !== 0 || carryForwardCrateBalance !== 0)) {
+      if (carryForwardBalance !== 0) {
+        ledgerEntries.push({
+          tenantId,
+          date: new Date(fromDate),
+          description: 'Opening Balance',
+          referenceType: 'Sales Invoice' as const,
+          referenceId: 'opening-balance',
+          debit: carryForwardBalance > 0 ? carryForwardBalance : 0,
+          credit: carryForwardBalance < 0 ? Math.abs(carryForwardBalance) : 0,
+          balance: carryForwardBalance,
+          createdAt: new Date()
+        });
+      }
+      if (carryForwardCrateBalance !== 0) {
+        ledgerEntries.push({
+          tenantId,
+          date: new Date(fromDate),
+          description: 'Opening Crate Balance',
+          referenceType: 'Crate Transaction' as const,
+          referenceId: 'opening-crate-balance',
+          debit: 0,
+          credit: 0,
+          balance: carryForwardBalance,
+          crateBalance: carryForwardCrateBalance,
+          createdAt: new Date()
+        });
+      }
+    }
+    
+    const mappedEntries: RetailerLedgerEntry[] = allEntries.map(entry => {
       // Update monetary running balance
       runningBalance += (entry.debit - entry.credit);
       
@@ -258,6 +657,7 @@ export class LedgerModel {
       };
     });
 
+    ledgerEntries.push(...mappedEntries);
     return ledgerEntries;
   }
 
@@ -273,26 +673,68 @@ export class LedgerModel {
         const balance = parseFloat(retailer.udhaaarBalance || '0');
         return balance !== 0;
       })
-      .map(retailer => ({
-        tenantId,
-        retailerId: retailer.id,
-        retailerName: retailer.name,
-        contactPerson: retailer.contactPerson,
-        phone: retailer.phone,
-        address: retailer.address,
-        udhaaarBalance: parseFloat(retailer.udhaaarBalance || '0'),
-        totalBalance: parseFloat(retailer.balance || '0'),
-        shortfallBalance: parseFloat(retailer.shortfallBalance || '0'),
-        crateBalance: retailer.crateBalance || 0,
-        isActive: retailer.isActive,
-        createdAt: retailer.createdAt
-      }));
+      .map(retailer => {
+        const balanceValue = parseFloat(retailer.udhaaarBalance || '0');
+        return {
+          tenantId,
+          retailerId: retailer.id,
+          retailerName: retailer.name,
+          contactPerson: retailer.contactPerson,
+          phone: retailer.phone,
+          address: retailer.address,
+          udhaarBalance: balanceValue,
+          udhaaarBalance: balanceValue, // Keep legacy field for backward compatibility
+          totalBalance: parseFloat(retailer.balance || '0'),
+          shortfallBalance: parseFloat(retailer.shortfallBalance || '0'),
+          crateBalance: retailer.crateBalance || 0,
+          isActive: retailer.isActive,
+          createdAt: retailer.createdAt
+        };
+      });
 
     return udhaaarEntries;
   }
 
-  async getCrateLedger(tenantId: string, retailerId?: string): Promise<CrateLedgerEntry[]> {
-    const baseQuery = db.select({
+  async getCrateLedger(tenantId: string, retailerId?: string, fromDate?: string, toDate?: string): Promise<CrateLedgerEntry[]> {
+    // Calculate carry-forward balance if fromDate is provided and retailerId is specified
+    const retailerCarryForwardBalances = new Map<string, number>();
+    if (fromDate && retailerId) {
+      const priorTransactions = await db.select().from(crateTransactions)
+        .where(and(
+          withTenant(crateTransactions, tenantId),
+          eq(crateTransactions.retailerId, retailerId),
+          lt(crateTransactions.transactionDate, new Date(fromDate))
+        ));
+      
+      const carryForwardBalance = priorTransactions.reduce((sum, trans) => {
+        return sum + (trans.transactionType === 'Given' ? trans.quantity : -trans.quantity);
+      }, 0);
+      
+      retailerCarryForwardBalances.set(retailerId, carryForwardBalance);
+    }
+
+    // Build conditions array for WHERE clause
+    const conditions = [
+      withTenant(crateTransactions, tenantId)
+    ];
+    
+    if (retailerId) {
+      conditions.push(eq(crateTransactions.retailerId, retailerId));
+    }
+    
+    if (fromDate) {
+      conditions.push(gte(crateTransactions.transactionDate, new Date(fromDate)));
+    }
+    
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      conditions.push(lte(crateTransactions.transactionDate, endOfDay));
+    }
+    
+    const whereExpr = conditions.length > 1 ? and(...conditions) : conditions[0];
+
+    const transactions = await db.select({
       id: crateTransactions.id,
       retailerId: crateTransactions.retailerId,
       retailerName: retailers.name,
@@ -305,23 +747,46 @@ export class LedgerModel {
       createdAt: crateTransactions.createdAt
     })
     .from(crateTransactions)
-    .leftJoin(retailers, eq(crateTransactions.retailerId, retailers.id));
-
-    const transactions = retailerId 
-      ? await baseQuery.where(and(
-          withTenant(crateTransactions, tenantId),
-          withTenant(retailers, tenantId),
-          eq(crateTransactions.retailerId, retailerId)
-        )).orderBy(asc(crateTransactions.transactionDate))
-      : await baseQuery.where(and(
-          withTenant(crateTransactions, tenantId),
-          withTenant(retailers, tenantId)
-        )).orderBy(asc(crateTransactions.transactionDate));
+    .leftJoin(retailers, and(
+      eq(crateTransactions.retailerId, retailers.id),
+      withTenant(retailers, tenantId)
+    ))
+    .where(whereExpr)
+    .orderBy(asc(crateTransactions.transactionDate), asc(crateTransactions.createdAt), asc(crateTransactions.id));
 
     // Calculate running crate balance for each retailer
     const retailerBalances = new Map<string, number>();
     
-    const ledgerEntries: CrateLedgerEntry[] = transactions
+    // Initialize with carry-forward balances
+    retailerCarryForwardBalances.forEach((balance, retailerId) => {
+      retailerBalances.set(retailerId, balance);
+    });
+    
+    const ledgerEntries: CrateLedgerEntry[] = [];
+    
+    // Add opening balance entries if fromDate is provided and there are carry-forward balances
+    if (fromDate && retailerId && retailerCarryForwardBalances.has(retailerId)) {
+      const carryForwardBalance = retailerCarryForwardBalances.get(retailerId)!;
+      if (carryForwardBalance !== 0) {
+        ledgerEntries.push({
+          tenantId,
+          id: '',
+          retailerId: retailerId,
+          retailerName: 'Opening Balance',
+          contactPerson: '',
+          phone: '',
+          transactionType: carryForwardBalance > 0 ? 'Given' : 'Received',
+          quantity: Math.abs(carryForwardBalance),
+          depositAmount: 0,
+          transactionDate: new Date(fromDate),
+          notes: 'Opening Balance',
+          runningBalance: carryForwardBalance,
+          createdAt: new Date()
+        });
+      }
+    }
+    
+    const mappedEntries: CrateLedgerEntry[] = transactions
       .filter(transaction => transaction.retailerId !== null) // Filter out null retailerIds
       .map(transaction => {
         const retailerId = transaction.retailerId!; // Non-null assertion after filter
@@ -353,6 +818,7 @@ export class LedgerModel {
         };
       });
 
+    ledgerEntries.push(...mappedEntries);
     return ledgerEntries;
   }
 
@@ -373,5 +839,10 @@ export class LedgerModel {
     const [bankAccount] = await db.select().from(bankAccounts)
       .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, bankAccountId)));
     return bankAccount;
+  }
+
+  async getBankAccountStats(tenantId: string): Promise<{ totalAccounts: number; totalBalance: string }> {
+    const bankAccountModel = new BankAccountModel();
+    return await bankAccountModel.getBankAccountStats(tenantId);
   }
 }
