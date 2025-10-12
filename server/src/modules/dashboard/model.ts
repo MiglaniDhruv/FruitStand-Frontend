@@ -1,17 +1,30 @@
 import { eq, sum, gte, lte, inArray, desc, and } from 'drizzle-orm';
 import { db } from '../../../db';
-import { vendors, retailers, purchaseInvoices, salesInvoices, stock, bankAccounts, tenants, DashboardKPIs, RecentPurchase, RecentSale, TopRetailerByUdhaar } from '@shared/schema';
+import { vendors, retailers, purchaseInvoices, salesInvoices, stock, bankAccounts, tenants, expenses, DashboardKPIs, RecentPurchase, RecentSale, TopRetailerByUdhaar } from '@shared/schema';
 import { withTenant } from '../../utils/tenant-scope';
 import { TenantModel } from '../tenants/model';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 export class DashboardModel {
   async getDashboardKPIs(tenantId: string): Promise<DashboardKPIs> {
-    // Calculate today's date range
-    // Note: Currently uses server timezone. Consider implementing tenant timezone support
-    // by retrieving tenant settings and adjusting dates accordingly.
+    // Get tenant settings to retrieve timezone
+    const tenant = await db.select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    
+    const tenantTimezone = (tenant[0]?.settings as any)?.timezone || 'Asia/Kolkata';
+    
+    // Calculate today's date range using tenant timezone
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const zonedNow = toZonedTime(now, tenantTimezone);
+    
+    // Create start and end of day in tenant timezone, then convert to UTC for database queries
+    const startOfTodayLocal = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), zonedNow.getDate(), 0, 0, 0);
+    const endOfTodayLocal = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), zonedNow.getDate(), 23, 59, 59);
+    
+    const startOfToday = fromZonedTime(startOfTodayLocal, tenantTimezone);
+    const endOfToday = fromZonedTime(endOfTodayLocal, tenantTimezone);
 
     // Run all independent queries in parallel
     const [
@@ -22,6 +35,7 @@ export class DashboardModel {
       totalUdhaarResult,
       totalShortfallResult,
       todaysCommissionResult,
+      todaysExpensesResult,
       recentPurchases,
       recentSales,
       topRetailersByUdhaar
@@ -68,6 +82,14 @@ export class DashboardModel {
           lte(purchaseInvoices.createdAt, endOfToday)
         ))),
       
+      // Get today's expenses
+      db.select({ total: sum(expenses.amount) })
+        .from(expenses)
+        .where(withTenant(expenses, tenantId, and(
+          gte(expenses.paymentDate, startOfToday),
+          lte(expenses.paymentDate, endOfToday)
+        ))),
+      
       // Get recent purchases, sales, and top retailers
       this.getRecentPurchases(tenantId, 5),
       this.getRecentSales(tenantId, 5),
@@ -83,6 +105,7 @@ export class DashboardModel {
     const totalUdhaar = `₹${(Number(totalUdhaarResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const totalShortfall = `₹${(Number(totalShortfallResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const todaysCommission = `₹${(Number(todaysCommissionResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const todaysExpenses = `₹${(Number(todaysExpensesResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return {
       totalCashBalance,
@@ -92,6 +115,7 @@ export class DashboardModel {
       totalUdhaar,
       totalShortfall,
       todaysCommission,
+      todaysExpenses,
       recentPurchases,
       recentSales,
       topRetailersByUdhaar

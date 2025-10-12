@@ -9,7 +9,8 @@ import {
   TrendingDown, 
   DollarSign, 
   IndianRupee,
-  Activity
+  Activity,
+  Receipt
 } from "lucide-react";
 import { DashboardKPIs } from "@/types";
 
@@ -37,7 +38,7 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 11 }).map((_, index) => (
+        {Array.from({ length: 8 }).map((_, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <Skeleton className="h-4 w-24" />
@@ -107,32 +108,11 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
       iconColor: "text-purple-600"
     },
     {
-      title: "Recent Purchases",
-      value: kpis.recentPurchases.length.toString(),
-      icon: ShoppingCart,
-      iconBg: "bg-slate-100",
-      iconColor: "text-slate-600"
-    },
-    {
-      title: "Recent Sales",
-      value: kpis.recentSales.length.toString(),
-      icon: TrendingUp,
-      iconBg: "bg-cyan-100",
-      iconColor: "text-cyan-600"
-    },
-    {
-      title: "Top Retailers",
-      value: kpis.topRetailersByUdhaar.length.toString(),
-      icon: IndianRupee,
-      iconBg: "bg-indigo-100",
-      iconColor: "text-indigo-600"
-    },
-    {
-      title: "Active Metrics",
-      value: "Live",
-      icon: Activity,
-      iconBg: "bg-teal-100",
-      iconColor: "text-teal-600"
+      title: "Today's Expenses",
+      value: formatINRCurrency(kpis.todaysExpenses),
+      icon: Receipt,
+      iconBg: "bg-rose-100",
+      iconColor: "text-rose-600"
     }
   ];
 
