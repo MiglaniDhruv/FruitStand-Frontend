@@ -74,5 +74,14 @@ export class BankAccountRouter extends BaseRouter {
       asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])),
       this.ah(this.bankAccountController, 'withdrawal')
     );
+
+    // DELETE /bank-accounts/:id/transactions/:transactionId - Delete manual transaction (Admin/Operator only)
+    this.router.delete('/bank-accounts/:id/transactions/:transactionId', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])),
+      this.ah(this.bankAccountController, 'deleteTransaction')
+    );
   }
 }

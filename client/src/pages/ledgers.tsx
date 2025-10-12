@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,9 +37,23 @@ import {
   Package,
   AlertCircle,
   FileText,
-  Search
+  Search,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { PermissionGuard } from "@/components/ui/permission-guard";
+import { PERMISSIONS } from "@shared/permissions";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Ledgers() {
   const [selectedVendor, setSelectedVendor] = useState("all");
@@ -52,6 +66,13 @@ export default function Ledgers() {
   const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
   const [selectedBankAccount, setSelectedBankAccount] = useState("all");
   const [activeTab, setActiveTab] = useState("cashbook");
+  
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<{ bankAccountId: string; transactionId: string } | null>(null);
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch dropdown data needed for filters
 
@@ -172,6 +193,44 @@ export default function Ledgers() {
     },
   });
 
+  // Delete mutation
+  const deleteTransactionMutation = useMutation({
+    mutationFn: async ({ bankAccountId, transactionId }: { bankAccountId: string; transactionId: string }) => {
+      const response = await authenticatedApiRequest(
+        "DELETE",
+        `/api/bank-accounts/${bankAccountId}/transactions/${transactionId}`
+      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete transaction");
+      }
+      if (response.status === 204) return null;
+      return response.json().catch(() => null);
+    },
+    onSuccess: () => {
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/bankbook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashbook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ledgers/kpi"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
+      
+      toast({
+        title: "Success",
+        description: "Transaction deleted successfully",
+      });
+      
+      setDeleteDialogOpen(false);
+      setTransactionToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete transaction",
+        variant: "destructive",
+      });
+    },
+  });
+
   const isInitialLoading = (vendorsLoading && vendors.length === 0) || 
     (retailersLoading && retailers.length === 0) || 
     (bankAccountsLoading && bankAccounts.length === 0) || 
@@ -184,6 +243,29 @@ export default function Ledgers() {
     (activeTab === "crate-ledger" && crateLedgerLoading && crateLedgerData.length === 0);
   const hasError = vendorsError || retailersError || bankAccountsError;
   const errorMessage = vendorsErrorMsg || retailersErrorMsg || bankAccountsErrorMsg;
+
+  // Helper functions for delete functionality
+  const handleDeleteTransaction = (bankAccountId: string, transactionId: string) => {
+    setTransactionToDelete({ bankAccountId, transactionId });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteTransaction = () => {
+    if (transactionToDelete) {
+      deleteTransactionMutation.mutate(transactionToDelete);
+    }
+  };
+
+  const cancelDeleteTransaction = () => {
+    setDeleteDialogOpen(false);
+    setTransactionToDelete(null);
+  };
+
+  // Helper function to check if a transaction is manually created (can be deleted)
+  const isManualTransaction = (t: any) =>
+    !t.isBalanceEntry &&
+    (t.referenceType === 'Bank Deposit' || t.referenceType === 'Bank Withdrawal') &&
+    (t.referenceId == null);
 
   if (isInitialLoading) {
     return (
@@ -597,12 +679,13 @@ export default function Ledgers() {
                           <TableHead>Debit</TableHead>
                           <TableHead>Credit</TableHead>
                           <TableHead>Balance</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {bankbookLoading && bankbookEntries.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                               Loading transactions...
                             </TableCell>
                           </TableRow>
@@ -624,11 +707,28 @@ export default function Ledgers() {
                                 <TableCell className={entry.balance >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
                                   {formatCurrency(entry.balance)}
                                 </TableCell>
+                                <TableCell>
+                                  {isManualTransaction(entry) && entry.id && selectedBankAccount !== "all" ? (
+                                    <PermissionGuard permission={PERMISSIONS.DELETE_PAYMENTS}>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteTransaction(selectedBankAccount, entry.id)}
+                                        disabled={deleteTransactionMutation.isPending}
+                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </PermissionGuard>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">-</span>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                             {bankbookEntries.length === 0 && (
                               <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                   No bank transactions found for the selected period and account
                                 </TableCell>
                               </TableRow>
@@ -1005,6 +1105,28 @@ export default function Ledgers() {
           </Tabs>
         </main>
       </div>
+
+      {/* Delete Transaction Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this transaction? This action cannot be undone and will also remove any related cashbook entries.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDeleteTransaction}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTransaction}
+              disabled={deleteTransactionMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteTransactionMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

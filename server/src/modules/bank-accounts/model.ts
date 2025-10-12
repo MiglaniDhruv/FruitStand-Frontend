@@ -1,4 +1,4 @@
-import { eq, asc, and, count, sum, sql, desc } from 'drizzle-orm';
+import { eq, asc, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
 import { db } from '../../../db';
 import { 
   bankAccounts, 
@@ -15,7 +15,7 @@ import {
 import { TenantModel } from '../tenants/model';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { applySorting, applySearchFilter, getCountWithSearch, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
-import { BadRequestError } from '../../types';
+import { BadRequestError, NotFoundError } from '../../types';
 
 export class BankAccountModel {
   async getBankAccounts(tenantId: string): Promise<BankAccount[]> {
@@ -375,6 +375,95 @@ export class BankAccountModel {
         throw error;
       }
       throw new BadRequestError(`Failed to record withdrawal: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete a manually created bank deposit or withdrawal transaction.
+   * Only allows deletion if referenceType is 'Bank Deposit' or 'Bank Withdrawal' and referenceId is null.
+   * Also reverses associated cashbook entry for cash deposits.
+   */
+  async deleteManualTransaction(tenantId: string, bankAccountId: string, transactionId: string): Promise<void> {
+    try {
+      await db.transaction(async (tx) => {
+        // Fetch the bankbook entry
+        const [bankEntry] = await tx.select().from(bankbook)
+          .where(withTenant(bankbook, tenantId, and(eq(bankbook.id, transactionId), eq(bankbook.bankAccountId, bankAccountId))));
+        if (!bankEntry) throw new NotFoundError('Bank transaction not found');
+        
+        // Validate manual transaction
+        if (!(bankEntry.referenceId == null && (bankEntry.referenceType === 'Bank Deposit' || bankEntry.referenceType === 'Bank Withdrawal'))) {
+          throw new BadRequestError('Only manually created deposits and withdrawals can be deleted');
+        }
+
+        // If deposit from cash, reverse the cashbook entry
+        if (bankEntry.referenceType === 'Bank Deposit') {
+          // Get bank account name for precise cashbook matching
+          const [bankAccount] = await tx.select().from(bankAccounts)
+            .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.id, bankAccountId)));
+          if (!bankAccount) throw new NotFoundError('Bank account not found');
+          
+          const expectedDescription = `Transfer to Bank - ${bankAccount.name}`;
+          const [cashEntry] = await tx.select().from(cashbook)
+            .where(withTenant(cashbook, tenantId, and(
+              eq(cashbook.referenceType, 'Bank Deposit'),
+              isNull(cashbook.referenceId),
+              eq(cashbook.date, bankEntry.date),
+              eq(cashbook.outflow, bankEntry.debit || '0.00'),
+              eq(cashbook.description, expectedDescription)
+            )));
+          if (cashEntry) {
+            // Get and update cash balance
+            const currentCashBalance = await TenantModel.getCashBalance(tenantId);
+            const newCashBalance = currentCashBalance + parseFloat(cashEntry.outflow || '0');
+            await tx.delete(cashbook).where(eq(cashbook.id, cashEntry.id));
+            await TenantModel.setCashBalance(tx, tenantId, newCashBalance.toFixed(2));
+            
+            // Recalculate cashbook balances from the deleted entry position forward
+            await this.recalculateCashbookBalances(tx, tenantId, cashEntry.date);
+          }
+        }
+
+        // Delete the bankbook entry
+        await tx.delete(bankbook).where(withTenant(bankbook, tenantId, eq(bankbook.id, transactionId)));
+
+        // Recalculate bankbook balances and update bank account
+        await BankAccountModel.recalculateBankAccountBalance(tx, tenantId, bankAccountId);
+      });
+    } catch (error) {
+      if (error instanceof BadRequestError || error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new BadRequestError(`Failed to delete transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Recalculate cashbook balances from a specific date forward.
+   * Helper method to optimize balance recalculation after cashbook entry deletion.
+   */
+  private async recalculateCashbookBalances(tx: any, tenantId: string, fromDate: Date): Promise<void> {
+    // Get all cashbook entries from the specified date forward, ordered chronologically
+    const cashEntries = await tx.select().from(cashbook)
+      .where(withTenant(cashbook, tenantId, sql`${cashbook.date} >= ${fromDate}`))
+      .orderBy(asc(cashbook.date), asc(cashbook.id));
+
+    if (cashEntries.length === 0) return;
+
+    // Get the balance from the entry just before the fromDate to start with correct running balance
+    const previousEntry = await tx.select().from(cashbook)
+      .where(withTenant(cashbook, tenantId, sql`${cashbook.date} < ${fromDate}`))
+      .orderBy(desc(cashbook.date), desc(cashbook.id))
+      .limit(1);
+
+    let runningBalance = previousEntry.length > 0 ? parseFloat(previousEntry[0].balance || '0') : 0.0;
+
+    // Recalculate balances for all entries from the specified date forward
+    for (const entry of cashEntries) {
+      runningBalance += parseFloat(entry.inflow || '0') - parseFloat(entry.outflow || '0');
+      await tx.update(cashbook)
+        .set({ balance: runningBalance.toFixed(2) })
+        .where(eq(cashbook.id, entry.id));
     }
   }
 }

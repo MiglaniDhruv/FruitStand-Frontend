@@ -156,4 +156,31 @@ export class BankAccountController extends BaseController {
 
     res.json({ message: 'Withdrawal recorded successfully' });
   }
+
+  /**
+   * Delete a manually created bank deposit or withdrawal transaction.
+   * Only allows deletion if referenceType is 'Bank Deposit' or 'Bank Withdrawal' and referenceId is null.
+   * Also reverses associated cashbook entry for cash deposits.
+   */
+  async deleteTransaction(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+
+    // Extract and validate params
+    const bankAccountId = this.sanitizeAndValidateUUID(req.params.id, 'Bank Account ID');
+    const transactionId = this.sanitizeAndValidateUUID(req.params.transactionId, 'Transaction ID');
+
+    // Verify bank account exists
+    const bankAccount = await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.getBankAccountById(tenantId, bankAccountId)
+    );
+    this.ensureResourceExists(bankAccount, 'Bank Account');
+
+    // Delete the manual transaction (and reverse cashbook if needed)
+    await this.wrapDatabaseOperation(() =>
+      this.bankAccountModel.deleteManualTransaction(tenantId, bankAccountId, transactionId)
+    );
+
+    res.json({ message: 'Transaction deleted successfully' });
+  }
 }
