@@ -1,6 +1,6 @@
-import { eq, sum, gte, lte, inArray, desc, and } from 'drizzle-orm';
+import { eq, sum, gte, lte, inArray, desc, and, asc, sql } from 'drizzle-orm';
 import { db } from '../../../db';
-import { vendors, retailers, purchaseInvoices, salesInvoices, stock, bankAccounts, tenants, expenses, DashboardKPIs, RecentPurchase, RecentSale, TopRetailerByUdhaar } from '@shared/schema';
+import { vendors, retailers, purchaseInvoices, salesInvoices, tenants, expenses, DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer } from '@shared/schema';
 import { withTenant } from '../../utils/tenant-scope';
 import { TenantModel } from '../tenants/model';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
@@ -28,25 +28,14 @@ export class DashboardModel {
 
     // Run all independent queries in parallel
     const [
-      cashBalance,
-      bankBalanceResult,
       todaysSalesResult,
       todaysPurchasesResult,
       totalUdhaarResult,
-      totalShortfallResult,
-      todaysCommissionResult,
       todaysExpensesResult,
       recentPurchases,
       recentSales,
-      topRetailersByUdhaar
+      favouriteRetailers
     ] = await Promise.all([
-      // Get cash balance from tenant settings
-      TenantModel.getCashBalance(tenantId),
-      
-      // Get total bank balance
-      db.select({ total: sum(bankAccounts.balance) })
-        .from(bankAccounts)
-        .where(withTenant(bankAccounts, tenantId, eq(bankAccounts.isActive, true))),
       
       // Get today's sales
       db.select({ total: sum(salesInvoices.totalAmount) })
@@ -69,19 +58,6 @@ export class DashboardModel {
         .from(retailers)
         .where(withTenant(retailers, tenantId, eq(retailers.isActive, true))),
       
-      // Get total shortfall
-      db.select({ total: sum(retailers.shortfallBalance) })
-        .from(retailers)
-        .where(withTenant(retailers, tenantId, eq(retailers.isActive, true))),
-      
-      // Get today's commission earned
-      db.select({ total: sum(purchaseInvoices.commission) })
-        .from(purchaseInvoices)
-        .where(withTenant(purchaseInvoices, tenantId, and(
-          gte(purchaseInvoices.createdAt, startOfToday),
-          lte(purchaseInvoices.createdAt, endOfToday)
-        ))),
-      
       // Get today's expenses
       db.select({ total: sum(expenses.amount) })
         .from(expenses)
@@ -90,35 +66,26 @@ export class DashboardModel {
           lte(expenses.paymentDate, endOfToday)
         ))),
       
-      // Get recent purchases, sales, and top retailers
+      // Get recent purchases, sales, and favourite retailers
       this.getRecentPurchases(tenantId, 5),
       this.getRecentSales(tenantId, 5),
-      this.getTopRetailersByUdhaar(tenantId, 5)
+      this.getFavouriteRetailers(tenantId, 10)
     ]);
 
     // Format results
-    const cashBalanceNum = Number(cashBalance ?? 0);
-    const totalCashBalance = `₹${cashBalanceNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const totalBankBalance = `₹${(Number(bankBalanceResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const todaysSales = `₹${(Number(todaysSalesResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const todaysPurchases = `₹${(Number(todaysPurchasesResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const totalUdhaar = `₹${(Number(totalUdhaarResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const totalShortfall = `₹${(Number(totalShortfallResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const todaysCommission = `₹${(Number(todaysCommissionResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const todaysExpenses = `₹${(Number(todaysExpensesResult[0]?.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return {
-      totalCashBalance,
-      totalBankBalance,
       todaysSales,
       todaysPurchases,
       totalUdhaar,
-      totalShortfall,
-      todaysCommission,
       todaysExpenses,
       recentPurchases,
       recentSales,
-      topRetailersByUdhaar
+      favouriteRetailers
     };
   }
 
@@ -168,22 +135,25 @@ export class DashboardModel {
     }));
   }
 
-  async getTopRetailersByUdhaar(tenantId: string, limit: number = 5): Promise<TopRetailerByUdhaar[]> {
-    const topRetailers = await db
+  async getFavouriteRetailers(tenantId: string, limit: number = 10): Promise<FavouriteRetailer[]> {
+    const favouriteRetailers = await db
       .select({
         id: retailers.id,
         name: retailers.name,
         phone: retailers.phone,
-        udhaaarBalance: retailers.udhaaarBalance
+        udhaaarBalance: retailers.udhaaarBalance,
+        shortfallBalance: retailers.shortfallBalance,
+        crateBalance: sql<number>`COALESCE(${retailers.crateBalance}, 0)`
       })
       .from(retailers)
-      .where(withTenant(retailers, tenantId, eq(retailers.isActive, true)))
-      .orderBy(desc(retailers.udhaaarBalance))
+      .where(withTenant(retailers, tenantId, and(eq(retailers.isActive, true), eq(retailers.isFavourite, true))))
+      .orderBy(asc(retailers.name))
       .limit(limit);
 
-    return topRetailers.map(retailer => ({
+    return favouriteRetailers.map(retailer => ({
       ...retailer,
-      udhaaarBalance: `₹${Number(retailer.udhaaarBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      udhaaarBalance: `₹${Number(retailer.udhaaarBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      shortfallBalance: `₹${Number(retailer.shortfallBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     }));
   }
 }

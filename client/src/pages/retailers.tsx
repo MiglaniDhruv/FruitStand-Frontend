@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { logEventHandlerError, logMutationError, logFormError } from "@/lib/error-logger";
 import { z } from "zod";
-import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search, Star } from "lucide-react";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 
 const retailerSchema = z.object({
@@ -166,6 +166,29 @@ export default function RetailerManagement() {
     },
   });
 
+  const toggleFavouriteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authenticatedApiRequest("PATCH", `/api/retailers/${id}/favourite`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Favourite updated",
+        description: "Retailer favourite status has been updated",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] }); // Refresh dashboard
+    },
+    onError: (error) => {
+      logMutationError(error, 'toggleFavourite');
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update favourite status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEdit = (retailer: any) => {
     try {
       if (!retailer) {
@@ -219,6 +242,22 @@ export default function RetailerManagement() {
       toast({
         title: "Error",
         description: "Failed to open payment form",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleFavourite = async (id: string, currentStatus: boolean) => {
+    try {
+      if (!id) {
+        throw new Error('Invalid retailer ID');
+      }
+      await toggleFavouriteMutation.mutateAsync(id);
+    } catch (error) {
+      logEventHandlerError(error, 'handleToggleFavourite', { retailerId: id });
+      toast({
+        title: "Error",
+        description: "Failed to toggle favourite status",
         variant: "destructive",
       });
     }
@@ -311,6 +350,27 @@ export default function RetailerManagement() {
       accessorKey: "name",
       header: "Name",
       cell: (value: string) => <div className="font-medium">{value}</div>,
+    },
+    {
+      accessorKey: "isFavourite",
+      header: "Favourite",
+      cell: (value: boolean, row: any) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleFavourite(row.id, value);
+          }}
+          title={value ? "Remove from favourites" : "Add to favourites"}
+          disabled={toggleFavouriteMutation.isPending}
+          className="h-8 w-8"
+        >
+          <Star 
+            className={`h-4 w-4 ${value ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`}
+          />
+        </Button>
+      ),
     },
     {
       accessorKey: "phone",
@@ -444,7 +504,7 @@ export default function RetailerManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-8">
+        <main className="flex-1 overflow-auto p-6 space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

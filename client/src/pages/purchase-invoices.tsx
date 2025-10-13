@@ -302,7 +302,7 @@ export default function PurchaseInvoices() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-4">

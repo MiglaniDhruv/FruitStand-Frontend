@@ -15,7 +15,7 @@ import {
 } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
-import { ValidationError, AppError } from '../../types';
+import { ValidationError, AppError, NotFoundError } from '../../types';
 import { handleDatabaseError } from '../../utils/database-errors';
 
 export class RetailerModel {
@@ -234,5 +234,36 @@ export class RetailerModel {
       totalShortfall: result.totalShortfall || '0.00',
       totalCrates: Number(result.totalCrates) || 0
     };
+  }
+
+  async toggleFavourite(tenantId: string, id: string) {
+    try {
+      // First, fetch the current retailer to get current isFavourite status
+      const currentRetailer = await this.getRetailer(tenantId, id);
+      if (!currentRetailer) {
+        throw new NotFoundError('Retailer not found');
+      }
+
+      // Validate that the retailer is active before allowing favourite toggle
+      if (!currentRetailer.isActive) {
+        throw new ValidationError('Cannot mark inactive retailer as favourite', { 
+          retailerId: 'Retailer must be active to be marked as favourite' 
+        });
+      }
+
+      // Calculate new favourite status
+      const newStatus = !currentRetailer.isFavourite;
+
+      // Update the retailer
+      const [updatedRetailer] = await db
+        .update(retailers)
+        .set({ isFavourite: newStatus })
+        .where(withTenant(retailers, tenantId, eq(retailers.id, id)))
+        .returning();
+
+      return updatedRetailer;
+    } catch (error) {
+      handleDatabaseError(error);
+    }
   }
 }

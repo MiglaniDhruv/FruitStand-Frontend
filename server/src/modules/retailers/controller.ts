@@ -162,4 +162,17 @@ export class RetailerController extends BaseController {
     const stats = await this.retailerModel.getRetailerStats(tenantId);
     res.json(stats);
   }
+
+  async toggleFavourite(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Retailer ID is required');
+    
+    const retailer = await this.retailerModel.toggleFavourite(tenantId, id);
+    this.ensureResourceExists(retailer, 'Retailer');
+    
+    res.json(retailer);
+  }
 }

@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -62,23 +63,35 @@ const retailerPaymentFormSchema = z.object({
   upiReference: z.string().optional(),
   paymentLinkId: z.string().optional(),
   notes: z.string().optional(),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
   if (BANK_REQUIRED_MODES.includes(data.paymentMode as any) && !data.bankAccountId) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Bank account is required for Bank Transfer",
+      path: ['bankAccountId'],
+    });
   }
   if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Cheque number is required",
+      path: ['chequeNumber'],
+    });
   }
   if (data.paymentMode === 'UPI' && !data.upiReference) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "UPI reference is required",
+      path: ['upiReference'],
+    });
   }
   if (data.paymentMode === 'PaymentLink' && !data.paymentLinkId) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Payment link is required",
+      path: ['paymentLinkId'],
+    });
   }
-  return true;
-}, {
-  message: "Bank account is required for Bank Transfer, UPI, and Cheque payments",
-  path: ['bankAccountId'],
 });
 
 type RetailerPaymentFormData = z.infer<typeof retailerPaymentFormSchema>;
@@ -86,7 +99,7 @@ type RetailerPaymentFormData = z.infer<typeof retailerPaymentFormSchema>;
 interface RetailerPaymentFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  retailerId: string;
+  retailerId: string | undefined;
   retailerName?: string;
 }
 
@@ -99,6 +112,10 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const [showPreview, setShowPreview] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [distributionError, setDistributionError] = useState<string | null>(null);
+  
+  // State management for selected retailer
+  const [selectedRetailerId, setSelectedRetailerId] = useState<string>('');
+  const [selectedRetailerName, setSelectedRetailerName] = useState<string>('');
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -119,14 +136,30 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const paymentMode = form.watch('paymentMode');
   const amount = form.watch('amount');
 
-  // Fetch outstanding invoices
-  const { data: invoicesData, isLoading: invoicesLoading, isError: invoicesError, error: invoicesErrorMessage } = useQuery({
-    queryKey: ["/api/retailers", retailerId, "outstanding-invoices"],
+  // Compute the effective retailer ID
+  const effectiveRetailerId = retailerId || selectedRetailerId;
+
+  // Fetch retailers list
+  const { data: retailersData, isError: retailersError, error: retailersErrorMessage, refetch: refetchRetailers } = useQuery({
+    queryKey: ["/api/retailers"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", `/api/retailers/${retailerId}/outstanding-invoices`);
+      const response = await authenticatedApiRequest("GET", "/api/retailers?limit=100");
       return response.json();
     },
-    enabled: open && !!retailerId,
+    enabled: open && !retailerId,
+  });
+
+  // Normalize retailers list to handle both raw arrays and { data: [...] } shapes
+  const normalizedRetailers = Array.isArray(retailersData) ? retailersData : retailersData?.data || [];
+
+  // Fetch outstanding invoices
+  const { data: invoicesData, isLoading: invoicesLoading, isError: invoicesError, error: invoicesErrorMessage } = useQuery({
+    queryKey: ["/api/retailers", effectiveRetailerId, "outstanding-invoices"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", `/api/retailers/${effectiveRetailerId}/outstanding-invoices`);
+      return response.json();
+    },
+    enabled: open && !!effectiveRetailerId,
   });
 
   // Fetch bank accounts
@@ -209,6 +242,11 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
         setOutstandingInvoices([]);
         setDistributionPreview([]);
         setShowPreview(false);
+        // Reset selected retailer state when no retailerId is provided
+        if (!retailerId) {
+          setSelectedRetailerId('');
+          setSelectedRetailerName('');
+        }
       } catch (error) {
         console.error('Error resetting form:', error);
       }
@@ -219,7 +257,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const mutation = useMutation({
     mutationFn: async (data: RetailerPaymentFormData): Promise<RetailerPaymentDistributionResult> => {
       const payload: InsertRetailerPayment = {
-        retailerId,
+        retailerId: effectiveRetailerId,
         amount: data.amount,
         paymentMode: data.paymentMode,
         paymentDate: new Date(data.paymentDate),
@@ -230,7 +268,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
         notes: data.notes || undefined,
       };
       
-      const response = await authenticatedApiRequest("POST", `/api/retailers/${retailerId}/payments`, payload);
+      const response = await authenticatedApiRequest("POST", `/api/retailers/${effectiveRetailerId}/payments`, payload);
       return response.json();
     },
     onSuccess: (result: any) => {
@@ -245,7 +283,10 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
         queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
         queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
         queryClient.invalidateQueries({ queryKey: ["/api/sales-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+        // Invalidate outstanding invoices for the selected retailer
+        queryClient.invalidateQueries({ queryKey: ["/api/retailers", effectiveRetailerId, "outstanding-invoices"] });
         
         onOpenChange(false);
         form.reset();
@@ -269,6 +310,11 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
   const onSubmit = (data: RetailerPaymentFormData) => {
     try {
       setSubmissionError(null);
+      
+      // Validate retailer selection
+      if (!effectiveRetailerId) {
+        throw new Error('Please select a retailer');
+      }
       
       // Validate payment amount
       const paymentAmount = parseFloat(data.amount);
@@ -315,7 +361,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
-          resetKeys={[open ? 1 : 0, retailerId]}
+          resetKeys={[open ? 1 : 0, effectiveRetailerId || '']}
           fallback={({ error, resetError }) => (
             <div className="p-4">
               <AlertComponent variant="destructive">
@@ -337,10 +383,74 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
           )}
         >
           <DialogHeader>
-            <DialogTitle>Record Payment - {retailerName || 'Retailer'}</DialogTitle>
+            <DialogTitle>Record Payment - {retailerName || selectedRetailerName || 'Retailer'}</DialogTitle>
           </DialogHeader>
 
-        <Form {...form}>
+          {/* Retailer selector when retailerId is not provided */}
+          {!retailerId && (
+            <>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Select Retailer *
+                  </label>
+                  {retailersError ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Failed to load retailers: {retailersErrorMessage?.message || 'Unknown error'}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                          onClick={() => refetchRetailers()}
+                        >
+                          Retry
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : !retailersData ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-gray-600">Loading retailers...</span>
+                    </div>
+                  ) : (
+                    <Select 
+                      value={selectedRetailerId} 
+                      onValueChange={(value) => {
+                        setSelectedRetailerId(value);
+                        const retailer = normalizedRetailers?.find((r: any) => r.id === value);
+                        setSelectedRetailerName(retailer?.name || '');
+                        // Clear invoices and preview state on entity change
+                        setOutstandingInvoices([]);
+                        setDistributionPreview([]);
+                        setShowPreview(false);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a retailer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {normalizedRetailers?.map((retailer: any) => (
+                          <SelectItem key={retailer.id} value={retailer.id}>
+                            <div>
+                              <div className="font-medium">{retailer.name}</div>
+                              {retailer.phone && <div className="text-sm text-gray-500">{retailer.phone}</div>}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
+          {/* Conditionally render the main form fields */}
+          {effectiveRetailerId ? (
+            <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -660,7 +770,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
               </Button>
               <Button 
                 type="submit" 
-                disabled={mutation.isPending || outstandingInvoices.length === 0}
+                disabled={mutation.isPending || outstandingInvoices.length === 0 || invoicesLoading}
                 data-testid="button-record-retailer-payment"
               >
                 {mutation.isPending ? (
@@ -675,6 +785,16 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
             </div>
           </form>
         </Form>
+          ) : (
+            !retailerId && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Please select a retailer to continue
+                </AlertDescription>
+              </Alert>
+            )
+          )}
         </ErrorBoundary>
       </DialogContent>
     </Dialog>

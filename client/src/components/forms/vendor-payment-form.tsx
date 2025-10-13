@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -61,20 +62,28 @@ const vendorPaymentFormSchema = z.object({
   chequeNumber: z.string().optional(),
   upiReference: z.string().optional(),
   notes: z.string().optional(),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
   if (BANK_REQUIRED_MODES.includes(data.paymentMode as any) && !data.bankAccountId) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Bank account is required for Bank Transfer",
+      path: ['bankAccountId'],
+    });
   }
   if (data.paymentMode === 'Cheque' && !data.chequeNumber) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Cheque number is required",
+      path: ['chequeNumber'],
+    });
   }
   if (data.paymentMode === 'UPI' && !data.upiReference) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "UPI reference is required",
+      path: ['upiReference'],
+    });
   }
-  return true;
-}, {
-  message: "Bank account is required for Bank Transfer, UPI, and Cheque payments",
-  path: ['bankAccountId'],
 });
 
 type VendorPaymentFormData = z.infer<typeof vendorPaymentFormSchema>;
@@ -82,7 +91,7 @@ type VendorPaymentFormData = z.infer<typeof vendorPaymentFormSchema>;
 interface VendorPaymentFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  vendorId: string;
+  vendorId: string | undefined;
   vendorName?: string;
 }
 
@@ -95,6 +104,10 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   const [showPreview, setShowPreview] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [distributionError, setDistributionError] = useState<string | null>(null);
+  
+  // State management for selected vendor
+  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  const [selectedVendorName, setSelectedVendorName] = useState<string>('');
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -114,18 +127,34 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   const paymentMode = form.watch('paymentMode');
   const amount = form.watch('amount');
 
-  // Fetch outstanding invoices
-  const { data: invoicesData, isLoading: invoicesLoading } = useQuery({
-    queryKey: ["/api/vendors", vendorId, "outstanding-invoices"],
+  // Compute the effective vendor ID
+  const effectiveVendorId = vendorId || selectedVendorId;
+
+  // Fetch vendors list
+  const { data: vendorsData, isError: vendorsError, error: vendorsErrorMessage, refetch: refetchVendors } = useQuery({
+    queryKey: ["/api/vendors"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", `/api/vendors/${vendorId}/outstanding-invoices`);
+      const response = await authenticatedApiRequest("GET", "/api/vendors?limit=100");
       return response.json();
     },
-    enabled: open && !!vendorId,
+    enabled: open && !vendorId,
+  });
+
+  // Normalize vendors list to handle both raw arrays and { data: [...] } shapes
+  const normalizedVendors = Array.isArray(vendorsData) ? vendorsData : vendorsData?.data || [];
+
+  // Fetch outstanding invoices
+  const { data: invoicesData, isLoading: invoicesLoading, isError: invoicesError, error: invoicesErrorMessage } = useQuery({
+    queryKey: ["/api/vendors", effectiveVendorId, "outstanding-invoices"],
+    queryFn: async () => {
+      const response = await authenticatedApiRequest("GET", `/api/vendors/${effectiveVendorId}/outstanding-invoices`);
+      return response.json();
+    },
+    enabled: open && !!effectiveVendorId,
   });
 
   // Fetch bank accounts
-  const { data: bankAccountsData } = useQuery({
+  const { data: bankAccountsData, isError: bankAccountsError, error: bankAccountsErrorMessage } = useQuery({
     queryKey: ["/api/bank-accounts"],
     queryFn: async () => {
       const response = await authenticatedApiRequest("GET", "/api/bank-accounts");
@@ -203,6 +232,11 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
         setOutstandingInvoices([]);
         setDistributionPreview([]);
         setShowPreview(false);
+        // Reset selected vendor state when no vendorId is provided
+        if (!vendorId) {
+          setSelectedVendorId('');
+          setSelectedVendorName('');
+        }
       } catch (error) {
         console.error('Error resetting form:', error);
       }
@@ -213,7 +247,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   const mutation = useMutation({
     mutationFn: async (data: VendorPaymentFormData): Promise<VendorPaymentDistributionResult> => {
       const payload: InsertVendorPayment = {
-        vendorId,
+        vendorId: effectiveVendorId,
         amount: data.amount,
         paymentMode: data.paymentMode,
         paymentDate: new Date(data.paymentDate),
@@ -223,7 +257,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
         notes: data.notes || undefined,
       };
       
-      const response = await authenticatedApiRequest("POST", `/api/vendors/${vendorId}/payments`, payload);
+      const response = await authenticatedApiRequest("POST", `/api/vendors/${effectiveVendorId}/payments`, payload);
       return response.json();
     },
     onSuccess: (result) => {
@@ -238,7 +272,10 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+      // Invalidate outstanding invoices for the selected vendor
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors", effectiveVendorId, "outstanding-invoices"] });
       
       onOpenChange(false);
       form.reset();
@@ -258,6 +295,11 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
   const onSubmit = async (data: VendorPaymentFormData) => {
     try {
       setSubmissionError(null);
+      
+      // Validate vendor selection
+      if (!effectiveVendorId) {
+        throw new Error('Please select a vendor');
+      }
       
       // Validate payment amount
       const paymentAmount = parseFloat(data.amount);
@@ -302,7 +344,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
-          resetKeys={[open ? 1 : 0, vendorId]}
+          resetKeys={[open ? 1 : 0, effectiveVendorId || '']}
           fallback={({ error, resetError }) => (
             <div className="p-4">
               <AlertComponent variant="destructive">
@@ -324,10 +366,74 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
           )}
         >
           <DialogHeader>
-            <DialogTitle>Record Payment - {vendorName || 'Vendor'}</DialogTitle>
+            <DialogTitle>Record Payment - {vendorName || selectedVendorName || 'Vendor'}</DialogTitle>
           </DialogHeader>
 
-        <Form {...form}>
+          {/* Vendor selector when vendorId is not provided */}
+          {!vendorId && (
+            <>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Select Vendor *
+                  </label>
+                  {vendorsError ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Failed to load vendors: {vendorsErrorMessage?.message || 'Unknown error'}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-2 h-auto p-0 text-destructive hover:text-destructive"
+                          onClick={() => refetchVendors()}
+                        >
+                          Retry
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : !vendorsData ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-gray-600">Loading vendors...</span>
+                    </div>
+                  ) : (
+                    <Select 
+                      value={selectedVendorId} 
+                      onValueChange={(value) => {
+                        setSelectedVendorId(value);
+                        const vendor = normalizedVendors?.find((v: any) => v.id === value);
+                        setSelectedVendorName(vendor?.name || '');
+                        // Clear invoices and preview state on entity change
+                        setOutstandingInvoices([]);
+                        setDistributionPreview([]);
+                        setShowPreview(false);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a vendor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {normalizedVendors?.map((vendor: any) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            <div>
+                              <div className="font-medium">{vendor.name}</div>
+                              {vendor.phone && <div className="text-sm text-gray-500">{vendor.phone}</div>}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
+          {/* Conditionally render the main form fields */}
+          {effectiveVendorId ? (
+            <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -597,6 +703,24 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
               </Alert>
             )}
 
+            {invoicesError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to load outstanding invoices: {invoicesErrorMessage?.message || 'Unknown error'}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {bankAccountsError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to load bank accounts: {bankAccountsErrorMessage?.message || 'Unknown error'}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex justify-end space-x-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
@@ -608,7 +732,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
               </Button>
               <Button 
                 type="submit" 
-                disabled={mutation.isPending || outstandingInvoices.length === 0}
+                disabled={mutation.isPending || outstandingInvoices.length === 0 || invoicesLoading}
                 data-testid="button-record-vendor-payment"
               >
                 {mutation.isPending ? (
@@ -623,6 +747,16 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
             </div>
           </form>
         </Form>
+          ) : (
+            !vendorId && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Please select a vendor to continue
+                </AlertDescription>
+              </Alert>
+            )
+          )}
         </ErrorBoundary>
       </DialogContent>
     </Dialog>

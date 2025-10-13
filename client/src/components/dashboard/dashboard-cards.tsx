@@ -1,15 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  Wallet, 
-  Building2, 
   TrendingUp, 
   ShoppingCart, 
   AlertCircle, 
-  TrendingDown, 
-  DollarSign, 
-  IndianRupee,
-  Activity,
   Receipt
 } from "lucide-react";
 import { DashboardKPIs } from "@/types";
@@ -38,7 +32,7 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 8 }).map((_, index) => (
+        {Array.from({ length: 4 }).map((_, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <Skeleton className="h-4 w-24" />
@@ -59,20 +53,6 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
 
   const cards = [
     {
-      title: "Total Cash Balance",
-      value: formatINRCurrency(kpis.totalCashBalance),
-      icon: Wallet,
-      iconBg: "bg-green-100",
-      iconColor: "text-green-600"
-    },
-    {
-      title: "Total Bank Balance",
-      value: formatINRCurrency(kpis.totalBankBalance),
-      icon: Building2,
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-600"
-    },
-    {
       title: "Today's Sales",
       value: formatINRCurrency(kpis.todaysSales),
       icon: TrendingUp,
@@ -92,20 +72,6 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
       icon: AlertCircle,
       iconBg: "bg-red-100",
       iconColor: "text-red-600"
-    },
-    {
-      title: "Total Shortfall",
-      value: formatINRCurrency(kpis.totalShortfall),
-      icon: TrendingDown,
-      iconBg: "bg-amber-100",
-      iconColor: "text-amber-600"
-    },
-    {
-      title: "Today's Commission",
-      value: formatINRCurrency(kpis.todaysCommission),
-      icon: DollarSign,
-      iconBg: "bg-purple-100",
-      iconColor: "text-purple-600"
     },
     {
       title: "Today's Expenses",

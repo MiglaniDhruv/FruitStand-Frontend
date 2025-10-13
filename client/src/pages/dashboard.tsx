@@ -8,7 +8,7 @@ import { DashboardKPIs } from "@/types";
 import DashboardCards from "@/components/dashboard/dashboard-cards";
 import RecentPurchasesTable from "@/components/dashboard/recent-purchases-table";
 import RecentSalesTable from "@/components/dashboard/recent-sales-table";
-import TopUdhaarRetailers from "@/components/dashboard/top-udhaar-retailers";
+import FavouriteRetailers from "@/components/dashboard/favourite-retailers";
 
 export default function Dashboard() {
   const { tenant, isLoading, error } = useTenant();
@@ -102,7 +102,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-6">
+        <main className="flex-1 overflow-auto p-6 space-y-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           {/* KPI Cards Section */}
           {dashboardIsError ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -134,10 +134,10 @@ export default function Dashboard() {
           {/* Top Retailers Section */}
           {dashboardIsError ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-600">Failed to load top retailers data.</p>
+              <p className="text-red-600">Failed to load favourite retailers data.</p>
             </div>
           ) : (
-            <TopUdhaarRetailers retailers={kpis?.topRetailersByUdhaar} loading={dashboardLoading} />
+            <FavouriteRetailers retailers={kpis?.favouriteRetailers} loading={dashboardLoading} />
           )}
         </main>
       </div>

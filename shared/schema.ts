@@ -297,6 +297,7 @@ export const retailers = pgTable("retailers", {
   shortfallBalance: decimal("shortfall_balance", { precision: 10, scale: 2 }).default("0.00"), // Deficit balance
   crateBalance: integer("crate_balance").default(0), // Number of crates with retailer
   isActive: boolean("is_active").default(true),
+  isFavourite: boolean("is_favourite").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   uniqueNamePerTenant: unique().on(table.tenantId, table.name),
@@ -1185,18 +1186,23 @@ export interface TopRetailerByUdhaar {
   udhaaarBalance: string;
 }
 
+export interface FavouriteRetailer {
+  id: string;
+  name: string;
+  phone: string | null;
+  udhaaarBalance: string;
+  shortfallBalance: string;
+  crateBalance: number;
+}
+
 export interface DashboardKPIs {
-  totalCashBalance: string;
-  totalBankBalance: string;
   todaysSales: string;
   todaysPurchases: string;
   totalUdhaar: string;
-  totalShortfall: string;
-  todaysCommission: string;
   todaysExpenses: string;
   recentPurchases: RecentPurchase[];
   recentSales: RecentSale[];
-  topRetailersByUdhaar: TopRetailerByUdhaar[];
+  favouriteRetailers: FavouriteRetailer[];
 }
 
 // Authentication Schemas

@@ -29,6 +29,13 @@ export class RetailerRouter extends BaseRouter {
       this.ah(this.retailerController, 'getStats')
     );
 
+    this.router.patch('/retailers/:id/favourite',
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.retailerController, 'toggleFavourite')
+    );
+
     // GET /retailers/:id - Get a specific retailer
     this.router.get('/retailers/:id', 
       authenticateToken,

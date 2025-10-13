@@ -49,6 +49,7 @@
   --shadow-2xl: 0px 2px 0px 0px hsl(221.2, 83.2%, 53.3% / 0.00);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+  --footer-h: 72px; /* Footer bar height */
 }
 
 .dark {
