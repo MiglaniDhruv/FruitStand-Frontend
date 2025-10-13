@@ -487,8 +487,7 @@ export default function CrateManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto space-y-8">
+        <main className="flex-1 overflow-auto p-6 space-y-8">
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -599,8 +598,7 @@ export default function CrateManagement() {
               </Card>
             </TabsContent>
           </Tabs>
-        </div>
-      </main>
+        </main>
     </div>
 
     {/* Record Transaction Dialog */}
