@@ -72,7 +72,6 @@ export enum Permission {
 
   // Financial Reports & Ledgers
   VIEW_LEDGERS = "view_ledgers",
-  VIEW_REPORTS = "view_reports",
   VIEW_CASHBOOK = "view_cashbook",
   VIEW_BANKBOOK = "view_bankbook",
 

@@ -97,12 +97,6 @@ const getNavigationItems = (slug: string) => [
     permission: PERMISSIONS.VIEW_LEDGERS,
   },
   {
-    title: "Reports",
-    href: `/${slug}/reports`,
-    icon: BarChart3,
-    permission: PERMISSIONS.VIEW_REPORTS,
-  },
-    {
     title: "WhatsApp Logs",
     href: `/${slug}/whatsapp-logs`,
     icon: MessageSquare,

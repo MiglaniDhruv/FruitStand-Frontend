@@ -324,9 +324,16 @@ export default function UserManagement() {
     },
   });
 
+  // Sanitize permissions to remove any orphaned/removed permissions
+  const sanitizePermissions = (permissions: string[]): string[] => {
+    const validPermissions = Object.values(PERMISSIONS) as string[];
+    return permissions.filter(permission => validPermissions.includes(permission));
+  };
+
   const handleManagePermissions = (user: any) => {
     setManagingPermissions(user);
-    setUserPermissions(user.permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || []);
+    const initialPermissions = user.permissions || ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS] || [];
+    setUserPermissions(sanitizePermissions(initialPermissions));
   };
 
   const togglePermission = (permission: string) => {
@@ -343,7 +350,7 @@ export default function UserManagement() {
     if (managingPermissions) {
       updatePermissionsMutation.mutate({
         id: managingPermissions.id,
-        permissions: userPermissions
+        permissions: sanitizePermissions(userPermissions)
       });
       setManagingPermissions(null);
     }
@@ -672,7 +679,7 @@ export default function UserManagement() {
                       "Purchase Invoices": [PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES, PERMISSIONS.DELETE_PURCHASE_INVOICES],
                       "Payments": [PERMISSIONS.CREATE_PAYMENTS, PERMISSIONS.VIEW_PAYMENTS, PERMISSIONS.EDIT_PAYMENTS, PERMISSIONS.DELETE_PAYMENTS],
                       "Stock Management": [PERMISSIONS.MANAGE_STOCK, PERMISSIONS.VIEW_STOCK],
-                      "Financial Reports": [PERMISSIONS.VIEW_LEDGERS, PERMISSIONS.VIEW_REPORTS, PERMISSIONS.VIEW_CASHBOOK, PERMISSIONS.VIEW_BANKBOOK],
+                      "Financial Reports": [PERMISSIONS.VIEW_LEDGERS, PERMISSIONS.VIEW_CASHBOOK, PERMISSIONS.VIEW_BANKBOOK],
                       "Bank Accounts": [PERMISSIONS.MANAGE_BANK_ACCOUNTS, PERMISSIONS.VIEW_BANK_ACCOUNTS],
                       "Organization Settings": [PERMISSIONS.MANAGE_SETTINGS, PERMISSIONS.VIEW_SETTINGS, PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_ANALYTICS],
                     }).map(([category, permissions]) => (

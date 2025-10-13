@@ -20,7 +20,6 @@ import Crates from "@/pages/crates";
 import Stock from "@/pages/stock";
 import Ledgers from "@/pages/ledgers";
 import BankAccounts from "@/pages/bank-accounts";
-import Reports from "@/pages/reports";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import WhatsAppLogsPage from "@/pages/whatsapp-logs";
@@ -191,17 +190,6 @@ function Router() {
           <TenantSlugProvider slug={props.params.slug}>
             <TenantProtectedRoute
               component={Ledgers}
-              slug={props.params.slug}
-            />
-          </TenantSlugProvider>
-        )}
-      />
-      <Route
-        path="/:slug/reports"
-        component={(props) => (
-          <TenantSlugProvider slug={props.params.slug}>
-            <TenantProtectedRoute
-              component={Reports}
               slug={props.params.slug}
             />
           </TenantSlugProvider>

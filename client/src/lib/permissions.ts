@@ -55,7 +55,6 @@ export const permissionService = {
       '/payments': [PERMISSIONS.VIEW_PAYMENTS],
       '/stock': [PERMISSIONS.VIEW_STOCK],
       '/ledgers': [PERMISSIONS.VIEW_LEDGERS],
-      '/reports': [PERMISSIONS.VIEW_REPORTS],
       '/settings': [PERMISSIONS.VIEW_SETTINGS],
     };
 
