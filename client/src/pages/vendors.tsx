@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, DollarSign } from "lucide-react";
+import { Search, Plus, Edit, DollarSign, Star } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
-import { logEventHandlerError } from "@/lib/error-logger";
+import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
 
@@ -39,6 +39,7 @@ export default function Vendors() {
   const [showVendorPaymentModal, setShowVendorPaymentModal] = useState(false);
   const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: vendorsResult, isLoading, isFetching, isError, error } = useQuery<PaginatedResult<Vendor>>({
     queryKey: ["/api/vendors", paginationOptions],
@@ -57,6 +58,28 @@ export default function Vendors() {
     placeholderData: keepPreviousData,
   });
 
+  const toggleFavouriteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authenticatedApiRequest("PATCH", `/api/vendors/${id}/favourite`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Favourite updated",
+        description: "Vendor favourite status has been updated",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] }); // Refresh dashboard
+    },
+    onError: (error: unknown) => {
+      logMutationError(error, 'toggleFavourite');
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update favourite status",
+        variant: "destructive",
+      });
+    },
+  });
 
 
   const handlePageChange = (page: number) => {
@@ -93,6 +116,27 @@ export default function Vendors() {
       cell: (value: string) => <div className="font-medium">{value}</div>,
     },
     {
+      accessorKey: "isFavourite",
+      header: "Favourite",
+      cell: (value: boolean, row: any) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleFavourite(row.id, value);
+          }}
+          title={value ? "Remove from favourites" : "Add to favourites"}
+          disabled={toggleFavouriteMutation.isPending}
+          className="h-8 w-8"
+        >
+          <Star 
+            className={`h-4 w-4 ${value ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`}
+          />
+        </Button>
+      ),
+    },
+    {
       accessorKey: "phone",
       header: "Phone",
       cell: (value: string) => value || "-",
@@ -109,7 +153,7 @@ export default function Vendors() {
     {
       accessorKey: "balance",
       header: "Balance",
-      cell: (value: string) => `₹${parseFloat(value).toLocaleString('en-IN')}`,
+      cell: (value: string) => `₹${parseFloat(value || '0').toLocaleString('en-IN')}`,
     },
     {
       accessorKey: "isActive",
@@ -193,6 +237,22 @@ export default function Vendors() {
       toast({
         title: "Error",
         description: "Failed to open payment form",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleFavourite = async (id: string, currentStatus: boolean) => {
+    try {
+      if (!id) {
+        throw new Error('Invalid vendor ID');
+      }
+      await toggleFavouriteMutation.mutateAsync(id);
+    } catch (error) {
+      logEventHandlerError(error, 'handleToggleFavourite', { vendorId: id });
+      toast({
+        title: "Error",
+        description: "Failed to toggle favourite status",
         variant: "destructive",
       });
     }

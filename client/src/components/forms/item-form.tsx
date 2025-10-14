@@ -245,7 +245,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                             {vendor?.name || 'Unknown Vendor'}
                           </SelectItem>
                         )) : (
-                          <SelectItem value="" disabled>No vendors available</SelectItem>
+                          <SelectItem value="no-vendors" disabled>No vendors available</SelectItem>
                         )}
                       </SelectContent>
                     </Select>

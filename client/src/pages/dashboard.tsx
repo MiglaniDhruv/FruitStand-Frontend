@@ -10,6 +10,7 @@ import DashboardCards from "@/components/dashboard/dashboard-cards";
 import RecentPurchasesTable from "@/components/dashboard/recent-purchases-table";
 import RecentSalesTable from "@/components/dashboard/recent-sales-table";
 import FavouriteRetailers from "@/components/dashboard/favourite-retailers";
+import FavouriteVendors from "@/components/dashboard/favourite-vendors";
 
 export default function Dashboard() {
   const { tenant, isLoading, error } = useTenant();
@@ -150,6 +151,20 @@ export default function Dashboard() {
               </div>
             ) : (
               <FavouriteRetailers retailers={kpis?.favouriteRetailers} loading={dashboardLoading} />
+            )}
+          </section>
+
+          <Separator className="my-6 sm:my-8" />
+
+          {/* Favourite Vendors Section */}
+          <section aria-label="Favourite Vendors">
+            <h2 className="sr-only">Favourite Vendors</h2>
+            {dashboardIsError ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-600">Failed to load favourite vendors.</p>
+              </div>
+            ) : (
+              <FavouriteVendors vendors={kpis?.favouriteVendors} loading={dashboardLoading} />
             )}
           </section>
         </main>

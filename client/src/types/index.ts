@@ -37,7 +37,7 @@ export interface TenantSessionContext {
 }
 
 // Re-export dashboard types from shared schema to keep server and client types in sync
-export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer } from '@shared/schema';
+export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '@shared/schema';
 
 // Re-export report types from shared schema to keep server and client types in sync
 export type { 

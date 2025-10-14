@@ -54,6 +54,7 @@ export const vendors = pgTable("vendors", {
   balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
   crateBalance: integer("crate_balance").default(0), // Number of crates with vendor
   isActive: boolean("is_active").default(true),
+  isFavourite: boolean("is_favourite").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   uniqueNamePerTenant: unique().on(table.tenantId, table.name),
@@ -1195,6 +1196,14 @@ export interface FavouriteRetailer {
   crateBalance: number;
 }
 
+export interface FavouriteVendor {
+  id: string;
+  name: string;
+  phone: string | null;
+  balance: string;
+  crateBalance: number;
+}
+
 export interface DashboardKPIs {
   todaysSales: string;
   todaysPurchases: string;
@@ -1203,6 +1212,7 @@ export interface DashboardKPIs {
   recentPurchases: RecentPurchase[];
   recentSales: RecentSale[];
   favouriteRetailers: FavouriteRetailer[];
+  favouriteVendors: FavouriteVendor[];
 }
 
 // Authentication Schemas

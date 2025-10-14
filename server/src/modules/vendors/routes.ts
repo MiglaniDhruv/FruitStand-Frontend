@@ -30,6 +30,14 @@ export class VendorRouter extends BaseRouter {
       asyncHandler(this.vendorController.getById.bind(this.vendorController))
     );
 
+    // PATCH /vendors/:id/favourite - Toggle favourite status
+    this.router.patch('/vendors/:id/favourite',
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(this.vendorController.toggleFavourite.bind(this.vendorController))
+    );
+
     // POST /vendors - Create new vendor
     this.router.post("/vendors", 
       authenticateToken, 

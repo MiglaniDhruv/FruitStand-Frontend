@@ -144,4 +144,17 @@ export class VendorController extends BaseController {
     const invoices = await this.paymentModel.getOutstandingInvoicesForVendor(tenantId, vendorId);
     res.json(invoices);
   }
+
+  async toggleFavourite(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    
+    if (!id) throw new BadRequestError('Vendor ID is required');
+    
+    const vendor = await this.vendorModel.toggleFavourite(tenantId, id);
+    this.ensureResourceExists(vendor, 'Vendor');
+    
+    res.json(vendor);
+  }
 }

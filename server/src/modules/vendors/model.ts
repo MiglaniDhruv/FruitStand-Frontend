@@ -24,7 +24,7 @@ import {
   withTenantPagination
 } from "../../utils/pagination";
 import { withTenant, ensureTenantInsert } from "../../utils/tenant-scope";
-import { ValidationError, AppError } from "../../types";
+import { ValidationError, AppError, NotFoundError } from "../../types";
 import { handleDatabaseError } from "../../utils/database-errors";
 
 export class VendorModel {
@@ -265,5 +265,36 @@ export class VendorModel {
       totalBalance: result.totalBalance || '0.00',
       totalCrates: Number(result.totalCrates) || 0
     };
+  }
+
+  async toggleFavourite(tenantId: string, id: string) {
+    try {
+      // First, fetch the current vendor to get current isFavourite status
+      const currentVendor = await this.getVendor(tenantId, id);
+      if (!currentVendor) {
+        throw new NotFoundError('Vendor not found');
+      }
+
+      // Validate that the vendor is active before allowing favourite toggle
+      if (!currentVendor.isActive) {
+        throw new ValidationError('Cannot mark inactive vendor as favourite', { 
+          vendorId: 'Vendor must be active to be marked as favourite' 
+        });
+      }
+
+      // Calculate new favourite status
+      const newStatus = !currentVendor.isFavourite;
+
+      // Update the vendor
+      const [updatedVendor] = await db
+        .update(vendors)
+        .set({ isFavourite: newStatus })
+        .where(withTenant(vendors, tenantId, eq(vendors.id, id)))
+        .returning();
+
+      return updatedVendor;
+    } catch (error) {
+      handleDatabaseError(error);
+    }
   }
 }

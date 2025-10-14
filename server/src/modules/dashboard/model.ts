@@ -1,6 +1,6 @@
 import { eq, sum, gte, lte, inArray, desc, and, asc, sql } from 'drizzle-orm';
 import { db } from '../../../db';
-import { vendors, retailers, purchaseInvoices, salesInvoices, tenants, expenses, DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer } from '@shared/schema';
+import { vendors, retailers, purchaseInvoices, salesInvoices, tenants, expenses, DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '@shared/schema';
 import { withTenant } from '../../utils/tenant-scope';
 import { TenantModel } from '../tenants/model';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
@@ -34,7 +34,8 @@ export class DashboardModel {
       todaysExpensesResult,
       recentPurchases,
       recentSales,
-      favouriteRetailers
+      favouriteRetailers,
+      favouriteVendors
     ] = await Promise.all([
       
       // Get today's sales
@@ -69,7 +70,8 @@ export class DashboardModel {
       // Get recent purchases, sales, and favourite retailers
       this.getRecentPurchases(tenantId, 5),
       this.getRecentSales(tenantId, 5),
-      this.getFavouriteRetailers(tenantId, 10)
+      this.getFavouriteRetailers(tenantId, 10),
+      this.getFavouriteVendors(tenantId, 10)
     ]);
 
     // Format results
@@ -85,7 +87,8 @@ export class DashboardModel {
       todaysExpenses,
       recentPurchases,
       recentSales,
-      favouriteRetailers
+      favouriteRetailers,
+      favouriteVendors
     };
   }
 
@@ -154,6 +157,26 @@ export class DashboardModel {
       ...retailer,
       udhaaarBalance: `₹${Number(retailer.udhaaarBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       shortfallBalance: `₹${Number(retailer.shortfallBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    }));
+  }
+
+  async getFavouriteVendors(tenantId: string, limit: number = 10) {
+    const favouriteVendors = await db
+      .select({
+        id: vendors.id,
+        name: vendors.name,
+        phone: vendors.phone,
+        balance: vendors.balance,
+        crateBalance: sql<number>`COALESCE(${vendors.crateBalance}, 0)`
+      })
+      .from(vendors)
+      .where(withTenant(vendors, tenantId, and(eq(vendors.isActive, true), eq(vendors.isFavourite, true))))
+      .orderBy(asc(vendors.name))
+      .limit(limit);
+
+    return favouriteVendors.map(vendor => ({
+      ...vendor,
+      balance: `₹${Number(vendor.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     }));
   }
 }
