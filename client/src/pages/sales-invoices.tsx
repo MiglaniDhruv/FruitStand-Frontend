@@ -465,7 +465,7 @@ export default function SalesInvoiceManagement() {
         <Separator className="my-0" />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-5 sm:p-7" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-5 sm:p-7">
           <section aria-label="Sales invoices table">
             <h2 className="sr-only">Invoices List</h2>
             <Card shadow="md">

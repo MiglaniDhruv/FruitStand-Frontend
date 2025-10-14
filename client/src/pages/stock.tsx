@@ -461,7 +461,7 @@ export default function Stock() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-4">

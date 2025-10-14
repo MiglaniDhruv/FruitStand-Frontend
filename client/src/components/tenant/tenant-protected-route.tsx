@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/auth-context';
 import { TenantStatusGuard } from '@/components/tenant/tenant-status-guard';
 import { TenantAwareApp } from '@/components/tenant/tenant-aware-app';
 import { InvalidTenantFallback } from '@/components/tenant/invalid-tenant-fallback';
-import Footer from '@/components/layout/footer';
 
 /**
  * TenantProtectedRoute works correctly with the enhanced authentication flow:
@@ -88,7 +87,6 @@ export const TenantProtectedRoute: React.FC<TenantProtectedRouteProps> = ({
       <TenantAwareApp slug={slug}>
         <Component />
       </TenantAwareApp>
-      <Footer />
     </TenantStatusGuard>
   );
 };

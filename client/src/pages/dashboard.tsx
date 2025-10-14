@@ -102,7 +102,7 @@ export default function Dashboard() {
         <Separator className="my-0" />
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
           {/* KPI Cards Section */}
           <section aria-label="Key Performance Indicators">
             <h2 className="sr-only">Key Performance Indicators</h2>

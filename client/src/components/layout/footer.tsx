@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@shared/permissions";
@@ -9,17 +9,33 @@ import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { FileText, Receipt, DollarSign, Wallet } from "lucide-react";
 
 export default function Footer() {
+  const ref = useRef<HTMLDivElement>(null);
   // State management for modals
   const [salesInvoiceOpen, setSalesInvoiceOpen] = useState<boolean>(false);
   const [purchaseInvoiceOpen, setPurchaseInvoiceOpen] = useState<boolean>(false);
   const [retailerPaymentOpen, setRetailerPaymentOpen] = useState<boolean>(false);
   const [vendorPaymentOpen, setVendorPaymentOpen] = useState<boolean>(false);
 
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const setVar = () => {
+      const h = el.offsetHeight;
+      document.documentElement.style.setProperty("--footer-h", `${h}px`);
+    };
+    setVar();
+    const ro = new ResizeObserver(setVar);
+    ro.observe(el);
+    window.addEventListener("resize", setVar);
+    return () => { ro.disconnect(); window.removeEventListener("resize", setVar); };
+  }, []);
+
   return (
     <>
       {/* Footer container */}
       <div 
-        className="fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-lg z-40"
+        ref={ref}
+        className="sticky bottom-0 mt-auto bg-card border-t border-border shadow-lg z-30"
         data-testid="footer-quick-actions"
       >
         {/* Inner container for buttons */}

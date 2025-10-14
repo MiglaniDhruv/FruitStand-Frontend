@@ -504,7 +504,7 @@ export default function RetailerManagement() {
         <Separator className="my-0" />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-5 sm:p-7 space-y-6 sm:space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-5 sm:p-7 space-y-6 sm:space-y-8">
 
           {/* Summary Cards */}
           <section aria-label="Retailer summary statistics">

@@ -251,7 +251,7 @@ export default function Reports() {
   if (isInitialLoading) {
     return (
       <AppLayout>
-        <div className="flex-1 flex flex-col overflow-auto" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <div className="flex-1 flex flex-col overflow-auto">
           <div className="p-4 sm:p-6 space-y-6">
             <div className="space-y-2">
               <div className="h-8 bg-muted animate-pulse rounded"></div>
@@ -270,7 +270,7 @@ export default function Reports() {
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col overflow-auto" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+      <div className="flex-1 flex flex-col overflow-auto">
         {/* Header Section */}
         <div className="p-4 sm:p-6 space-y-6">
           <div className="space-y-2">

@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import AppSidebar from './sidebar';
+import Footer from './footer';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -42,13 +43,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </a>
       
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset id="main-content" tabIndex={-1}>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger className="-ml-1" />
         </header>
-        <main id="main-content" tabIndex={-1}>
+        <div className="flex-1 flex flex-col overflow-auto" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           {children}
-        </main>
+        </div>
+        <Footer />
       </SidebarInset>
     </SidebarProvider>
   );

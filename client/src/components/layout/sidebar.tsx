@@ -173,12 +173,12 @@ export default function AppSidebar() {
           </div>
           <div className="group-data-[collapsible=icon]:hidden">
             <h1 className="text-lg-fluid font-semibold text-foreground">
-              {tenant?.settings?.companyName || "APMC System"}
+              Mandify
             </h1>
-            <p className="text-sm-fluid text-muted-foreground">
+            {/* <p className="text-sm-fluid text-muted-foreground">
               Commission Merchant
               {tenant && <span className="block">{tenant.name}</span>}
-            </p>
+            </p> */}
           </div>
         </div>
 

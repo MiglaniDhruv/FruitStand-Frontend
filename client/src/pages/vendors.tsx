@@ -267,7 +267,7 @@ export default function Vendors() {
         <Separator className="my-0" />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-5 sm:p-7" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-5 sm:p-7">
           <Card shadow="md">
             <CardHeader className="pb-5">
               <div className="flex flex-col gap-3">
