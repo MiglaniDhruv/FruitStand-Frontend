@@ -404,7 +404,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingInvoice ? "Edit Sales Invoice" : "Create Sales Invoice"}
@@ -498,7 +498,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
               </div>
 
               {fields.map((field, index) => (
-                <div key={field.id} className="border rounded-lg p-4 space-y-4">
+                <div key={field.id} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Item {index + 1}</h4>
                     {fields.length > 1 && (
@@ -514,7 +514,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                     <FormField
                       control={form.control}
                       name={`items.${index}.itemId`}
@@ -620,7 +620,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
 
                     <div className="flex flex-col justify-end">
                       <FormLabel>Amount</FormLabel>
-                      <div className="h-10 flex items-center text-sm font-medium">
+                      <div className="h-11 flex items-center text-sm font-medium">
                         ₹{calculateItemAmount(form.watch(`items.${index}.rate`), form.watch(`items.${index}`)).toFixed(2)}
                       </div>
                     </div>
@@ -640,8 +640,8 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
             </div>
 
             {/* Total amount display */}
-            <div className="bg-muted p-4 rounded-lg">
-              <div className="text-lg font-semibold">
+            <div className="bg-muted p-3 sm:p-4 rounded-lg">
+              <div className="text-base sm:text-lg font-semibold">
                 Total Amount: ₹{calculateTotalAmount().toFixed(2)}
               </div>
             </div>
@@ -654,10 +654,12 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                     <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </div>
                     </FormControl>
                     <div className="space-y-1 leading-none">
                       <FormLabel>Add Crate Transaction</FormLabel>
@@ -667,7 +669,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
               />
 
               {form.watch("crateTransaction.enabled") && (
-                <div className="space-y-4 pl-6">
+                <div className="space-y-4 pl-4 sm:pl-6">
                   <FormField
                     control={form.control}
                     name="crateTransaction.quantity"
@@ -713,7 +715,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
             />
 
             {/* Form actions */}
-            <div className="flex justify-end space-x-2">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-2">
               <Button
                 type="button"
                 variant="outline"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type PaginationOptions,
@@ -306,12 +306,11 @@ export default function SalesInvoiceManagement() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -319,17 +318,16 @@ export default function SalesInvoiceManagement() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">
               Error Loading Sales Invoices
             </h2>
             <p className="text-gray-600 mb-6">
@@ -340,7 +338,7 @@ export default function SalesInvoiceManagement() {
             <Button onClick={() => window.location.reload()}>Retry</Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
@@ -363,18 +361,17 @@ export default function SalesInvoiceManagement() {
   const totalInvoices = invoices.length;
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
                 Sales Invoices
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage sales invoices and track payments
               </p>
             </div>
@@ -389,86 +386,86 @@ export default function SalesInvoiceManagement() {
         </header>
 
         {/* Summary Cards */}
-        <div className="p-6 bg-muted/50">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="p-4 sm:p-6 bg-muted/50">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-sm font-medium">
                   Total Revenue
                 </CardTitle>
                 <IndianRupee className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="text-xl sm:text-2xl font-bold">
                   ₹{totalRevenue.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-sm font-medium">
                   Total Paid
                 </CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="text-xl sm:text-2xl font-bold text-green-600">
                   ₹{totalPaid.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-sm font-medium">
                   Udhaar Amount
                 </CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="text-xl sm:text-2xl font-bold text-orange-600">
                   ₹{totalUdhaar.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-sm font-medium">
                   Total Shortfall
                 </CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="text-xl sm:text-2xl font-bold text-red-600">
                   ₹{totalShortfall.toLocaleString("en-IN")}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                   Deficit from paid invoices
                 </p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-sm font-medium">
                   Total Invoices
                 </CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalInvoices}</div>
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="text-xl sm:text-2xl font-bold">{totalInvoices}</div>
               </CardContent>
             </Card>
           </div>
         </div>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <CardTitle>All Invoices</CardTitle>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -484,7 +481,7 @@ export default function SalesInvoiceManagement() {
                     onValueChange={handleStatusFilterChange}
                   >
                     <SelectTrigger
-                      className="w-48"
+                      className="w-full sm:w-48"
                       data-testid="select-status-filter"
                     >
                       <SelectValue placeholder="Filter by status" />
@@ -523,6 +520,6 @@ export default function SalesInvoiceManagement() {
         onOpenChange={setOpen}
         editingInvoice={editingInvoice}
       />
-    </div>
+    </AppLayout>
   );
 }

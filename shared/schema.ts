@@ -1248,3 +1248,117 @@ export interface RefreshTokenResponse {
     permissions: string[];
   };
 }
+
+// REPORT TYPES
+export interface TurnoverReportEntry {
+  date: string;
+  salesAmount: string;
+  purchaseAmount: string;
+  netTurnover: string;
+}
+
+export interface TurnoverReportData {
+  entries: TurnoverReportEntry[];
+  totalSales: string;
+  totalPurchases: string;
+  netTurnover: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface ProfitLossReportData {
+  revenue: string;
+  costs: string;
+  grossProfit: string;
+  expenses: string;
+  netProfit: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface CommissionReportEntry {
+  invoiceNumber: string;
+  invoiceDate: string;
+  vendorName: string;
+  retailerName?: string; // Backward compatibility alias for vendorName
+  totalAmount: string;
+  commissionRate: string;
+  commissionAmount: string;
+}
+
+export interface CommissionReportData {
+  entries: CommissionReportEntry[];
+  totalCommission: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface ShortfallReportEntry {
+  retailerId: string;
+  retailerName: string;
+  shortfallBalance: string;
+  lastTransactionDate: string;
+}
+
+export interface ShortfallReportData {
+  entries: ShortfallReportEntry[];
+  totalShortfall: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface ExpensesSummaryEntry {
+  category: string;
+  amount: string;
+  count: number;
+  percentage: string;
+}
+
+export interface ExpensesSummaryData {
+  entries: ExpensesSummaryEntry[];
+  totalExpenses: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface VendorListEntry {
+  vendorId: string;
+  vendorName: string;
+  phone: string | null;
+  address: string | null;
+  balance: string;
+}
+
+export interface VendorsListData {
+  entries: VendorListEntry[];
+  totalPayable: string;
+}
+
+export interface RetailerListEntry {
+  retailerId: string;
+  retailerName: string;
+  phone: string | null;
+  address: string | null;
+  udhaaarBalance: string;
+}
+
+export interface RetailersListData {
+  entries: RetailerListEntry[];
+  totalReceivable: string;
+}
+
+// Report query parameter validation schema
+export const reportDateRangeSchema = z.object({
+  fromDate: z.string().optional().refine(val => {
+    if (!val) return true;
+    const date = new Date(val);
+    return !isNaN(date.getTime());
+  }, 'Invalid date format for fromDate'),
+  toDate: z.string().optional().refine(val => {
+    if (!val) return true;
+    const date = new Date(val);
+    return !isNaN(date.getTime());
+  }, 'Invalid date format for toDate'),
+}).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
+  message: 'fromDate must be before or equal to toDate'
+});

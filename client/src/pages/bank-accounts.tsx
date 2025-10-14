@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,9 +260,8 @@ export default function BankAccounts() {
 
   if (isError) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 p-6">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6">
           <div className="text-center">
             <p className="text-destructive">Error loading bank accounts: {error?.message}</p>
             <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] })}>
@@ -270,20 +269,19 @@ export default function BankAccounts() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-screen">
-        <Sidebar />
+      <AppLayout>
         <div className="flex-1 flex flex-col">
           <header className="bg-card border-b border-border px-6 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-foreground">Bank Accounts</h2>
-                <p className="text-sm text-muted-foreground">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Bank Accounts</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Manage your bank accounts and track balances
                 </p>
               </div>
@@ -296,12 +294,12 @@ export default function BankAccounts() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto p-6">
+          <main className="flex-1 overflow-auto p-4 sm:p-6">
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-4">
                   <CardTitle>All Bank Accounts</CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <div className="relative flex-1 max-w-sm">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -315,7 +313,7 @@ export default function BankAccounts() {
                       value={statusFilter}
                       onValueChange={handleStatusFilterChange}
                     >
-                      <SelectTrigger className="w-48">
+                      <SelectTrigger className="w-full sm:w-48">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -384,7 +382,7 @@ export default function BankAccounts() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
+      </AppLayout>
     </ErrorBoundary>
   );
 }

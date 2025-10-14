@@ -223,14 +223,14 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg lg:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="vendorId"
@@ -264,7 +264,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
                     <FormLabel>Invoice *</FormLabel>
                     {preSelectedInvoiceId && selectedInvoice ? (
                       <>
-                        <div className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                        <div className="flex h-11 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
                           {selectedInvoice.invoiceNumber} - Balance: ₹{parseFloat(selectedInvoice.balanceAmount).toLocaleString('en-IN')}
                         </div>
                         <input type="hidden" {...field} value={preSelectedInvoiceId} />
@@ -436,7 +436,7 @@ export default function PaymentForm({ open, onOpenChange, preSelectedInvoiceId }
               )}
             />
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

@@ -9,7 +9,14 @@ import {
   Retailer,
   Vendor,
   SalesInvoiceItem,
-  InvoiceItem
+  InvoiceItem,
+  TurnoverReportData,
+  ProfitLossReportData,
+  CommissionReportData,
+  ShortfallReportData,
+  ExpensesSummaryData,
+  VendorsListData,
+  RetailersListData
 } from '@shared/schema';
 import { 
   formatCurrency, 
@@ -546,6 +553,335 @@ export function renderPurchaseInvoiceTemplate(
     yPosition = drawPaymentHistory(doc, invoice.payments, yPosition);
   }
   
+  drawFooter(doc);
+}
+
+/**
+ * Render turnover report template
+ */
+export function renderTurnoverReportTemplate(doc: InstanceType<typeof PDFDocument>, reportData: TurnoverReportData, tenant: Tenant): void {
+  // Header
+  const yAfterHeader = drawHeader(doc, tenant, 'Turnover Report');
+  let yPosition = yAfterHeader + 20;
+
+  // Date range
+  doc.fontSize(FONTS.body)
+     .fillColor(COLORS.text)
+     .font('Helvetica')
+     .text(`Period: ${reportData.fromDate || ''} to ${reportData.toDate || ''}`, 50, yPosition, { align: 'center' });
+  
+  yPosition += 40;
+
+  // Report data
+  doc.fontSize(FONTS.subheading).font('Helvetica');
+  doc.text('Total Sales:', 50, yPosition);
+  doc.text(formatCurrency(reportData.totalSales), 200, yPosition);
+  
+  yPosition += 20;
+  doc.text('Total Purchases:', 50, yPosition);
+  doc.text(formatCurrency(reportData.totalPurchases), 200, yPosition);
+  
+  yPosition += 30;
+  doc.font('Helvetica-Bold').text('Net Turnover:', 50, yPosition);
+  doc.text(formatCurrency(reportData.netTurnover), 200, yPosition);
+
+  drawFooter(doc);
+}
+
+/**
+ * Render profit & loss report template
+ */
+export function renderProfitLossReportTemplate(doc: InstanceType<typeof PDFDocument>, reportData: ProfitLossReportData, tenant: Tenant): void {
+  // Header
+  const yAfterHeader = drawHeader(doc, tenant, 'Profit & Loss Report');
+  let yPosition = yAfterHeader + 20;
+
+  // Date range
+  doc.fontSize(FONTS.body)
+     .fillColor(COLORS.text)
+     .font('Helvetica')
+     .text(`Period: ${reportData.fromDate || ''} to ${reportData.toDate || ''}`, 50, yPosition, { align: 'center' });
+  
+  yPosition += 40;
+
+  // Report data
+  doc.fontSize(FONTS.subheading).font('Helvetica');
+  doc.text('Total Revenue:', 50, yPosition);
+  doc.text(formatCurrency(reportData.revenue), 200, yPosition);
+  
+  yPosition += 20;
+  doc.text('Total Costs:', 50, yPosition);
+  doc.text(formatCurrency(reportData.costs), 200, yPosition);
+  
+  yPosition += 20;
+  doc.text('Gross Profit:', 50, yPosition);
+  doc.text(formatCurrency(reportData.grossProfit), 200, yPosition);
+  
+  yPosition += 20;
+  doc.text('Total Expenses:', 50, yPosition);
+  doc.text(formatCurrency(reportData.expenses), 200, yPosition);
+  
+  yPosition += 30;
+  doc.font('Helvetica-Bold').text('Net Profit:', 50, yPosition);
+  doc.text(formatCurrency(reportData.netProfit), 200, yPosition);
+
+  drawFooter(doc);
+}
+
+/**
+ * Render commission report template
+ */
+export function renderCommissionReportTemplate(doc: InstanceType<typeof PDFDocument>, reportData: CommissionReportData, tenant: Tenant): void {
+  // Header
+  const yAfterHeader = drawHeader(doc, tenant, 'Commission Report');
+  let yPosition = yAfterHeader + 20;
+
+  // Date range
+  doc.fontSize(FONTS.body)
+     .fillColor(COLORS.text)
+     .font('Helvetica')
+     .text(`Period: ${reportData.fromDate || ''} to ${reportData.toDate || ''}`, 50, yPosition, { align: 'center' });
+  
+  yPosition += 40;
+
+  // Table header
+  doc.fontSize(FONTS.body).font('Helvetica-Bold');
+  doc.text('Invoice No.', 50, yPosition);
+  doc.text('Date', 150, yPosition);
+  doc.text('Vendor', 220, yPosition);
+  doc.text('Amount', 320, yPosition);
+  doc.text('Rate', 380, yPosition);
+  doc.text('Commission', 430, yPosition);
+  
+  yPosition += 20;
+  
+  // Draw line under header
+  doc.strokeColor(COLORS.secondary)
+     .lineWidth(0.5)
+     .moveTo(50, yPosition)
+     .lineTo(500, yPosition)
+     .stroke();
+     
+  yPosition += 10;
+  
+  // Table rows
+  doc.fontSize(FONTS.small).font('Helvetica');
+  reportData.entries.forEach((entry) => {
+    doc.text(entry.invoiceNumber, 50, yPosition);
+    doc.text(formatDate(entry.invoiceDate), 150, yPosition);
+    doc.text(entry.vendorName, 220, yPosition);
+    doc.text(formatCurrency(entry.totalAmount), 320, yPosition);
+    doc.text(`${entry.commissionRate}%`, 380, yPosition);
+    doc.text(formatCurrency(entry.commissionAmount), 430, yPosition);
+    yPosition += 15;
+  });
+
+  // Total
+  yPosition += 10;
+  doc.font('Helvetica-Bold').text('Total Commission:', 350, yPosition);
+  doc.text(formatCurrency(reportData.totalCommission), 450, yPosition);
+
+  drawFooter(doc);
+}
+
+/**
+ * Render shortfall report template
+ */
+export function renderShortfallReportTemplate(doc: InstanceType<typeof PDFDocument>, reportData: ShortfallReportData, tenant: Tenant): void {
+  let yPosition = drawHeader(doc, tenant, 'Shortfall Report');
+
+  // Add date range if available
+  if (reportData.fromDate || reportData.toDate) {
+    const dateRange = `Period: ${reportData.fromDate || 'Beginning'} to ${reportData.toDate || 'Present'}`;
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).font('Helvetica').text(dateRange, 50, yPosition, { align: 'center' });
+    yPosition += 40;
+  }
+
+  if (reportData.entries && reportData.entries.length > 0) {
+    // Table headers
+    doc.fontSize(FONTS.body).font('Helvetica-Bold').fillColor(COLORS.text);
+    doc.text('Retailer Name', 50, yPosition);
+    doc.text('Shortfall Balance', 250, yPosition);
+    doc.text('Last Transaction', 400, yPosition);
+    
+    // Draw horizontal line under headers
+    yPosition += 15;
+    doc.strokeColor(COLORS.secondary).lineWidth(0.5).moveTo(50, yPosition).lineTo(500, yPosition).stroke();
+    yPosition += 10;
+
+    // Data rows
+    doc.fontSize(FONTS.small).font('Helvetica').fillColor(COLORS.text);
+    reportData.entries.forEach((entry) => {
+      // Check for page break
+      if (yPosition > doc.page.height - 100) {
+        doc.addPage();
+        yPosition = doc.page.margins.top;
+      }
+
+      doc.text(entry.retailerName, 50, yPosition);
+      doc.text(formatCurrency(entry.shortfallBalance), 250, yPosition);
+      const lastTransaction = entry.lastTransactionDate ? formatDate(entry.lastTransactionDate) : '-';
+      doc.text(lastTransaction, 400, yPosition);
+      yPosition += 15;
+    });
+
+    // Total
+    yPosition += 10;
+    doc.font('Helvetica-Bold').fillColor(COLORS.accent);
+    doc.text('Total Shortfall:', 350, yPosition);
+    doc.text(formatCurrency(reportData.totalShortfall), 450, yPosition);
+  } else {
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).text('No shortfall records found.', 50, yPosition);
+  }
+
+  drawFooter(doc);
+}
+
+/**
+ * Render expenses summary template
+ */
+export function renderExpensesSummaryTemplate(doc: InstanceType<typeof PDFDocument>, reportData: ExpensesSummaryData, tenant: Tenant): void {
+  let yPosition = drawHeader(doc, tenant, 'Expenses Summary');
+
+  // Add date range if available
+  if (reportData.fromDate || reportData.toDate) {
+    const dateRange = `Period: ${reportData.fromDate || 'Beginning'} to ${reportData.toDate || 'Present'}`;
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).font('Helvetica').text(dateRange, 50, yPosition, { align: 'center' });
+    yPosition += 40;
+  }
+
+  if (reportData.entries && reportData.entries.length > 0) {
+    // Table headers
+    doc.fontSize(FONTS.body).font('Helvetica-Bold').fillColor(COLORS.text);
+    doc.text('Category', 50, yPosition);
+    doc.text('Amount', 200, yPosition);
+    doc.text('Count', 320, yPosition);
+    doc.text('Percentage', 400, yPosition);
+    
+    // Draw horizontal line under headers
+    yPosition += 15;
+    doc.strokeColor(COLORS.secondary).lineWidth(0.5).moveTo(50, yPosition).lineTo(500, yPosition).stroke();
+    yPosition += 10;
+
+    // Data rows
+    doc.fontSize(FONTS.small).font('Helvetica').fillColor(COLORS.text);
+    reportData.entries.forEach((entry) => {
+      // Check for page break
+      if (yPosition > doc.page.height - 100) {
+        doc.addPage();
+        yPosition = doc.page.margins.top;
+      }
+
+      doc.text(entry.category, 50, yPosition);
+      doc.text(formatCurrency(entry.amount), 200, yPosition);
+      doc.text(entry.count.toString(), 320, yPosition);
+      doc.text(entry.percentage + '%', 400, yPosition);
+      yPosition += 15;
+    });
+
+    // Total
+    yPosition += 10;
+    doc.font('Helvetica-Bold').fillColor(COLORS.accent);
+    doc.text('Total Expenses:', 350, yPosition);
+    doc.text(formatCurrency(reportData.totalExpenses), 450, yPosition);
+  } else {
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).text('No expense records found.', 50, yPosition);
+  }
+
+  drawFooter(doc);
+}
+
+/**
+ * Render vendors list template
+ */
+export function renderVendorsListTemplate(doc: InstanceType<typeof PDFDocument>, reportData: VendorsListData, tenant: Tenant): void {
+  let yPosition = drawHeader(doc, tenant, 'Vendors List - Amount Payable');
+
+  if (reportData.entries && reportData.entries.length > 0) {
+    // Table headers
+    doc.fontSize(FONTS.body).font('Helvetica-Bold').fillColor(COLORS.text);
+    doc.text('Vendor Name', 50, yPosition);
+    doc.text('Phone', 200, yPosition);
+    doc.text('Address', 280, yPosition);
+    doc.text('Balance', 420, yPosition);
+    
+    // Draw horizontal line under headers
+    yPosition += 15;
+    doc.strokeColor(COLORS.secondary).lineWidth(0.5).moveTo(50, yPosition).lineTo(500, yPosition).stroke();
+    yPosition += 10;
+
+    // Data rows
+    doc.fontSize(FONTS.small).font('Helvetica').fillColor(COLORS.text);
+    reportData.entries.forEach((entry) => {
+      // Check for page break
+      if (yPosition > doc.page.height - 100) {
+        doc.addPage();
+        yPosition = doc.page.margins.top;
+      }
+
+      doc.text(entry.vendorName, 50, yPosition);
+      doc.text(entry.phone || '-', 200, yPosition);
+      doc.text(entry.address || '-', 280, yPosition, { width: 130, ellipsis: true });
+      doc.text(formatCurrency(entry.balance), 420, yPosition);
+      yPosition += 15;
+    });
+
+    // Total
+    yPosition += 10;
+    doc.font('Helvetica-Bold').fillColor(COLORS.accent);
+    doc.text('Total Payable:', 350, yPosition);
+    doc.text(formatCurrency(reportData.totalPayable), 450, yPosition);
+  } else {
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).text('No vendor records found.', 50, yPosition);
+  }
+
+  drawFooter(doc);
+}
+
+/**
+ * Render retailers list template
+ */
+export function renderRetailersListTemplate(doc: InstanceType<typeof PDFDocument>, reportData: RetailersListData, tenant: Tenant): void {
+  let yPosition = drawHeader(doc, tenant, 'Retailers List - Amount Receivable');
+
+  if (reportData.entries && reportData.entries.length > 0) {
+    // Table headers
+    doc.fontSize(FONTS.body).font('Helvetica-Bold').fillColor(COLORS.text);
+    doc.text('Retailer Name', 50, yPosition);
+    doc.text('Phone', 200, yPosition);
+    doc.text('Address', 280, yPosition);
+    doc.text('Udhaar Balance', 420, yPosition);
+    
+    // Draw horizontal line under headers
+    yPosition += 15;
+    doc.strokeColor(COLORS.secondary).lineWidth(0.5).moveTo(50, yPosition).lineTo(500, yPosition).stroke();
+    yPosition += 10;
+
+    // Data rows
+    doc.fontSize(FONTS.small).font('Helvetica').fillColor(COLORS.text);
+    reportData.entries.forEach((entry) => {
+      // Check for page break
+      if (yPosition > doc.page.height - 100) {
+        doc.addPage();
+        yPosition = doc.page.margins.top;
+      }
+
+      doc.text(entry.retailerName, 50, yPosition);
+      doc.text(entry.phone || '-', 200, yPosition);
+      doc.text(entry.address || '-', 280, yPosition, { width: 130, ellipsis: true });
+      doc.text(formatCurrency(entry.udhaaarBalance), 420, yPosition);
+      yPosition += 15;
+    });
+
+    // Total
+    yPosition += 10;
+    doc.font('Helvetica-Bold').fillColor(COLORS.accent);
+    doc.text('Total Receivable:', 350, yPosition);
+    doc.text(formatCurrency(reportData.totalReceivable), 450, yPosition);
+  } else {
+    doc.fontSize(FONTS.body).fillColor(COLORS.text).text('No retailer records found.', 50, yPosition);
+  }
+
   drawFooter(doc);
 }
 

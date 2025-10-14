@@ -499,6 +499,56 @@ For issues or questions:
 3. Ensure you're using the correct tenant URLs
 4. Check that test data is properly seeded for development
 
+## Responsive Design
+
+The application is **fully responsive** and optimized for all device sizes:
+
+- ✅ **Mobile**: 320px - 767px (phones in portrait/landscape)
+- ✅ **Tablet**: 768px - 1023px (tablets with collapsible sidebar)
+- ✅ **Desktop**: 1024px+ (full-featured desktop experience)
+
+### Key Features
+
+- **Collapsible Sidebar**: Icon-only mode on desktop (Cmd/Ctrl+B to toggle)
+- **Mobile Drawer**: Slide-out navigation on mobile devices
+- **Touch-Friendly**: All interactive elements ≥ 44px touch targets (WCAG 2.5.5)
+- **Fluid Typography**: Scales smoothly between 320px and 1920px+ displays
+- **Responsive Tables**: Card-based views on mobile, full tables on desktop
+- **Accessible**: WCAG 2.1 AA compliant, supports zoom up to 200%
+
+### Documentation
+
+- **[Quick Start Testing Guide](./QUICK_START_RESPONSIVE_TESTING.md)** - 5-minute responsive testing guide
+- **[Comprehensive Testing Guide](./RESPONSIVE_TESTING_GUIDE.md)** - Complete device testing matrix
+- **[Implementation Summary](./RESPONSIVE_IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
+
+### Testing
+
+Test the responsive design across different viewports:
+
+```bash
+# Chrome DevTools
+# Press Ctrl+Shift+M (Windows) or Cmd+Shift+M (Mac) to toggle responsive mode
+
+# Key viewports to test:
+# - 320px (iPhone SE)
+# - 375px (iPhone 12/13/14)
+# - 768px (iPad Mini)
+# - 1280px (Desktop)
+```
+
+**Mobile Features:**
+- Hamburger menu for navigation
+- Card-based table views
+- Touch-optimized forms
+- Vertical scrolling (no horizontal scroll)
+
+**Desktop Features:**
+- Fixed collapsible sidebar
+- Keyboard shortcut (Cmd/Ctrl+B) to toggle
+- Full table views with all columns
+- Icon-only sidebar mode with tooltips
+
 ## License
 
 MIT License - see LICENSE file for details.

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -337,8 +337,7 @@ export default function SettingsPage() {
 
   if (loadError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
+      <AppLayout>
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center space-y-4">
             <h2 className="text-2xl font-semibold text-red-600">Error Loading Settings</h2>
@@ -358,28 +357,27 @@ export default function SettingsPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
       
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+        <header className="bg-card border-b border-border px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Organization Settings</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Organization Settings</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Configure your organization preferences and business settings
               </p>
             </div>
             <PermissionGuard permission={PERMISSIONS.MANAGE_SETTINGS}>
               <Button 
                 onClick={handleSave} 
-                className="gap-2" 
+                className="gap-2 w-full sm:w-auto" 
                 data-testid="button-save-settings"
                 disabled={saving || loading}
               >
@@ -391,11 +389,11 @@ export default function SettingsPage() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6">
           {loading && (
             <div className="animate-pulse space-y-4">
               <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="h-24 bg-gray-200 rounded"></div>
                 ))}
@@ -435,7 +433,7 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
                   <Input
@@ -468,7 +466,7 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="commissionRate">Default Commission Rate (%)</Label>
                   <Input
@@ -548,7 +546,7 @@ export default function SettingsPage() {
                     <Separator />
                     
                     {/* Credit Information Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="creditBalance">Credit Balance (Read-only)</Label>
                         <Input
@@ -600,7 +598,7 @@ export default function SettingsPage() {
                       </div>
 
                       {settings.whatsapp?.scheduler?.enabled && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="preferredSendHour">Preferred Send Hour (0-23)</Label>
                             <Input
@@ -656,6 +654,4 @@ export default function SettingsPage() {
           )}
         </main>
       </div>
-    </div>
-  );
-}
+    </AppLayout>);}

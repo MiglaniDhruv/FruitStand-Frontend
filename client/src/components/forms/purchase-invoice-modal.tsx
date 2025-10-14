@@ -507,7 +507,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open ? 1 : 0]}
           fallback={({ error, resetError }) => (
@@ -539,7 +539,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             {/* Basic Information */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Invoice Details</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Invoice Details</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
@@ -568,20 +568,22 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                 />
 
                 {selectedVendorId && availableStockOutEntries && availableStockOutEntries.length > 0 && (
-                  <div className="md:col-span-2">
+                  <div className="col-span-full">
                     <label className="text-sm font-medium">Select Stock Out Entries (Optional)</label>
-                    <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
+                    <div className="mt-2 max-h-32 sm:max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
                       {availableStockOutEntries?.map((entry: any) => (
                         <div key={entry.id} className="flex items-start space-x-3">
-                          <Checkbox
-                            id={entry.id}
-                            checked={selectedStockOutEntries.includes(entry.id)}
-                            onCheckedChange={() => handleStockOutEntryToggle(entry.id)}
-                            data-testid={`checkbox-stock-out-entry-${entry.id}`}
-                          />
+                          <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                            <Checkbox
+                              id={entry.id}
+                              checked={selectedStockOutEntries.includes(entry.id)}
+                              onCheckedChange={() => handleStockOutEntryToggle(entry.id)}
+                              data-testid={`checkbox-stock-out-entry-${entry.id}`}
+                            />
+                          </div>
                           <label 
                             htmlFor={entry.id} 
-                            className="text-sm cursor-pointer flex-1 leading-relaxed"
+                            className="text-xs sm:text-sm cursor-pointer flex-1 leading-relaxed"
                           >
                             <span className="font-medium">{entry.item.name} - {entry.item.quality}</span>
                             <br />
@@ -623,7 +625,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Invoice Items</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">Invoice Items</CardTitle>
                   <Button 
                     type="button" 
                     onClick={addItem}
@@ -639,7 +641,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
+                  <div key={field.id} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 p-3 sm:p-4 border rounded-lg">
                     <FormField
                       control={form.control}
                       name={`items.${index}.itemId`}
@@ -784,9 +786,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             {/* Expenses */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Expenses</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Expenses</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <FormField
                   control={form.control}
                   name="commission"
@@ -981,7 +983,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
               <CardHeader>
                 <div className="flex items-center space-x-2">
                   <Package className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-lg">Crate Transaction (Optional)</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">Crate Transaction (Optional)</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -991,11 +993,13 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                       <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="checkbox-crate-transaction"
-                        />
+                        <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-crate-transaction"
+                          />
+                        </div>
                       </FormControl>
                       <div className="space-y-1 leading-none">
                         <FormLabel>
@@ -1043,9 +1047,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             {/* Totals */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Calculated Totals</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Calculated Totals</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <FormField
                   control={form.control}
                   name="totalExpense"
@@ -1166,7 +1170,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
             )}
 
             {/* Form Actions */}
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

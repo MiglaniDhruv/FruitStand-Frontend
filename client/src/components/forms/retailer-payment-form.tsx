@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Card,
   CardContent,
@@ -106,6 +107,7 @@ interface RetailerPaymentFormProps {
 export default function RetailerPaymentForm({ open, onOpenChange, retailerId, retailerName }: RetailerPaymentFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   
   const [outstandingInvoices, setOutstandingInvoices] = useState<SalesInvoice[]>([]);
   const [distributionPreview, setDistributionPreview] = useState<Array<{ invoice: SalesInvoice; allocatedAmount: number }>>([]);
@@ -359,7 +361,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open ? 1 : 0, effectiveRetailerId || '']}
           fallback={({ error, resetError }) => (
@@ -452,7 +454,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
           {effectiveRetailerId ? (
             <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="amount"
@@ -647,38 +649,59 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice Number</TableHead>
-                          <TableHead>Invoice Date</TableHead>
-                          <TableHead className="text-right">Udhaar</TableHead>
-                          <TableHead className="text-right">Allocated Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {distributionPreview.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">
-                              {item.invoice.invoiceNumber}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(item.invoice.invoiceDate).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₹{parseFloat(item.invoice.udhaaarAmount || '0').toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₹{item.allocatedAmount.toFixed(2)}
-                            </TableCell>
+                  {isMobile ? (
+                    <div className="space-y-2">
+                      {distributionPreview.map((item, index) => (
+                        <Card key={index}>
+                          <CardContent className="p-3">
+                            <div className="font-medium">{item.invoice.invoiceNumber}</div>
+                            <div className="text-sm text-muted-foreground">{new Date(item.invoice.invoiceDate).toLocaleDateString()}</div>
+                            <div className="flex justify-between mt-2">
+                              <span className="text-sm">Udhaar:</span>
+                              <span className="font-medium">₹{parseFloat(item.invoice.udhaaarAmount || '0').toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Allocated:</span>
+                              <span className="font-medium text-green-600">₹{item.allocatedAmount.toFixed(2)}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs sm:text-sm">Invoice Number</TableHead>
+                            <TableHead className="text-xs sm:text-sm">Invoice Date</TableHead>
+                            <TableHead className="text-right text-xs sm:text-sm">Udhaar</TableHead>
+                            <TableHead className="text-right text-xs sm:text-sm">Allocated Amount</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {distributionPreview.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium text-xs sm:text-sm">
+                                {item.invoice.invoiceNumber}
+                              </TableCell>
+                              <TableCell className="text-xs sm:text-sm">
+                                {new Date(item.invoice.invoiceDate).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm">
+                                ₹{parseFloat(item.invoice.udhaaarAmount || '0').toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm">
+                                ₹{item.allocatedAmount.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                   
-                  <div className="mt-4 space-y-2 text-sm">
+                  <div className="mt-4 space-y-2 text-xs sm:text-sm">
                     <div className="flex justify-between">
                       <span>Total Payment:</span>
                       <span>₹{paymentAmount.toFixed(2)}</span>
@@ -759,7 +782,7 @@ export default function RetailerPaymentForm({ open, onOpenChange, retailerId, re
               </Alert>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

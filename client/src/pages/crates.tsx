@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type CrateTransactionWithParty } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -430,12 +430,11 @@ export default function CrateManagement() {
 
   if (transactionsLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -443,15 +442,14 @@ export default function CrateManagement() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Crate Transactions</h2>
             <p className="text-gray-600 mb-6">
@@ -462,24 +460,23 @@ export default function CrateManagement() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+        <header className="bg-card border-b border-border px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Crate Management</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Crate Management</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Track crate transactions with retailers and vendors
               </p>
             </div>
-            <Button onClick={handleCreateTransaction} data-testid="button-add-transaction">
+            <Button onClick={handleCreateTransaction} data-testid="button-add-transaction" className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Record Transaction
             </Button>
@@ -487,10 +484,10 @@ export default function CrateManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
@@ -516,11 +513,11 @@ export default function CrateManagement() {
             <TabsContent value="transactions" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <CardTitle>Crate Transactions</CardTitle>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <Select value={selectedPartyType} onValueChange={handlePartyTypeFilterChange}>
-                        <SelectTrigger className="w-32" data-testid="select-party-type-filter">
+                        <SelectTrigger className="w-full sm:w-32" data-testid="select-party-type-filter">
                           <SelectValue placeholder="All Parties" />
                         </SelectTrigger>
                         <SelectContent>
@@ -531,7 +528,7 @@ export default function CrateManagement() {
                       </Select>
                       
                       <Select value={selectedRetailer} onValueChange={handleRetailerFilterChange}>
-                        <SelectTrigger className="w-40" data-testid="select-retailer-filter">
+                        <SelectTrigger className="w-full sm:w-40" data-testid="select-retailer-filter">
                           <SelectValue placeholder="All Retailers" />
                         </SelectTrigger>
                         <SelectContent>
@@ -545,7 +542,7 @@ export default function CrateManagement() {
                       </Select>
                       
                       <Select value={selectedTransactionType} onValueChange={handleTransactionTypeFilterChange}>
-                        <SelectTrigger className="w-32" data-testid="select-type-filter">
+                        <SelectTrigger className="w-full sm:w-32" data-testid="select-type-filter">
                           <SelectValue placeholder="All Types" />
                         </SelectTrigger>
                         <SelectContent>
@@ -881,6 +878,4 @@ export default function CrateManagement() {
           </Form>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+    </AppLayout>);}

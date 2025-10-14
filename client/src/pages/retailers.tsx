@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -447,12 +447,11 @@ export default function RetailerManagement() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -460,17 +459,16 @@ export default function RetailerManagement() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Retailers</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Error Loading Retailers</h2>
             <p className="text-gray-600 mb-6">
               {error instanceof Error ? error.message : "Failed to load retailers. Please try again."}
             </p>
@@ -479,20 +477,19 @@ export default function RetailerManagement() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Retailer Management</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Retailer Management</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage your retail customers and track their balances
               </p>
             </div>
@@ -504,19 +501,19 @@ export default function RetailerManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Retailers</p>
-                    <p className="text-2xl font-semibold text-foreground">{statsData?.totalRetailers || 0}</p>
-                    <p className="text-sm mt-1 text-purple-600">Active retailers</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Retailers</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-foreground">{statsData?.totalRetailers || 0}</p>
+                    <p className="text-xs sm:text-sm mt-1 text-purple-600">Active retailers</p>
                   </div>
-                  <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500/10 rounded-lg flex items-center justify-center">
                     <Users className="text-lg text-purple-600" />
                   </div>
                 </div>
@@ -524,14 +521,14 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Udhaar</p>
-                    <p className="text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalUdhaar || "0").toLocaleString("en-IN")}</p>
-                    <p className="text-sm mt-1 text-green-600">Outstanding credit</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Udhaar</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalUdhaar || "0").toLocaleString("en-IN")}</p>
+                    <p className="text-xs sm:text-sm mt-1 text-green-600">Outstanding credit</p>
                   </div>
-                  <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
                     <TrendingUp className="text-lg text-green-600" />
                   </div>
                 </div>
@@ -539,14 +536,14 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Shortfall</p>
-                    <p className="text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalShortfall || "0").toLocaleString("en-IN")}</p>
-                    <p className="text-sm mt-1 text-red-600">Pending shortfall</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Shortfall</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-foreground">₹{parseFloat(statsData?.totalShortfall || "0").toLocaleString("en-IN")}</p>
+                    <p className="text-xs sm:text-sm mt-1 text-red-600">Pending shortfall</p>
                   </div>
-                  <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
                     <IndianRupee className="text-lg text-red-600" />
                   </div>
                 </div>
@@ -554,14 +551,14 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Crates</p>
-                    <p className="text-2xl font-semibold text-foreground">{statsData?.totalCrates || 0}</p>
-                    <p className="text-sm mt-1 text-blue-600">Crates with retailers</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Crates</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-foreground">{statsData?.totalCrates || 0}</p>
+                    <p className="text-xs sm:text-sm mt-1 text-blue-600">Crates with retailers</p>
                   </div>
-                  <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
                     <Package className="text-lg text-blue-600" />
                   </div>
                 </div>
@@ -572,9 +569,9 @@ export default function RetailerManagement() {
           {/* Retailers Table */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                 <CardTitle>Retailers</CardTitle>
-                <div className="relative flex-1 max-w-sm ml-4">
+                <div className="relative flex-1 max-w-full sm:max-w-sm sm:ml-4">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search retailers by name or contact person..."
@@ -706,6 +703,4 @@ export default function RetailerManagement() {
         retailerId={selectedRetailerForPayment?.id || ""}
         retailerName={selectedRetailerForPayment?.name}
       />
-    </div>
-  );
-}
+    </AppLayout>);}

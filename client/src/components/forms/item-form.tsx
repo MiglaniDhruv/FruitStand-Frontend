@@ -146,7 +146,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg lg:max-w-2xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open, item?.id]}
           fallback={({ error, resetError }) => (
@@ -174,8 +174,8 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
           </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="name"
@@ -258,7 +258,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                 control={form.control}
                 name="isActive"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 sm:p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
                       <div className="text-sm text-muted-foreground">
@@ -302,7 +302,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
               </Alert>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

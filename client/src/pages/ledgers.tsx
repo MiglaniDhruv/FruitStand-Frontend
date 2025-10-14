@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -269,12 +269,11 @@ export default function Ledgers() {
 
   if (isInitialLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -282,15 +281,14 @@ export default function Ledgers() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (hasError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <AppLayout>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="text-center space-y-4">
             <h2 className="text-2xl font-semibold text-red-600">Error Loading Ledger Data</h2>
             <p className="text-gray-600 max-w-md">
@@ -304,7 +302,7 @@ export default function Ledgers() {
             </button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
@@ -458,21 +456,22 @@ export default function Ledgers() {
   const crateLedgerEntries = filterCrateLedgerEntries(crateLedgerData);
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground">Business Ledgers</h2>
-              <p className="text-sm text-muted-foreground">
-                Complete ledger management system for APMC operations
-              </p>
+        <header className="bg-card border-b border-border px-4 sm:px-6 py-4">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Business Ledgers</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Complete ledger management system for APMC operations
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="relative w-full sm:flex-1 sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by party name or description..."
@@ -483,7 +482,7 @@ export default function Ledgers() {
                 />
               </div>
               <Select value={transactionTypeFilter} onValueChange={handleTransactionTypeChange}>
-                <SelectTrigger className="w-40" data-testid="select-transaction-type">
+                <SelectTrigger className="w-full sm:w-40" data-testid="select-transaction-type">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -501,18 +500,18 @@ export default function Ledgers() {
                 type="date"
                 value={dateFilter.startDate}
                 onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-40"
+                className="w-full sm:w-40"
                 data-testid="input-start-date"
               />
-              <span className="text-muted-foreground">to</span>
+              <span className="text-muted-foreground hidden sm:inline">to</span>
               <Input
                 type="date"
                 value={dateFilter.endDate}
                 onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-40"
+                className="w-full sm:w-40"
                 data-testid="input-end-date"
               />
-              <Button variant="outline" data-testid="button-export-ledger">
+              <Button variant="outline" data-testid="button-export-ledger" className="w-full sm:w-auto">
                 <Download className="mr-2 h-4 w-4" />
                 Export
               </Button>
@@ -521,38 +520,38 @@ export default function Ledgers() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           {/* KPI Cards */}
           {kpiData && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Cash Balance</p>
                       <p className="text-2xl font-semibold text-foreground">
                         {formatCurrency(kpiData.cashBalance)}
                       </p>
-                      <p className="text-sm mt-1 text-muted-foreground">Current cash in hand</p>
+                      <p className="text-xs sm:text-sm mt-1 text-muted-foreground">Current cash in hand</p>
                     </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <DollarSign className="text-lg text-green-600" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="text-base sm:text-lg text-green-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Bank Balance</p>
                       <p className="text-2xl font-semibold text-foreground">
                         {formatCurrency(kpiData.totalBankBalance)}
                       </p>
-                      <p className="text-sm mt-1 text-muted-foreground">Across all bank accounts</p>
+                      <p className="text-xs sm:text-sm mt-1 text-muted-foreground">Across all bank accounts</p>
                     </div>
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <CreditCard className="text-lg text-blue-600" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <CreditCard className="text-base sm:text-lg text-blue-600" />
                     </div>
                   </div>
                 </CardContent>
@@ -1127,6 +1126,4 @@ export default function Ledgers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
+    </AppLayout>);}

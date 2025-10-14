@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -393,9 +393,8 @@ export default function Stock() {
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Stock</h2>
             <p className="text-gray-600 mb-6">
@@ -406,7 +405,7 @@ export default function Stock() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
@@ -446,16 +445,15 @@ export default function Stock() {
   };
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+        <header className="bg-card border-b border-border px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Stock Management</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Stock Management</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Monitor and update inventory levels
               </p>
             </div>
@@ -463,16 +461,17 @@ export default function Stock() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <CardTitle>Stock Inventory</CardTitle>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <Button 
                       onClick={() => setShowManualEntry(true)}
                       data-testid="button-add-stock"
+                      className="w-full sm:w-auto"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Stock
@@ -481,13 +480,14 @@ export default function Stock() {
                       variant="destructive"
                       onClick={() => setShowWastageEntry(true)}
                       data-testid="button-add-wastage"
+                      className="w-full sm:w-auto"
                     >
                       <AlertCircle className="h-4 w-4 mr-2" />
                       Record Wastage
                     </Button>
                   </div>
                 </div>
-                <div className="relative flex-1 max-w-sm">
+                <div className="relative w-full sm:max-w-sm">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search stock by item name or quality..."
@@ -1057,6 +1057,4 @@ export default function Stock() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+    </AppLayout>);}

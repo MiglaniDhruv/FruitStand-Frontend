@@ -39,6 +39,17 @@ export interface TenantSessionContext {
 // Re-export dashboard types from shared schema to keep server and client types in sync
 export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer } from '@shared/schema';
 
+// Re-export report types from shared schema to keep server and client types in sync
+export type { 
+  TurnoverReportData, 
+  ProfitLossReportData, 
+  CommissionReportData, 
+  ShortfallReportData, 
+  ExpensesSummaryData, 
+  VendorsListData, 
+  RetailersListData 
+} from '@shared/schema';
+
 export interface CreateInvoiceItem {
   commodityId: string;
   quantity: string;

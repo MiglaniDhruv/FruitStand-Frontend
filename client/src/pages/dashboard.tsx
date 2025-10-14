@@ -1,4 +1,4 @@
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { useTenant } from "@/hooks/use-tenant";
 import { AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -31,12 +31,11 @@ export default function Dashboard() {
 
   if (isLoading || dashboardLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -44,18 +43,17 @@ export default function Dashboard() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   // Only tenant errors trigger full-page error
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <AppLayout>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Tenant</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-red-600">Error Loading Tenant</h2>
             <p className="text-gray-600 max-w-md">
               {error instanceof Error 
                 ? error.message 
@@ -69,22 +67,21 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center space-x-3">
-                <h2 className="text-2xl font-semibold text-foreground">
+                <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
                   Dashboard{tenant ? ` - ${tenant.name}` : ""}
                 </h2>
                 {tenant && !tenant.isActive && (
@@ -94,7 +91,7 @@ export default function Dashboard() {
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Overview of {tenant?.name || "your"} commission merchant operations
               </p>
             </div>
@@ -102,7 +99,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-4 sm:space-y-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           {/* KPI Cards Section */}
           {dashboardIsError ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -141,6 +138,6 @@ export default function Dashboard() {
           )}
         </main>
       </div>
-    </div>
+    </AppLayout>
   );
 }

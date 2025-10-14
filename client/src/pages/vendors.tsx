@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,12 +204,11 @@ export default function Vendors() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -217,17 +216,16 @@ export default function Vendors() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <AppLayout>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Vendors</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-red-600">Error Loading Vendors</h2>
             <p className="text-gray-600 max-w-md">
               {error instanceof Error ? error.message : "Failed to load vendors. Please try again."}
             </p>
@@ -239,21 +237,20 @@ export default function Vendors() {
             </button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Vendors</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Vendors</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage your vendor information and contacts
               </p>
             </div>
@@ -267,14 +264,14 @@ export default function Vendors() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <CardTitle>All Vendors</CardTitle>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -289,7 +286,7 @@ export default function Vendors() {
                     value={paginationOptions.status || "active"}
                     onValueChange={handleStatusChange}
                   >
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[140px]">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -331,6 +328,6 @@ export default function Vendors() {
         vendorId={selectedVendorForPayment?.id || ""}
         vendorName={selectedVendorForPayment?.name}
       />
-    </div>
+    </AppLayout>
   );
 }

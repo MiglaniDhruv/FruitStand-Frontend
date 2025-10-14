@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/alert";
 import { Info, AlertCircle, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Alert as AlertComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
@@ -98,6 +99,7 @@ interface VendorPaymentFormProps {
 export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendorName }: VendorPaymentFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   
   const [outstandingInvoices, setOutstandingInvoices] = useState<PurchaseInvoice[]>([]);
   const [distributionPreview, setDistributionPreview] = useState<Array<{ invoice: PurchaseInvoice; allocatedAmount: number }>>([]);
@@ -342,7 +344,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open ? 1 : 0, effectiveVendorId || '']}
           fallback={({ error, resetError }) => (
@@ -435,7 +437,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
           {effectiveVendorId ? (
             <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="amount"
@@ -603,44 +605,65 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
             ) : showPreview && distributionPreview.length > 0 ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Payment Distribution Preview</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">Payment Distribution Preview</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     This payment will be distributed across the following invoices (FIFO)
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice Number</TableHead>
-                          <TableHead>Invoice Date</TableHead>
-                          <TableHead className="text-right">Balance</TableHead>
-                          <TableHead className="text-right">Allocated Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {distributionPreview.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">
-                              {item.invoice.invoiceNumber}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(item.invoice.invoiceDate).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₹{parseFloat(item.invoice.balanceAmount).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₹{item.allocatedAmount.toFixed(2)}
-                            </TableCell>
+                  {isMobile ? (
+                    <div className="space-y-2">
+                      {distributionPreview.map((item, index) => (
+                        <Card key={index}>
+                          <CardContent className="p-3">
+                            <div className="font-medium">{item.invoice.invoiceNumber}</div>
+                            <div className="text-sm text-muted-foreground">{new Date(item.invoice.invoiceDate).toLocaleDateString()}</div>
+                            <div className="flex justify-between mt-2">
+                              <span className="text-sm">Balance:</span>
+                              <span className="font-medium">₹{parseFloat(item.invoice.balanceAmount).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Allocated:</span>
+                              <span className="font-medium text-green-600">₹{item.allocatedAmount.toFixed(2)}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs sm:text-sm">Invoice Number</TableHead>
+                            <TableHead className="text-xs sm:text-sm">Invoice Date</TableHead>
+                            <TableHead className="text-right text-xs sm:text-sm">Balance</TableHead>
+                            <TableHead className="text-right text-xs sm:text-sm">Allocated Amount</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {distributionPreview.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium text-xs sm:text-sm">
+                                {item.invoice.invoiceNumber}
+                              </TableCell>
+                              <TableCell className="text-xs sm:text-sm">
+                                {new Date(item.invoice.invoiceDate).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm">
+                                ₹{parseFloat(item.invoice.balanceAmount).toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm">
+                                ₹{item.allocatedAmount.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                   
-                  <div className="mt-4 space-y-2 text-sm">
+                  <div className="mt-4 space-y-2 text-xs sm:text-sm">
                     <div className="flex justify-between">
                       <span>Total Payment:</span>
                       <span>₹{paymentAmount.toFixed(2)}</span>
@@ -721,7 +744,7 @@ export default function VendorPaymentForm({ open, onOpenChange, vendorId, vendor
               </Alert>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

@@ -9,6 +9,20 @@ import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { TenantInfo } from "@/components/tenant/tenant-info";
 import { LowCreditWarningBanner } from "@/components/whatsapp/low-credit-warning-banner";
 import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
   Apple,
   BarChart3,
   Book,
@@ -97,6 +111,12 @@ const getNavigationItems = (slug: string) => [
     permission: PERMISSIONS.VIEW_LEDGERS,
   },
   {
+    title: "Reports",
+    href: `/${slug}/reports`,
+    icon: BarChart3,
+    permission: PERMISSIONS.VIEW_LEDGERS,
+  },
+  {
     title: "WhatsApp Logs",
     href: `/${slug}/whatsapp-logs`,
     icon: MessageSquare,
@@ -116,11 +136,12 @@ const getNavigationItems = (slug: string) => [
   },
 ];
 
-export default function Sidebar() {
+export default function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const currentUser = authService.getCurrentUser();
   const { tenant } = useTenant();
+  const { state } = useSidebar();
 
   // Get tenant slug from context
   const { slug: tenantSlug } = useTenantSlug();
@@ -143,91 +164,96 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 bg-card border-r border-border flex flex-col">
+    <Sidebar collapsible="icon" side="left">
       {/* Logo and Brand */}
-      <div className="p-6 border-b border-border">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+      <SidebarHeader className="border-b border-border">
+        <div className="flex items-center space-x-3 p-6">
+          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
             <Apple className="text-primary-foreground text-lg" />
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">
+          <div className="group-data-[collapsible=icon]:hidden">
+            <h1 className="text-lg-fluid font-semibold text-foreground">
               {tenant?.settings?.companyName || "APMC System"}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm-fluid text-muted-foreground">
               Commission Merchant
               {tenant && <span className="block">{tenant.name}</span>}
             </p>
           </div>
         </div>
-      </div>
 
-      {/* User Info */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
-            <User className="text-secondary-foreground text-sm" />
-          </div>
-          <div>
-            <p className="text-sm font-medium">{currentUser?.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {permissionService.getRoleInfo().label}
-            </p>
+        {/* User Info */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
+              <User className="text-secondary-foreground text-sm" />
+            </div>
+            <div className="group-data-[collapsible=icon]:hidden">
+              <p className="text-sm-fluid font-medium">{currentUser?.name}</p>
+              <p className="text-xs-fluid text-muted-foreground">
+                {permissionService.getRoleInfo().label}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tenant Info */}
-      <div className="p-4 border-b border-border">
-        <TenantInfo compact={true} showStatus={false} showSwitcher={false} />
-      </div>
+        {/* Tenant Info */}
+        <div className="p-4 border-b border-border group-data-[collapsible=icon]:hidden">
+          <TenantInfo compact={true} showStatus={false} showSwitcher={false} />
+        </div>
 
-      {/* Low Credit Warning */}
-      <div className="px-4">
-        <LowCreditWarningBanner />
-      </div>
+        {/* Low Credit Warning */}
+        <div className="px-4 group-data-[collapsible=icon]:hidden">
+          <LowCreditWarningBanner />
+        </div>
+      </SidebarHeader>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 p-4">
-        <div className="space-y-2">
-          {navigationItems.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <PermissionGuard key={item.href} permission={item.permission}>
-                <Link href={item.href}>
-                  <a
-                    className={cn(
-                      "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                      isActive
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                    )}
-                    data-testid={`link-${
-                      item.href.replace(/^\/.*?\//, "").replace("/", "") ||
-                      "dashboard"
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5 mr-3" />
-                    {item.title}
-                  </a>
-                </Link>
-              </PermissionGuard>
-            );
-          })}
-        </div>
-      </nav>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navigationItems.map((item) => {
+                const isActive = location === item.href || location.startsWith(item.href + '/') || location.startsWith(item.href + '?');
+                return (
+                  <PermissionGuard key={item.href} permission={item.permission}>
+                    <SidebarMenuItem>
+                      <Link href={item.href}>
+                        <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                          <a
+                            data-testid={`link-${
+                              item.href.replace(/^\/.*?\//, "").replace("/", "") ||
+                              "dashboard"
+                            }`}
+                          >
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </a>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                  </PermissionGuard>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-border">
-        <button
-          onClick={handleLogout}
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:text-destructive w-full rounded-md transition-colors"
-          data-testid="button-logout"
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </button>
-      </div>
-    </div>
+      {/* Footer with Toggle and Logout */}
+      <SidebarFooter className="border-t border-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarTrigger className="w-full" />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
+              <LogOut />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 }

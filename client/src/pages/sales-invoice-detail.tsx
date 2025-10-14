@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import InvoiceDetailsView from "@/components/invoice/invoice-details-view";
 import SalesPaymentForm from "@/components/forms/sales-payment-form";
 import { Button } from "@/components/ui/button";
@@ -302,9 +302,8 @@ export default function SalesInvoiceDetailPage() {
   // Loading state
   if (invoiceLoading) {
     return (
-      <div className="flex min-h-screen bg-muted/30">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+      <AppLayout>
+        <div className="flex-1 flex flex-col bg-muted/30">
           <header className="bg-card shadow-sm border-b">
             <div className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center space-x-4">
@@ -331,16 +330,15 @@ export default function SalesInvoiceDetailPage() {
             </div>
           </main>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   // Error state
   if (invoiceError) {
     return (
-      <div className="flex min-h-screen bg-muted/30">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+      <AppLayout>
+        <div className="flex-1 flex flex-col bg-muted/30">
           <header className="bg-card shadow-sm border-b">
             <div className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center space-x-4">
@@ -377,16 +375,15 @@ export default function SalesInvoiceDetailPage() {
             </div>
           </main>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   // Not found state
   if (!invoice && !invoiceLoading) {
     return (
-      <div className="flex min-h-screen bg-muted/30">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+      <AppLayout>
+        <div className="flex-1 flex flex-col bg-muted/30">
           <header className="bg-card shadow-sm border-b">
             <div className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center space-x-4">
@@ -418,15 +415,14 @@ export default function SalesInvoiceDetailPage() {
             </div>
           </main>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
     <>
-      <div className="flex min-h-screen bg-muted/30">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+      <AppLayout>
+        <div className="flex-1 flex flex-col bg-muted/30">
           <header className="bg-card shadow-sm border-b">
             <div className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center justify-between">
@@ -546,7 +542,7 @@ export default function SalesInvoiceDetailPage() {
             </div>
           </main>
         </div>
-      </div>
+      </AppLayout>
 
       <SalesPaymentForm
         open={showPaymentForm}

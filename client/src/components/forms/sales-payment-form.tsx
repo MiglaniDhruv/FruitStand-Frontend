@@ -213,7 +213,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open ? 1 : 0]}
           fallback={({ error, resetError }) => (
@@ -240,7 +240,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
             <DialogTitle>Record Sales Payment</DialogTitle>
           </DialogHeader>
           <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <FormField
               control={form.control}
               name="retailerId"
@@ -437,7 +437,7 @@ export default function SalesPaymentForm({ open, onOpenChange, preSelectedInvoic
               <Alert variant="destructive"><AlertDescription>Failed to load bank accounts: {bankAccountsErrorMessage?.message || 'Unknown error'}</AlertDescription></Alert>
             )}
 
-            <div className="flex justify-end space-x-2">
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -373,10 +373,9 @@ export default function UserManagement() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
+      <AppLayout>
         <div className="flex-1 flex flex-col">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <div className="animate-pulse">
               <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
               <div className="space-y-3">
@@ -387,17 +386,16 @@ export default function UserManagement() {
             </div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <AppLayout>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold text-red-600">Error Loading Users</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-red-600">Error Loading Users</h2>
             <p className="text-gray-600 max-w-md">
               {error instanceof Error ? error.message : "Failed to load users. Please try again."}
             </p>
@@ -409,21 +407,20 @@ export default function UserManagement() {
             </button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
       
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Organization Users</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Organization Users</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage users in your organization
               </p>
             </div>
@@ -519,15 +516,15 @@ export default function UserManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   Organization Users
                 </CardTitle>
-                <div className="relative flex-1 max-w-sm ml-4">
+                <div className="relative flex-1 max-w-full sm:max-w-sm sm:ml-4">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search users by username or name..."
@@ -641,7 +638,7 @@ export default function UserManagement() {
 
       {/* Permissions Management Modal */}
       <Dialog open={!!managingPermissions} onOpenChange={() => setManagingPermissions(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Permissions - {managingPermissions?.name}</DialogTitle>
             <p className="text-sm text-muted-foreground">
@@ -656,7 +653,7 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-4">
                   <h4 className="text-lg font-medium">Default Role Permissions</h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ROLE_PERMISSIONS[managingPermissions.role as keyof typeof ROLE_PERMISSIONS]?.map((permission: string) => (
                       <div key={permission} className="flex items-center space-x-2 p-2 bg-secondary rounded-md">
                         <Shield className="h-4 w-4 text-green-600" />
@@ -731,6 +728,4 @@ export default function UserManagement() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+    </AppLayout>);}

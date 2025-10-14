@@ -131,7 +131,7 @@ function BankAccountFormContent({ open, onOpenChange, bankAccount }: BankAccount
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Edit Bank Account" : "Add Bank Account"}
@@ -256,7 +256,7 @@ function BankAccountFormContent({ open, onOpenChange, bankAccount }: BankAccount
               />
             </div>
             
-            <div className="flex justify-end space-x-2 pt-4">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
               <Button 
                 type="button" 
                 variant="outline" 

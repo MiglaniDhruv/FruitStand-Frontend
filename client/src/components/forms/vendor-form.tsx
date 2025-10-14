@@ -128,7 +128,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg lg:max-w-2xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundary 
           resetKeys={[open, vendor?.id]}
           fallback={({ error, resetError }) => (
@@ -157,7 +157,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}
                 name="name"
@@ -180,7 +180,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
                     <FormLabel>Phone Number *</FormLabel>
                     <FormControl>
                       <div className="flex items-center gap-0">
-                        <div className="flex h-10 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
+                        <div className="flex h-11 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
                           +91
                         </div>
                         <Input 
@@ -211,7 +211,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
                 control={form.control}
                 name="isActive"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 sm:p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
                       <div className="text-sm text-muted-foreground">
@@ -265,7 +265,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
               </Alert>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
               <Button 
                 type="button" 
                 variant="outline" 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "@/components/layout/sidebar";
+import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -555,12 +555,11 @@ export default function ExpenseManagement() {
 
   if (expensesLoading || categoriesLoading) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
@@ -568,17 +567,16 @@ export default function ExpenseManagement() {
             <div className="h-96 bg-gray-200 rounded"></div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (isError || categoriesError) {
     return (
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-8">
+      <AppLayout>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Expenses</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Error Loading Expenses</h2>
             <p className="text-gray-600 mb-6">
               {isError && error instanceof Error ? error.message : 
                categoriesError && categoriesErrorMessage instanceof Error ? categoriesErrorMessage.message :
@@ -589,25 +587,24 @@ export default function ExpenseManagement() {
             </Button>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
     <>
-    <div className="flex h-screen">
-      <Sidebar />
+    <AppLayout>
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Expense Management</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Expense Management</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Track business expenses and manage categories
               </p>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button variant="outline" onClick={handleCreateCategory} data-testid="button-add-category">
                 <Tag className="h-4 w-4 mr-2" />
                 Add Category
@@ -621,18 +618,18 @@ export default function ExpenseManagement() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6 space-y-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
                 <Receipt className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{totalExpenses}</div>
-                <p className="text-xs text-muted-foreground">All time</p>
+                <div className="text-xl sm:text-2xl font-bold">{totalExpenses}</div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">All time</p>
               </CardContent>
             </Card>
             
@@ -665,7 +662,7 @@ export default function ExpenseManagement() {
                     <div className="flex items-center justify-between">
                       <CardTitle>Expenses</CardTitle>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -677,7 +674,7 @@ export default function ExpenseManagement() {
                         />
                       </div>
                       <Select value={selectedCategory} onValueChange={handleCategoryFilterChange}>
-                        <SelectTrigger className="w-40" data-testid="select-category-filter">
+                        <SelectTrigger className="w-full sm:w-40" data-testid="select-category-filter">
                           <SelectValue placeholder="All Categories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -690,7 +687,7 @@ export default function ExpenseManagement() {
                         </SelectContent>
                       </Select>
                       <Select value={selectedPaymentMode} onValueChange={handlePaymentModeFilterChange}>
-                        <SelectTrigger className="w-40" data-testid="select-payment-mode-filter">
+                        <SelectTrigger className="w-full sm:w-40" data-testid="select-payment-mode-filter">
                           <SelectValue placeholder="All Payment Modes" />
                         </SelectTrigger>
                         <SelectContent>
@@ -969,7 +966,7 @@ export default function ExpenseManagement() {
           </Form>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppLayout>
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -14,12 +14,17 @@ import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { PaginationMetadata } from "@shared/schema";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface DataTableColumn<T> {
   accessorKey: string;
   header: string;
   cell?: (value: any, item: T) => React.ReactNode;
   enableSorting?: boolean;
+  hideOnMobile?: boolean;
+  priority?: 'high' | 'medium' | 'low';
+  mobileLabel?: string;
 }
 
 interface DataTableProps<T> {
@@ -59,6 +64,9 @@ interface DataTableProps<T> {
    * Falls back to data length and first/last row IDs if not provided.
    */
   resetKey?: string | number;
+  enableMobileCardView?: boolean;
+  cardViewBreakpoint?: number;
+  mobileCardRenderer?: (item: T) => React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -78,10 +86,45 @@ export function DataTable<T>({
   pageSizeOptions,
   emptyMessage = "No results.",
   resetKey,
+  enableMobileCardView = false,
+  cardViewBreakpoint = 768,
+  mobileCardRenderer,
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
   const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
   const [currentSortOrder, setCurrentSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Mobile detection and responsive logic
+  const isMobile = useIsMobile();
+  
+  // Custom breakpoint detection for card view
+  const [isNarrowScreen, setIsNarrowScreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < cardViewBreakpoint;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const mediaQuery = window.matchMedia(`(max-width: ${cardViewBreakpoint - 1}px)`);
+    
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsNarrowScreen(e.matches);
+    };
+    
+    // Set initial value
+    handleChange(mediaQuery);
+    
+    // Listen for changes
+    mediaQuery.addEventListener('change', handleChange);
+    
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, [cardViewBreakpoint]);
+
+  const shouldShowCardView = isNarrowScreen && enableMobileCardView;
+  const visibleColumns = isNarrowScreen ? columns.filter(col => !col.hideOnMobile) : columns;
 
   const handleSort = (columnKey: string) => {
     if (!onSortChange) return;
@@ -114,6 +157,11 @@ export function DataTable<T>({
   function getNestedValue(obj: any, path: string) {
     return path.split('.').reduce((current, key) => current?.[key], obj);
   }
+
+  // Helper function to get row ID
+  const getRowId = (item: T, index: number) => {
+    return getNestedValue(item, rowKey) || index;
+  };
 
   // Handle page size change
   const handlePageSizeChange = (newPageSize: number) => {
@@ -216,59 +264,6 @@ export function DataTable<T>({
     selectedRows.has(getNestedValue(item, rowKey))
   ) && !isAllSelected;
 
-  if (isLoading) {
-    const loadingPageSize = paginationMetadata?.limit || 10;
-    return (
-      <div className="space-y-4">
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {enableRowSelection && <TableHead className="w-12" />}
-                {columns.map((column) => (
-                  <TableHead key={column.accessorKey}>
-                    {column.enableSorting ? (
-                      <div className="flex items-center">
-                        {column.header}
-                        <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />
-                      </div>
-                    ) : (
-                      column.header
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: loadingPageSize }).map((_, index) => (
-                <TableRow key={index}>
-                  {enableRowSelection && (
-                    <TableCell>
-                      <div className="h-4 w-4 animate-pulse bg-muted rounded" />
-                    </TableCell>
-                  )}
-                  {columns.map((column) => (
-                    <TableCell key={column.accessorKey}>
-                      <div className="h-4 animate-pulse bg-muted rounded w-24" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <DataTablePagination
-          paginationMetadata={paginationMetadata}
-          onPageChange={() => {}}
-          onPageSizeChange={() => {}}
-          selectedRowCount={0}
-          isLoading={true}
-          pageSizeOptions={pageSizeOptions}
-        />
-      </div>
-    );
-  }
-
   const TableErrorFallback = ({ error, resetError }: { error: Error; resetError: () => void }) => (
     <Alert variant="destructive" className="m-4">
       <AlertTriangle className="h-4 w-4" />
@@ -304,96 +299,276 @@ export function DataTable<T>({
     return keys;
   };
 
-  return (
-    <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
-      <div className="space-y-4">
+  // Mobile Card View Component
+  const MobileCardView = () => {
+    if (data.length === 0) {
+      return (
+        <Card className="p-8">
+          <div className="text-center text-muted-foreground">
+            {emptyMessage}
+          </div>
+        </Card>
+      );
+    }
+
+    if (mobileCardRenderer) {
+      return (
+        <div className="space-y-3">
+          {data.map((item, index) => {
+            const rowId = getRowId(item, index);
+            return (
+              <div key={rowId} className="space-y-2">
+                {enableRowSelection && (
+                  <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                    <Checkbox
+                      checked={selectedRows.has(rowId)}
+                      onCheckedChange={() => handleRowToggle(rowId)}
+                      aria-label={`Select row ${index + 1}`}
+                    />
+                  </div>
+                )}
+                {mobileCardRenderer(item)}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {data.map((item, index) => {
+          const rowId = getRowId(item, index);
+          const primaryColumn = visibleColumns[0];
+          const otherColumns = visibleColumns.slice(1);
+          
+          return (
+            <Card key={rowId} className="p-4">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">
+                    {primaryColumn ? (
+                      primaryColumn.cell 
+                        ? primaryColumn.cell(getNestedValue(item, primaryColumn.accessorKey), item)
+                        : String(getNestedValue(item, primaryColumn.accessorKey) || '')
+                    ) : ''}
+                  </CardTitle>
+                  {enableRowSelection && (
+                    <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                      <Checkbox
+                        checked={selectedRows.has(rowId)}
+                        onCheckedChange={() => handleRowToggle(rowId)}
+                        aria-label={`Select ${primaryColumn?.header || 'item'}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-2">
+                  {otherColumns.map((column) => (
+                    <div key={column.accessorKey} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">
+                        {column.mobileLabel || column.header}:
+                      </span>
+                      <span>
+                        {column.cell 
+                          ? column.cell(getNestedValue(item, column.accessorKey), item)
+                          : String(getNestedValue(item, column.accessorKey) || '')
+                        }
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Loading state with mobile card view support
+  const LoadingView = () => {
+    if (shouldShowCardView) {
+      return (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-4">
+              <CardHeader className="pb-2">
+                <div className="h-4 bg-muted rounded animate-pulse" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-2">
+                  <div className="h-3 bg-muted rounded animate-pulse" />
+                  <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    return (
       <div className="rounded-md border">
-        <Table>
+        <Table className="min-w-full">
           <TableHeader>
             <TableRow>
               {enableRowSelection && (
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={isAllSelected}
-                    indeterminate={isIndeterminate}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all"
-                    data-testid="checkbox-select-all"
-                  />
+                <TableHead className="min-w-[44px] min-h-[44px]">
+                  <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                    <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+                  </div>
                 </TableHead>
               )}
-              {columns.map((column) => (
+              {visibleColumns.map((column) => (
                 <TableHead key={column.accessorKey}>
-                  {column.enableSorting ? (
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort(column.accessorKey)}
-                      className="-ml-4 h-auto p-2 hover:bg-transparent"
-                      data-testid={`sort-${column.accessorKey}`}
-                    >
-                      {column.header}
-                      {getSortIcon(column.accessorKey)}
-                    </Button>
-                  ) : (
-                    column.header
-                  )}
+                  <div className="h-4 bg-muted rounded animate-pulse" />
                 </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length + (enableRowSelection ? 1 : 0)}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  {emptyMessage}
-                </TableCell>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                {enableRowSelection && (
+                  <TableCell>
+                    <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                      <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+                    </div>
+                  </TableCell>
+                )}
+                {visibleColumns.map((column) => (
+                  <TableCell key={column.accessorKey}>
+                    <div className="h-4 bg-muted rounded animate-pulse" />
+                  </TableCell>
+                ))}
               </TableRow>
-            ) : (
-              data.map((item, index) => {
-                const rowId = getNestedValue(item, rowKey);
-                const isSelected = selectedRows.has(rowId);
-                
-                return (
-                  <TableRow
-                    key={rowId || index}
-                    data-state={isSelected ? "selected" : undefined}
-                  >
-                    {enableRowSelection && (
-                      <TableCell>
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleRowToggle(rowId)}
-                          aria-label={`Select row ${index + 1}`}
-                          data-testid={`checkbox-row-${index}`}
-                        />
-                      </TableCell>
-                    )}
-                    {columns.map((column) => {
-                      const value = getNestedValue(item, column.accessorKey);
-                      return (
-                        <TableCell key={column.accessorKey}>
-                          {column.cell ? column.cell(value, item) : value}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination
-        paginationMetadata={paginationMetadata}
-        onPageChange={handlePageChange}
-        onPageSizeChange={handlePageSizeChange}
-        selectedRowCount={selectedRows.size}
-        pageSizeOptions={pageSizeOptions}
-      />
-    </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
+        <div className="space-y-4">
+          <LoadingView />
+          {paginationMetadata && (
+            <DataTablePagination
+              paginationMetadata={paginationMetadata}
+              onPageChange={onPageChange || (() => {})}
+              onPageSizeChange={onPageSizeChange || (() => {})}
+              pageSizeOptions={pageSizeOptions}
+            />
+          )}
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
+      <div className="space-y-4">
+        {shouldShowCardView ? (
+          <MobileCardView />
+        ) : (
+          <div className="rounded-md border">
+            <Table className="min-w-full">
+              <TableHeader>
+                <TableRow>
+                  {enableRowSelection && (
+                    <TableHead className="min-w-[44px] min-h-[44px]">
+                      <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                        <Checkbox
+                          checked={isAllSelected}
+                          indeterminate={isIndeterminate}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all"
+                          data-testid="checkbox-select-all"
+                        />
+                      </div>
+                    </TableHead>
+                  )}
+                  {visibleColumns.map((column) => (
+                                    <TableHead key={column.accessorKey}>
+                      {column.enableSorting ? (
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort(column.accessorKey)}
+                          className="-ml-4 min-h-[44px] min-w-[44px] p-2 hover:bg-transparent"
+                          data-testid={`sort-${column.accessorKey}`}
+                        >
+                          {column.header}
+                          {getSortIcon(column.accessorKey)}
+                        </Button>
+                      ) : (
+                        column.header
+                      )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={visibleColumns.length + (enableRowSelection ? 1 : 0)}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      {emptyMessage}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((item, index) => {
+                    const rowId = getNestedValue(item, rowKey);
+                    const isSelected = selectedRows.has(rowId);
+                    
+                    return (
+                      <TableRow
+                        key={rowId || index}
+                        data-state={isSelected ? "selected" : undefined}
+                      >
+                        {enableRowSelection && (
+                          <TableCell>
+                            <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleRowToggle(rowId)}
+                                aria-label={`Select row ${index + 1}`}
+                                data-testid={`checkbox-row-${index}`}
+                              />
+                            </div>
+                          </TableCell>
+                        )}
+                        {visibleColumns.map((column) => {
+                          const value = getNestedValue(item, column.accessorKey);
+                          return (
+                            <TableCell key={column.accessorKey}>
+                              {column.cell ? column.cell(value, item) : value}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {paginationMetadata && (
+          <DataTablePagination
+            paginationMetadata={paginationMetadata}
+            onPageChange={onPageChange || (() => {})}
+            onPageSizeChange={onPageSizeChange || (() => {})}
+            pageSizeOptions={pageSizeOptions}
+          />
+        )}
+      </div>
     </ErrorBoundary>
   );
 }

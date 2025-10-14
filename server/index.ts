@@ -35,6 +35,7 @@ import { dashboardRouter } from "./src/modules/dashboard";
 import { tenantRouter } from "./src/modules/tenants";
 import { whatsappRouter } from "./src/modules/whatsapp";
 import { publicRouter } from "./src/modules/public/router";
+import { reportRouter } from "./src/modules/reports";
 
 // Server reference for graceful shutdown
 let server: any = null;
@@ -267,6 +268,7 @@ app.use(asyncHandler(extractTenantSlug));
   app.use("/api", expenseRouter.getRouter());
   app.use("/api", ledgerRouter.getRouter());
   app.use("/api", dashboardRouter.getRouter());
+  app.use("/api", reportRouter.getRouter());
   app.use("/api", tenantRouter.getRouter());
   app.use("/api", whatsappRouter.getRouter());
 

@@ -5,6 +5,13 @@ export { InvoiceGenerator, invoiceGenerator } from './invoice-generator';
 export { 
   renderSalesInvoiceTemplate,
   renderPurchaseInvoiceTemplate,
+  renderTurnoverReportTemplate,
+  renderProfitLossReportTemplate,
+  renderCommissionReportTemplate,
+  renderShortfallReportTemplate,
+  renderExpensesSummaryTemplate,
+  renderVendorsListTemplate,
+  renderRetailersListTemplate,
   drawHeader,
   drawInvoiceDetails,
   drawPartyDetails,

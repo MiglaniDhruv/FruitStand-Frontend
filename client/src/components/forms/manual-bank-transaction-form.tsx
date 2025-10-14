@@ -210,7 +210,7 @@ function ManualBankTransactionFormComponent({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isDeposit ? 'Record Bank Deposit' : 'Record Bank Withdrawal'}
@@ -218,8 +218,8 @@ function ManualBankTransactionFormComponent({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {/* Transaction Type */}
               <FormField
                 control={form.control}
@@ -394,7 +394,7 @@ function ManualBankTransactionFormComponent({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-end space-x-4">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
               <Button
                 type="button"
                 variant="outline"

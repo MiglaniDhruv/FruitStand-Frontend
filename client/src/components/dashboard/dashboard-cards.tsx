@@ -31,15 +31,15 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {Array.from({ length: 4 }).map((_, index) => (
           <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-4 w-24" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <Skeleton className="h-3 sm:h-4 w-20 sm:w-24" />
               <Skeleton className="h-4 w-4 rounded-full" />
             </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-20" />
+            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <Skeleton className="h-6 sm:h-8 w-16 sm:w-20" />
             </CardContent>
           </Card>
         ))}
@@ -83,21 +83,21 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
       {cards.map((card, index) => {
         const Icon = card.icon;
         return (
           <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <CardTitle className="text-xs sm:text-sm font-medium">
                 {card.title}
               </CardTitle>
-              <div className={`p-2 rounded-full ${card.iconBg}`}>
+              <div className={`p-1.5 sm:p-2 rounded-full ${card.iconBg}`}>
                 <Icon className={`h-4 w-4 ${card.iconColor}`} />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
+            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <div className="text-xl sm:text-2xl font-bold">{card.value}</div>
             </CardContent>
           </Card>
         );
