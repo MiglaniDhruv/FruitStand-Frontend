@@ -1,3 +1,29 @@
+/**
+ * Form Components - React Hook Form Integration with Accessibility
+ * 
+ * This component provides accessible form inputs with built-in error handling.
+ * 
+ * Key Accessibility Features:
+ * 
+ * 1. ARIA Associations:
+ *    - FormControl uses aria-describedby to link to FormDescription and FormMessage
+ *    - Screen readers announce field descriptions and errors when field is focused
+ *    - Proper id-based relationships ensure reliable screen reader announcements
+ * 
+ * 2. Error State Indication:
+ *    - aria-invalid attribute on FormControl tells screen readers about errors
+ *    - FormLabel turns red (text-destructive) when error exists for visual feedback
+ *    - FormMessage displays error text with alert behavior via aria-describedby
+ * 
+ * 3. Label Associations:
+ *    - FormLabel uses htmlFor to associate with FormControl's id
+ *    - Clicking label focuses the input (standard HTML behavior)
+ * 
+ * Usage Pattern:
+ *   FormField wraps FormItem which contains FormLabel, FormControl, 
+ *   FormDescription (help text), and FormMessage (validation errors)
+ */
+
 "use client"
 
 import * as React from "react"

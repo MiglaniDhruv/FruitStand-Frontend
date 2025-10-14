@@ -26,8 +26,7 @@ function CreditBalanceBadge() {
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">Available Credits:</span>
       <Badge 
-        variant={isLow ? "destructive" : "secondary"}
-        className={isLow ? "bg-amber-500" : ""}
+        className={isLow ? "bg-warning/10 text-warning border-warning/20" : ""}
       >
         {creditBalance} credits
       </Badge>
@@ -117,13 +116,13 @@ export default function WhatsAppMessageLog({ referenceType, referenceId, compact
       cell: (value: string, item: WhatsAppMessage) => {
         const type = item.messageType;
         const colorMap = {
-          sales_invoice: 'bg-blue-100 text-blue-800',
-          purchase_invoice: 'bg-green-100 text-green-800',
-          payment_reminder: 'bg-yellow-100 text-yellow-800',
-          payment_notification: 'bg-purple-100 text-purple-800',
+          sales_invoice: 'bg-info/10 text-info border-info/20',
+          purchase_invoice: 'bg-success/10 text-success border-success/20',
+          payment_reminder: 'bg-warning/10 text-warning border-warning/20',
+          payment_notification: 'bg-info/10 text-info border-info/20',
         };
         return (
-          <Badge className={colorMap[type as keyof typeof colorMap] || 'bg-gray-100 text-gray-800'}>
+          <Badge className={colorMap[type as keyof typeof colorMap] || 'bg-muted text-muted-foreground'}>
             {type.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
           </Badge>
         );

@@ -1,3 +1,38 @@
+/**
+ * DropdownMenu Component - Accessible Dropdown Menus
+ * 
+ * Built on Radix UI's DropdownMenu primitive for full keyboard and screen reader support.
+ * 
+ * Key Accessibility Features (provided by Radix UI):
+ * 
+ * 1. Keyboard Navigation:
+ *    - Space/Enter: Open menu and activate items
+ *    - Escape: Close menu (returns focus to trigger)
+ *    - Arrow Up/Down: Navigate between menu items
+ *    - Arrow Right/Left: Open/close submenus
+ *    - Tab: Close menu and move to next focusable element
+ * 
+ * 2. Screen Reader Support:
+ *    - Proper ARIA roles: menu, menuitem, menuitemcheckbox, menuitemradio
+ *    - Focus management: Menu receives focus on open, returns to trigger on close
+ *    - State announcements: Checked states announced for checkbox/radio items
+ * 
+ * 3. Focus Management:
+ *    - Focus trapped within open menu (Tab cycles through items)
+ *    - First item receives focus on open (or last focused item)
+ *    - Focus returns to trigger button when menu closes
+ * 
+ * 4. Pointer Interaction:
+ *    - Click trigger to open/close menu
+ *    - Click outside to close (with focus return to trigger)
+ *    - Hover to highlight items (doesn't affect keyboard focus)
+ * 
+ * Usage:
+ *   Use DropdownMenuCheckboxItem for toggleable options
+ *   Use DropdownMenuRadioGroup with DropdownMenuRadioItem for single-select
+ *   Use DropdownMenuSeparator to group related items visually
+ */
+
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"

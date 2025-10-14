@@ -32,13 +32,13 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
   if (loading) {
     return (
       <Card>
-        <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+        <CardHeader size="default" className="py-5 sm:py-7">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <TrendingUp className="h-5 w-5" />
             Recent Sales
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+        <CardContent size="default" className="pb-5 sm:pb-7">
           <Table>
             <TableHeader>
               <TableRow>
@@ -69,13 +69,13 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
   if (!sales || sales.length === 0) {
     return (
       <Card>
-        <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+        <CardHeader size="default">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <TrendingUp className="h-5 w-5" />
             Recent Sales
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+        <CardContent size="default">
           <p className="text-xs sm:text-sm text-muted-foreground text-center py-4 sm:py-6">No recent sales found</p>
         </CardContent>
       </Card>
@@ -96,10 +96,10 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
   };
 
   const MobileCardView = () => (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {sales.map((sale) => (
-        <Card key={sale.id} className="hover:bg-muted/50 cursor-pointer">
-          <CardHeader className="pb-3">
+        <Card key={sale.id} hover className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+          <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
               <div className="font-medium">{sale.invoiceNumber}</div>
               <div className="text-xs text-muted-foreground">
@@ -107,7 +107,7 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div>
               <div className="text-xs text-muted-foreground">Retailer</div>
               <div className="text-sm">{sale.retailerName}</div>
@@ -142,7 +142,7 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
         </TableHeader>
         <TableBody>
           {sales.map((sale) => (
-            <TableRow key={sale.id} className="hover:bg-muted/50 cursor-pointer">
+            <TableRow key={sale.id} className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
               <TableCell className="text-xs sm:text-sm font-medium">{sale.invoiceNumber}</TableCell>
               <TableCell className="text-xs sm:text-sm text-muted-foreground">
                 {format(new Date(sale.invoiceDate), "MMM dd, yyyy")}
@@ -163,13 +163,13 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
 
   return (
     <Card>
-      <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+      <CardHeader size="default" className="py-5 sm:py-7">
         <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
           <TrendingUp className="h-5 w-5" />
           Recent Sales
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+      <CardContent size="default" className="pb-5 sm:pb-7">
         {isMobile ? <MobileCardView /> : <TableView />}
       </CardContent>
     </Card>

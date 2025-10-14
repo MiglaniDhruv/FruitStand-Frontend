@@ -4,6 +4,25 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
+/**
+ * AlertDialog Component - Accessible Alert Dialog
+ * 
+ * Built on Radix UI AlertDialog primitives which provide:
+ * - Automatic focus trap management (focus stays within alert dialog when open)
+ * - NO escape key closing (by design - user must explicitly choose an action)
+ * - NO outside click closing (by design - prevents accidental dismissal of important alerts)
+ * - Automatic ARIA attributes (aria-labelledby, aria-describedby) when using AlertDialogTitle/AlertDialogDescription
+ * - Focus restoration (returns focus to trigger element when closed)
+ * - Screen reader announcements with role="alertdialog" (more assertive than regular dialog)
+ * 
+ * Difference from Dialog:
+ * - AlertDialog requires explicit user action (AlertDialogAction or AlertDialogCancel)
+ * - Cannot be closed with Escape key or outside clicks
+ * - Used for critical confirmations that require user attention
+ * 
+ * For more details: https://www.radix-ui.com/primitives/docs/components/alert-dialog
+ */
+
 const AlertDialog = AlertDialogPrimitive.Root
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
@@ -25,6 +44,20 @@ const AlertDialogOverlay = React.forwardRef<
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 
+/**
+ * AlertDialogContent - Main container for alert dialog content
+ * 
+ * Accessibility Features:
+ * - Focus trap: Focus is automatically trapped within the alert dialog and cycles through focusable elements
+ * - Cannot be closed with Escape key (by design for alerts)
+ * - Cannot be closed by clicking outside (by design for alerts)
+ * - Automatically connects to AlertDialogTitle via aria-labelledby
+ * - Automatically connects to AlertDialogDescription via aria-describedby
+ * - role="alertdialog" for assertive screen reader announcements
+ * - Focus maintained until user takes explicit action (AlertDialogAction or AlertDialogCancel)
+ * 
+ * Note: Use regular Dialog component if you need Escape key or outside click dismissal.
+ */
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>

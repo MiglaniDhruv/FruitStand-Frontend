@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   type PaginationOptions,
   type PaginatedResult,
@@ -33,6 +34,7 @@ import {
   Eye,
   Trash2,
   Search,
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
@@ -243,7 +245,7 @@ export default function SalesInvoiceManagement() {
       cell: (value: string) => {
         const amount = parseFloat(value || "0");
         return (
-          <span className={amount > 0 ? "text-red-600 font-medium" : ""}>
+          <span className={amount > 0 ? "text-destructive font-medium" : ""}>
             ₹{amount.toLocaleString("en-IN")}
           </span>
         );
@@ -294,11 +296,12 @@ export default function SalesInvoiceManagement() {
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
       case "Paid":
-        return "bg-chart-2/10 text-chart-2";
+        return "bg-status-paid/10 text-status-paid border-status-paid/20";
       case "Pending":
-        return "bg-chart-1/10 text-chart-1";
+        return "bg-status-pending/10 text-status-pending border-status-pending/20";
       case "Partial":
-        return "bg-chart-4/10 text-chart-4";
+      case "Partially Paid":
+        return "bg-status-partial/10 text-status-partial border-status-partial/20";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -309,13 +312,13 @@ export default function SalesInvoiceManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-8 bg-muted rounded w-1/4"></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <div key={i} className="h-24 bg-muted rounded"></div>
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-muted rounded"></div>
           </div>
         </div>
       </AppLayout>
@@ -327,10 +330,10 @@ export default function SalesInvoiceManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-destructive mb-4">
               Error Loading Sales Invoices
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-muted-foreground mb-6">
               {error instanceof Error
                 ? error.message
                 : "Failed to load sales invoices. Please try again."}
@@ -368,9 +371,9 @@ export default function SalesInvoiceManagement() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground heading-page">
                 Sales Invoices
-              </h2>
+              </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage sales invoices and track payments
               </p>
@@ -384,88 +387,94 @@ export default function SalesInvoiceManagement() {
             </Button>
           </div>
         </header>
+        
+        <Separator className="my-0" />
 
         {/* Summary Cards */}
-        <div className="p-4 sm:p-6 bg-muted/50">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+        <section aria-label="Sales summary statistics">
+          <h2 className="sr-only">Sales Summary</h2>
+          <div className="p-4 sm:p-6 bg-muted/50 border-b border-border">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 sm:gap-7">
+              <Card>
+              <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Revenue
                 </CardTitle>
                 <IndianRupee className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <CardContent size="default">
                 <div className="text-xl sm:text-2xl font-bold">
                   ₹{totalRevenue.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Paid
                 </CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-                <div className="text-xl sm:text-2xl font-bold text-green-600">
+                            <CardContent size="default">
+                <div className="text-xl sm:text-2xl font-bold text-success">
                   ₹{totalPaid.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Udhaar Amount
                 </CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-                <div className="text-xl sm:text-2xl font-bold text-orange-600">
+              <CardContent size="default">
+                <div className="text-xl sm:text-2xl font-bold text-warning">
                   ₹{totalUdhaar.toLocaleString("en-IN")}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Total Shortfall
+                  Shortfall Amount
                 </CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-                <div className="text-xl sm:text-2xl font-bold text-red-600">
+              <CardContent size="default">
+                <div className="text-xl sm:text-2xl font-bold text-destructive">
                   ₹{totalShortfall.toLocaleString("en-IN")}
                 </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
-                  Deficit from paid invoices
-                </p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Invoices
                 </CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <CardContent size="default">
                 <div className="text-xl sm:text-2xl font-bold">{totalInvoices}</div>
               </CardContent>
             </Card>
           </div>
         </div>
+        </section>
+        
+        <Separator className="my-0" />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
-          <Card>
-            <CardHeader>
+        <main className="flex-1 overflow-auto p-5 sm:p-7" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+          <section aria-label="Sales invoices table">
+            <h2 className="sr-only">Invoices List</h2>
+            <Card shadow="md">
+            <CardHeader className="pb-5">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <CardTitle>All Invoices</CardTitle>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -511,6 +520,7 @@ export default function SalesInvoiceManagement() {
               />
             </CardContent>
           </Card>
+          </section>
         </main>
       </div>
 

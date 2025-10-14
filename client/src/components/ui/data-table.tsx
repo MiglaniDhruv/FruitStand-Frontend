@@ -313,7 +313,7 @@ export function DataTable<T>({
 
     if (mobileCardRenderer) {
       return (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {data.map((item, index) => {
             const rowId = getRowId(item, index);
             return (
@@ -336,15 +336,15 @@ export function DataTable<T>({
     }
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {data.map((item, index) => {
           const rowId = getRowId(item, index);
           const primaryColumn = visibleColumns[0];
           const otherColumns = visibleColumns.slice(1);
           
           return (
-            <Card key={rowId} className="p-4">
-              <CardHeader className="pb-2">
+            <Card key={rowId} size="sm" hover>
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">
                     {primaryColumn ? (
@@ -365,7 +365,7 @@ export function DataTable<T>({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {otherColumns.map((column) => (
                     <div key={column.accessorKey} className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">
@@ -392,9 +392,9 @@ export function DataTable<T>({
   const LoadingView = () => {
     if (shouldShowCardView) {
       return (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="p-4">
+            <Card key={i} size="sm">
               <CardHeader className="pb-2">
                 <div className="h-4 bg-muted rounded animate-pulse" />
               </CardHeader>
@@ -455,7 +455,7 @@ export function DataTable<T>({
   if (isLoading) {
     return (
       <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
-        <div className="space-y-4">
+        <div className="space-y-6">
           <LoadingView />
           {paginationMetadata && (
             <DataTablePagination
@@ -472,7 +472,7 @@ export function DataTable<T>({
 
   return (
     <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
-      <div className="space-y-4">
+      <div className="space-y-6">
         {shouldShowCardView ? (
           <MobileCardView />
         ) : (
@@ -493,23 +493,48 @@ export function DataTable<T>({
                       </div>
                     </TableHead>
                   )}
-                  {visibleColumns.map((column) => (
-                                    <TableHead key={column.accessorKey}>
-                      {column.enableSorting ? (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleSort(column.accessorKey)}
-                          className="-ml-4 min-h-[44px] min-w-[44px] p-2 hover:bg-transparent"
-                          data-testid={`sort-${column.accessorKey}`}
-                        >
-                          {column.header}
-                          {getSortIcon(column.accessorKey)}
-                        </Button>
-                      ) : (
-                        column.header
-                      )}
-                    </TableHead>
-                  ))}
+                  {visibleColumns.map((column) => {
+                    const getSortLabel = () => {
+                      if (currentSortBy === column.accessorKey) {
+                        return currentSortOrder === 'asc' 
+                          ? `Sort by ${column.header}, currently ascending` 
+                          : `Sort by ${column.header}, currently descending`;
+                      }
+                      return `Sort by ${column.header}, currently unsorted`;
+                    };
+                    
+                    const sortProps = column.enableSorting
+                      ? {
+                          "aria-sort": (
+                            currentSortBy === column.accessorKey 
+                              ? currentSortOrder === 'asc' ? 'ascending' : 'descending'
+                              : 'none'
+                          ) as 'ascending' | 'descending' | 'none'
+                        }
+                      : {};
+                    
+                    return (
+                      <TableHead 
+                        key={column.accessorKey}
+                        {...sortProps}
+                      >
+                        {column.enableSorting ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleSort(column.accessorKey)}
+                            className="-ml-4 min-h-[44px] min-w-[44px] p-2 hover:bg-transparent transition-all duration-150"
+                            data-testid={`sort-${column.accessorKey}`}
+                            aria-label={getSortLabel()}
+                          >
+                            {column.header}
+                            {getSortIcon(column.accessorKey)}
+                          </Button>
+                        ) : (
+                          column.header
+                        )}
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -225,7 +226,7 @@ export default function Vendors() {
       <AppLayout>
         <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-xl sm:text-2xl font-semibold text-red-600">Error Loading Vendors</h2>
+            <h1 className="text-xl sm:text-2xl font-semibold text-red-600 heading-page">Error Loading Vendors</h1>
             <p className="text-gray-600 max-w-md">
               {error instanceof Error ? error.message : "Failed to load vendors. Please try again."}
             </p>
@@ -249,7 +250,7 @@ export default function Vendors() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Vendors</h2>
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground heading-page">Vendors</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage your vendor information and contacts
               </p>
@@ -263,15 +264,17 @@ export default function Vendors() {
           </div>
         </header>
 
+        <Separator className="my-0" />
+
         {/* Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-4">
+        <main className="flex-1 overflow-auto p-5 sm:p-7" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+          <Card shadow="md">
+            <CardHeader className="pb-5">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <CardTitle>All Vendors</CardTitle>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input

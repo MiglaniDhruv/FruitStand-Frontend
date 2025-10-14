@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
+import { Separator } from "@/components/ui/separator";
 import { PaginationOptions, PaginatedResult, Retailer } from "@shared/schema";
 import { buildPaginationParams } from "@/lib/pagination";
 import {
@@ -468,7 +469,7 @@ export default function RetailerManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Error Loading Retailers</h2>
+            <h1 className="text-xl sm:text-2xl font-bold text-red-600 mb-4 heading-page">Error Loading Retailers</h1>
             <p className="text-gray-600 mb-6">
               {error instanceof Error ? error.message : "Failed to load retailers. Please try again."}
             </p>
@@ -488,7 +489,7 @@ export default function RetailerManagement() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Retailer Management</h2>
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground heading-page">Retailer Management</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage your retail customers and track their balances
               </p>
@@ -500,13 +501,17 @@ export default function RetailerManagement() {
           </div>
         </header>
 
+        <Separator className="my-0" />
+
         {/* Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6 sm:space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+        <main className="flex-1 overflow-auto p-5 sm:p-7 space-y-6 sm:space-y-8" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            <Card>
-              <CardContent className="p-4 sm:p-6">
+          <section aria-label="Retailer summary statistics">
+            <h2 className="sr-only">Retailer Summary</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <Card>
+              <CardContent size="default">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-muted-foreground">Total Retailers</p>
@@ -521,7 +526,7 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 sm:p-6">
+              <CardContent size="default">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-muted-foreground">Total Udhaar</p>
@@ -536,7 +541,7 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 sm:p-6">
+              <CardContent size="default">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-muted-foreground">Total Shortfall</p>
@@ -551,7 +556,7 @@ export default function RetailerManagement() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 sm:p-6">
+              <CardContent size="default">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-muted-foreground">Total Crates</p>
@@ -565,11 +570,14 @@ export default function RetailerManagement() {
               </CardContent>
             </Card>
           </div>
+          </section>
 
           {/* Retailers Table */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          <section aria-label="Retailers table">
+            <h2 className="sr-only">Retailers List</h2>
+            <Card shadow="md">
+            <CardHeader size="default" className="pb-5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <CardTitle>Retailers</CardTitle>
                 <div className="relative flex-1 max-w-full sm:max-w-sm sm:ml-4">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -583,7 +591,7 @@ export default function RetailerManagement() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent size="default">
               <DataTable
                 data={retailers}
                 columns={columns}
@@ -598,6 +606,7 @@ export default function RetailerManagement() {
               />
             </CardContent>
           </Card>
+          </section>
         </main>
       </div>
 
@@ -634,7 +643,7 @@ export default function RetailerManagement() {
                     <FormLabel>Phone *</FormLabel>
                     <FormControl>
                       <div className="flex items-center gap-0">
-                        <div className="flex h-10 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
+                        <div className="flex h-11 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm">
                           +91
                         </div>
                         <Input 

@@ -33,12 +33,12 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+          <Card key={index} shadow="sm">
+            <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
               <Skeleton className="h-3 sm:h-4 w-20 sm:w-24" />
               <Skeleton className="h-4 w-4 rounded-full" />
             </CardHeader>
-            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <CardContent size="default">
               <Skeleton className="h-6 sm:h-8 w-16 sm:w-20" />
             </CardContent>
           </Card>
@@ -87,16 +87,16 @@ export default function DashboardCards({ kpis, loading }: DashboardCardsProps) {
       {cards.map((card, index) => {
         const Icon = card.icon;
         return (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+          <Card key={index} hover>
+            <CardHeader size="default" className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">
                 {card.title}
               </CardTitle>
-              <div className={`p-1.5 sm:p-2 rounded-full ${card.iconBg}`}>
+              <div className={`p-1.5 sm:p-2 rounded-full transition-all duration-200 ${card.iconBg}`}>
                 <Icon className={`h-4 w-4 ${card.iconColor}`} />
               </div>
             </CardHeader>
-            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <CardContent size="default">
               <div className="text-xl sm:text-2xl font-bold">{card.value}</div>
             </CardContent>
           </Card>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -208,12 +209,13 @@ export default function PurchaseInvoices() {
       
       switch (status) {
         case "Paid":
-          return "bg-chart-2/10 text-chart-2";
+          return "bg-status-paid/10 text-status-paid border-status-paid/20";
         case "Pending":
         case "Unpaid":
-          return "bg-chart-1/10 text-chart-1";
+          return "bg-status-pending/10 text-status-pending border-status-pending/20";
+        case "Partial":
         case "Partially Paid":
-          return "bg-chart-4/10 text-chart-4";
+          return "bg-status-partial/10 text-status-partial border-status-partial/20";
         default:
           return "bg-muted text-muted-foreground";
       }
@@ -247,13 +249,13 @@ export default function PurchaseInvoices() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-8 bg-muted rounded w-1/4"></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <div key={i} className="h-24 bg-muted rounded"></div>
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-muted rounded"></div>
           </div>
         </div>
       </AppLayout>
@@ -265,8 +267,8 @@ export default function PurchaseInvoices() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Error Loading Purchase Invoices</h2>
-            <p className="text-gray-600 mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold text-destructive mb-4">Error Loading Purchase Invoices</h1>
+            <p className="text-muted-foreground mb-6">
               {error instanceof Error ? error.message : "Failed to load purchase invoices. Please try again."}
             </p>
             <Button onClick={() => window.location.reload()}>
@@ -286,7 +288,7 @@ export default function PurchaseInvoices() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Purchase Invoices</h2>
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground heading-page">Purchase Invoices</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Manage purchase invoices and track payments
               </p>
@@ -297,16 +299,18 @@ export default function PurchaseInvoices() {
             </Button>
           </div>
         </header>
+        
+        <Separator className="my-0" />
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
-          <Card>
-            <CardHeader>
+        <main className="flex-1 overflow-auto p-5 sm:p-7" style={{ paddingBottom: 'calc(var(--footer-h, 72px) + 8px)' }}>
+          <Card shadow="md">
+            <CardHeader size="default" className="pb-5">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <CardTitle>All Invoices</CardTitle>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -331,7 +335,7 @@ export default function PurchaseInvoices() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent size="default">
               <DataTable
                 data={invoices}
                 columns={columns}

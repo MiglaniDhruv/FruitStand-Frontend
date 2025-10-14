@@ -6,6 +6,20 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Dialog Component - Accessible Modal Dialog
+ * 
+ * Built on Radix UI Dialog primitives which provide:
+ * - Automatic focus trap management (focus stays within dialog when open)
+ * - Escape key handling (closes dialog by default, customizable via onEscapeKeyDown)
+ * - Outside click handling (closes dialog by default, customizable via onInteractOutside)
+ * - Automatic ARIA attributes (aria-labelledby, aria-describedby) when using DialogTitle/DialogDescription
+ * - Focus restoration (returns focus to trigger element when closed)
+ * - Screen reader announcements via proper ARIA roles
+ * 
+ * For more details: https://www.radix-ui.com/primitives/docs/components/dialog
+ */
+
 const Dialog = DialogPrimitive.Root
 
 const DialogTrigger = DialogPrimitive.Trigger
@@ -29,6 +43,21 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+/**
+ * DialogContent - Main container for dialog content
+ * 
+ * Accessibility Features:
+ * - Focus trap: Focus is automatically trapped within the dialog and cycles through focusable elements
+ * - Close button includes sr-only text "Close" for screen readers
+ * - Automatically connects to DialogTitle via aria-labelledby
+ * - Automatically connects to DialogDescription via aria-describedby
+ * - Escape key closes dialog (can be customized with onEscapeKeyDown prop)
+ * - Outside clicks close dialog (can be customized with onInteractOutside prop)
+ * 
+ * Usage:
+ * <DialogContent onEscapeKeyDown={(e) => e.preventDefault()}> // Prevent escape key from closing
+ * <DialogContent onInteractOutside={(e) => e.preventDefault()}> // Prevent outside clicks from closing
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>

@@ -411,24 +411,24 @@ export default function ExpenseManagement() {
   const getPaymentModeColor = (mode: string) => {
     try {
       if (!mode) {
-        return "bg-gray-500";
+        return "bg-muted";
       }
       
       switch (mode) {
         case "Cash":
-          return "bg-green-500";
+          return "bg-success";
         case "Bank":
-          return "bg-blue-500";
+          return "bg-info";
         case "UPI":
-          return "bg-purple-500";
+          return "bg-info";
         case "Card":
-          return "bg-orange-500";
+          return "bg-warning";
         default:
-          return "bg-gray-500";
+          return "bg-muted";
       }
     } catch (error) {
       logEventHandlerError(error, 'getPaymentModeColor', { mode });
-      return "bg-gray-500"; // Safe default
+      return "bg-muted"; // Safe default
     }
   };
 
@@ -466,7 +466,7 @@ export default function ExpenseManagement() {
       accessorKey: "amount",
       header: "Amount",
       cell: (value: string) => (
-        <div className="font-medium text-red-600">
+        <div className="font-medium text-destructive">
           ₹{parseFloat(value).toLocaleString("en-IN")}
         </div>
       ),
@@ -558,13 +558,13 @@ export default function ExpenseManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-8 bg-muted rounded w-1/4"></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <div key={i} className="h-24 bg-muted rounded"></div>
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-muted rounded"></div>
           </div>
         </div>
       </AppLayout>
@@ -576,8 +576,8 @@ export default function ExpenseManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Error Loading Expenses</h2>
-            <p className="text-gray-600 mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-destructive mb-4">Error Loading Expenses</h2>
+            <p className="text-muted-foreground mb-6">
               {isError && error instanceof Error ? error.message : 
                categoriesError && categoriesErrorMessage instanceof Error ? categoriesErrorMessage.message :
                "Failed to load expenses. Please try again."}

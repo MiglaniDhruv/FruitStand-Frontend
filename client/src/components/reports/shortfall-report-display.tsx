@@ -85,7 +85,7 @@ export default function ShortfallReportDisplay({ data, loading }: ShortfallRepor
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="font-semibold text-red-600">
+                    <span className="font-semibold text-destructive">
                       {formatCurrency(entry.shortfallBalance)}
                     </span>
                   </TableCell>
@@ -104,15 +104,15 @@ export default function ShortfallReportDisplay({ data, loading }: ShortfallRepor
       </div>
 
       {/* Total Shortfall Summary */}
-      <Card className="p-4 border-red-200 bg-red-50">
+      <Card className="p-4 border-destructive/20 bg-destructive/5">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-lg font-semibold text-red-800">
+          <CardTitle className="text-lg font-semibold text-destructive">
             Total Shortfall Amount
           </CardTitle>
-          <AlertCircle className="h-5 w-5 text-red-600" />
+          <AlertCircle className="h-5 w-5 text-destructive" />
         </CardHeader>
         <CardContent className="p-0">
-          <div className="text-2xl font-bold text-red-600">
+          <div className="text-2xl font-bold text-destructive">
             {formatCurrency(data.totalShortfall)}
           </div>
         </CardContent>

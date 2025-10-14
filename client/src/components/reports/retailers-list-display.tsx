@@ -56,7 +56,7 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
         <Card className="p-4">
           <CardContent className="p-0">
             <div className="text-sm text-muted-foreground">Average Receivable</div>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-success">
               {formatCurrency(averageReceivable)}
             </div>
           </CardContent>
@@ -82,13 +82,13 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
               return (
                 <TableRow 
                   key={index} 
-                  className={`hover:bg-muted/50 ${isHighReceivable ? 'bg-green-50 hover:bg-green-100' : ''}`}
+                  className={`hover:bg-muted/50 ${isHighReceivable ? 'bg-success/5 hover:bg-success/10' : ''}`}
                 >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       {entry.retailerName}
                       {isHighReceivable && (
-                        <Badge variant="default" className="text-xs bg-green-600">
+                        <Badge variant="success" className="text-xs">
                           High
                         </Badge>
                       )}
@@ -104,7 +104,7 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
                     {entry.address || <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="font-semibold text-green-600">
+                    <span className="font-semibold text-success">
                       {formatCurrency(entry.udhaaarBalance)}
                     </span>
                   </TableCell>
@@ -116,15 +116,15 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
       </div>
 
       {/* Total Receivable Summary */}
-      <Card className="p-4 border-green-200 bg-green-50">
+      <Card className="p-4 border-success/20 bg-success/5">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-lg font-semibold text-green-800">
+          <CardTitle className="text-lg font-semibold text-success">
             Total Amount Receivable from Retailers
           </CardTitle>
-          <Store className="h-5 w-5 text-green-600" />
+          <Store className="h-5 w-5 text-success" />
         </CardHeader>
         <CardContent className="p-0">
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-2xl font-bold text-success">
             {formatCurrency(data.totalReceivable)}
           </div>
         </CardContent>

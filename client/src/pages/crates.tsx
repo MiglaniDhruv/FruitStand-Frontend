@@ -294,9 +294,9 @@ export default function CrateManagement() {
   };
 
   const getTransactionTypeColor = (type: string) => {
-    if (type === "Given") return "bg-blue-500";
-    if (type === "Received") return "bg-purple-500";
-    return "bg-green-500"; // Returned
+    if (type === "Given") return "bg-info";
+    if (type === "Received") return "bg-warning";
+    return "bg-success"; // Returned
   };
 
   const getTransactionTypeIcon = (type: string) => {
@@ -398,7 +398,7 @@ export default function CrateManagement() {
       accessorKey: "balance",
       header: "Crate Balance",
       cell: (value: number) => (
-        <div className={`font-medium ${value > 0 ? 'text-orange-600' : value < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+        <div className={`font-medium ${value > 0 ? 'text-warning' : value < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
           {value} crates
         </div>
       ),
@@ -410,7 +410,7 @@ export default function CrateManagement() {
         if (value > 0) {
           return (
             <div className="flex items-center space-x-1">
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <AlertTriangle className="h-4 w-4 text-warning" />
               <Badge variant="destructive">Outstanding</Badge>
             </div>
           );
@@ -433,13 +433,13 @@ export default function CrateManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-8 bg-muted rounded w-1/4"></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <div key={i} className="h-24 bg-muted rounded"></div>
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-muted rounded"></div>
           </div>
         </div>
       </AppLayout>
@@ -451,8 +451,8 @@ export default function CrateManagement() {
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Crate Transactions</h2>
-            <p className="text-gray-600 mb-6">
+            <h2 className="text-2xl font-bold text-destructive mb-4">Error Loading Crate Transactions</h2>
+            <p className="text-muted-foreground mb-6">
               {error instanceof Error ? error.message : "Failed to load crate transactions. Please try again."}
             </p>
             <Button onClick={() => window.location.reload()}>
@@ -726,13 +726,13 @@ export default function CrateManagement() {
                             <>
                               <SelectItem value="Given">
                                 <div className="flex items-center space-x-2">
-                                  <ArrowUpCircle className="h-4 w-4 text-blue-600" />
+                                  <ArrowUpCircle className="h-4 w-4 text-info" />
                                   <span>Given</span>
                                 </div>
                               </SelectItem>
                               <SelectItem value="Returned">
                                 <div className="flex items-center space-x-2">
-                                  <ArrowDownCircle className="h-4 w-4 text-green-600" />
+                                  <ArrowDownCircle className="h-4 w-4 text-success" />
                                   <span>Returned</span>
                                 </div>
                               </SelectItem>
@@ -742,13 +742,13 @@ export default function CrateManagement() {
                             <>
                               <SelectItem value="Received">
                                 <div className="flex items-center space-x-2">
-                                  <ArrowDownCircle className="h-4 w-4 text-purple-600" />
+                                  <ArrowDownCircle className="h-4 w-4 text-warning" />
                                   <span>Received</span>
                                 </div>
                               </SelectItem>
                               <SelectItem value="Returned">
                                 <div className="flex items-center space-x-2">
-                                  <ArrowUpCircle className="h-4 w-4 text-green-600" />
+                                  <ArrowUpCircle className="h-4 w-4 text-success" />
                                   <span>Returned</span>
                                 </div>
                               </SelectItem>

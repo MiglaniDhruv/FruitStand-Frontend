@@ -5,6 +5,24 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Toast Component - Accessible Toast Notifications
+ * 
+ * Built on Radix UI Toast primitives which provide:
+ * - Automatic ARIA live region management for screen reader announcements
+ * - role="status" (polite) or role="alert" (assertive) based on toast variant
+ * - Swipe-to-dismiss gesture support on touch devices
+ * - Automatic viewport positioning and stacking
+ * - Focus management (toasts don't trap focus, allowing background interaction)
+ * 
+ * ARIA Live Regions:
+ * - Default/success toasts: aria-live="polite" (announced when screen reader is idle)
+ * - Destructive/error toasts: aria-live="assertive" (announced immediately)
+ * - ToastViewport automatically creates the live region container
+ * 
+ * For more details: https://www.radix-ui.com/primitives/docs/components/toast
+ */
+
 const ToastProvider = ToastPrimitives.Provider
 
 const ToastViewport = React.forwardRef<
@@ -43,10 +61,14 @@ const Toast = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
+  const isDestructive = variant === "destructive";
+  
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
+      role={isDestructive ? "alert" : "status"}
+      aria-live={isDestructive ? "assertive" : "polite"}
       {...props}
     />
   )
@@ -82,6 +104,7 @@ const ToastClose = React.forwardRef<
     {...props}
   >
     <X className="h-4 w-4" />
+    <span className="sr-only">Close notification</span>
   </ToastPrimitives.Close>
 ))
 ToastClose.displayName = ToastPrimitives.Close.displayName

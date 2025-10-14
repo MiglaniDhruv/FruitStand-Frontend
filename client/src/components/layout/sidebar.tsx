@@ -164,7 +164,7 @@ export default function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" side="left">
+    <Sidebar collapsible="icon" side="left" id="navigation" tabIndex={-1}>
       {/* Logo and Brand */}
       <SidebarHeader className="border-b border-border">
         <div className="flex items-center space-x-3 p-6">
@@ -215,11 +215,17 @@ export default function AppSidebar() {
             <SidebarMenu>
               {navigationItems.map((item) => {
                 const isActive = location === item.href || location.startsWith(item.href + '/') || location.startsWith(item.href + '?');
+                const isCollapsed = state === "collapsed";
                 return (
                   <PermissionGuard key={item.href} permission={item.permission}>
                     <SidebarMenuItem>
                       <Link href={item.href}>
-                        <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                        <SidebarMenuButton 
+                          asChild 
+                          tooltip={item.title} 
+                          isActive={isActive}
+                          {...(isCollapsed && { "aria-label": `Navigate to ${item.title}` })}
+                        >
                           <a
                             data-testid={`link-${
                               item.href.replace(/^\/.*?\//, "").replace("/", "") ||
@@ -244,10 +250,17 @@ export default function AppSidebar() {
       <SidebarFooter className="border-t border-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarTrigger className="w-full" />
+            <SidebarTrigger 
+              className="w-full" 
+              {...(state === "collapsed" && { "aria-label": "Toggle sidebar navigation" })}
+            />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
+            <SidebarMenuButton 
+              onClick={handleLogout} 
+              tooltip="Logout"
+              {...(state === "collapsed" && { "aria-label": "Logout from application" })}
+            >
               <LogOut />
               <span>Logout</span>
             </SidebarMenuButton>

@@ -7,6 +7,22 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Sheet Component - Accessible Slide-out Panel (Drawer)
+ * 
+ * Built on Radix UI Dialog primitives which provide:
+ * - Automatic focus trap management (focus stays within sheet when open)
+ * - Escape key handling (closes sheet by default, customizable via onEscapeKeyDown)
+ * - Outside click handling (closes sheet by default, customizable via onInteractOutside)
+ * - Automatic ARIA attributes (aria-labelledby, aria-describedby) when using SheetTitle/SheetDescription
+ * - Focus restoration (returns focus to trigger element when closed)
+ * - Screen reader announcements via proper ARIA roles
+ * 
+ * Sides: 'top', 'right', 'bottom', 'left'
+ * 
+ * For more details: https://www.radix-ui.com/primitives/docs/components/dialog
+ */
+
 const Sheet = SheetPrimitive.Root
 
 const SheetTrigger = SheetPrimitive.Trigger
@@ -53,6 +69,21 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {}
 
+/**
+ * SheetContent - Main container for sheet content
+ * 
+ * Accessibility Features:
+ * - Focus trap: Focus is automatically trapped within the sheet and cycles through focusable elements
+ * - Close button includes sr-only text "Close" for screen readers
+ * - Automatically connects to SheetTitle via aria-labelledby
+ * - Automatically connects to SheetDescription via aria-describedby
+ * - Escape key closes sheet (can be customized with onEscapeKeyDown prop)
+ * - Outside clicks close sheet (can be customized with onInteractOutside prop)
+ * 
+ * Usage:
+ * <SheetContent onEscapeKeyDown={(e) => e.preventDefault()}> // Prevent escape key from closing
+ * <SheetContent onInteractOutside={(e) => e.preventDefault()}> // Prevent outside clicks from closing
+ */
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps

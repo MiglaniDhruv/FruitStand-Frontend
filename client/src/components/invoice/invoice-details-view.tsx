@@ -47,12 +47,13 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment, is
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Paid":
-        return "bg-chart-2/10 text-chart-2";
+        return "bg-status-paid/10 text-status-paid border-status-paid/20";
       case "Pending":
       case "Unpaid":
-        return "bg-chart-1/10 text-chart-1";
+        return "bg-status-pending/10 text-status-pending border-status-pending/20";
+      case "Partial":
       case "Partially Paid":
-        return "bg-chart-4/10 text-chart-4";
+        return "bg-status-partial/10 text-status-partial border-status-partial/20";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -61,13 +62,13 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment, is
   const getPaymentModeColor = (mode: string) => {
     switch (mode) {
       case "Cash":
-        return "bg-chart-2/10 text-chart-2";
+        return "bg-success/10 text-success border-success/20";
       case "Bank":
-        return "bg-chart-3/10 text-chart-3";
+        return "bg-info/10 text-info border-info/20";
       case "UPI":
-        return "bg-chart-4/10 text-chart-4";
+        return "bg-info/10 text-info border-info/20";
       case "Cheque":
-        return "bg-chart-1/10 text-chart-1";
+        return "bg-warning/10 text-warning border-warning/20";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -317,7 +318,7 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment, is
             {isPurchaseInvoice && (
               <div className="text-center p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
-                <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.totalExpense).toLocaleString('en-IN')}</p>
+                <p className="text-lg font-bold text-destructive">₹{safeParseFloat(invoice.totalExpense).toLocaleString('en-IN')}</p>
               </div>
             )}
             {isPurchaseInvoice && (
@@ -359,26 +360,26 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment, is
               <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
               <p className="text-lg font-bold text-foreground">₹{getTotalAmount().toLocaleString('en-IN')}</p>
             </div>
-            <div className="text-center p-4 bg-chart-2/10 rounded-lg">
+            <div className="text-center p-4 bg-success/10 border border-success/20 rounded-lg">
               <p className="text-sm font-medium text-muted-foreground">Paid Amount</p>
-              <p className="text-lg font-bold text-chart-2">₹{safeParseFloat(invoice.paidAmount).toLocaleString('en-IN')}</p>
+              <p className="text-lg font-bold text-success">₹{safeParseFloat(invoice.paidAmount).toLocaleString('en-IN')}</p>
             </div>
             {isPurchaseInvoice ? (
-              <div className="text-center p-4 bg-chart-1/10 rounded-lg">
+              <div className="text-center p-4 bg-status-pending/10 border border-status-pending/20 rounded-lg">
                 <p className="text-sm font-medium text-muted-foreground">Balance Amount</p>
-                <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</p>
+                <p className="text-lg font-bold text-status-pending">₹{safeParseFloat(invoice.balanceAmount).toLocaleString('en-IN')}</p>
               </div>
             ) : (
               <>
-                <div className="text-center p-4 bg-chart-1/10 rounded-lg">
+                <div className="text-center p-4 bg-status-pending/10 border border-status-pending/20 rounded-lg">
                   <p className="text-sm font-medium text-muted-foreground">Udhaar</p>
                   <p className="text-xs text-muted-foreground mb-1">Amount retailer needs to pay</p>
-                  <p className="text-lg font-bold text-chart-1">₹{safeParseFloat(invoice.udhaaarAmount).toLocaleString('en-IN')}</p>
+                  <p className="text-lg font-bold text-status-pending">₹{safeParseFloat(invoice.udhaaarAmount).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="text-center p-4 bg-amber-100 rounded-lg">
+                <div className="text-center p-4 bg-warning/10 border border-warning/20 rounded-lg">
                   <p className="text-sm font-medium text-muted-foreground">Shortfall</p>
                   <p className="text-xs text-muted-foreground mb-1">Deficit when marked as Paid</p>
-                  <p className="text-lg font-bold text-amber-700">₹{safeParseFloat(invoice.shortfallAmount).toLocaleString('en-IN')}</p>
+                  <p className="text-lg font-bold text-warning">₹{safeParseFloat(invoice.shortfallAmount).toLocaleString('en-IN')}</p>
                 </div>
               </>
             )}

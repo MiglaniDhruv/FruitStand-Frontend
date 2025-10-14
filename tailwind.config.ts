@@ -24,10 +24,12 @@ export default {
         primary: {
           DEFAULT: "var(--primary)",
           foreground: "var(--primary-foreground)",
+          hover: "var(--primary-hover)",
         },
         secondary: {
           DEFAULT: "var(--secondary)",
           foreground: "var(--secondary-foreground)",
+          hover: "var(--secondary-hover)",
         },
         muted: {
           DEFAULT: "var(--muted)",
@@ -36,13 +38,16 @@ export default {
         accent: {
           DEFAULT: "var(--accent)",
           foreground: "var(--accent-foreground)",
+          strong: "var(--accent-strong)",
         },
         destructive: {
           DEFAULT: "var(--destructive)",
           foreground: "var(--destructive-foreground)",
+          hover: "var(--destructive-hover)",
         },
         border: "var(--border)",
         input: "var(--input)",
+        outline: "var(--outline)",
         ring: "var(--ring)",
         chart: {
           "1": "var(--chart-1)",
@@ -51,8 +56,27 @@ export default {
           "4": "var(--chart-4)",
           "5": "var(--chart-5)",
         },
+        /**
+         * Semantic status colors for invoice and payment states
+         * All colors meet WCAG AA standards (4.5:1 contrast ratio)
+         * Usage: text-status-paid, bg-status-pending/10, etc.
+         */
+        status: {
+          paid: "var(--status-paid)",
+          pending: "var(--status-pending)",
+          partial: "var(--status-partial)",
+          unpaid: "var(--status-unpaid)",
+        },
+        /**
+         * Semantic feedback colors for UI states
+         * Guaranteed WCAG AA compliance
+         * Usage: text-success, bg-warning/10, text-info
+         */
+        success: "var(--success)",
+        warning: "var(--warning)",
+        info: "var(--info)",
         sidebar: {
-          DEFAULT: "var(--sidebar-background)",
+          DEFAULT: "var(--sidebar)",
           foreground: "var(--sidebar-foreground)",
           primary: "var(--sidebar-primary)",
           "primary-foreground": "var(--sidebar-primary-foreground)",
@@ -120,6 +144,13 @@ export default {
         'icon-md': '1.5rem',
         'icon-lg': '2rem',
         'icon-xl': '2.5rem',
+      },
+      /**
+       * High contrast mode media query support
+       * Usage: high-contrast:border-2 high-contrast:font-bold
+       */
+      screens: {
+        'high-contrast': { raw: '(prefers-contrast: high)' },
       },
     },
   },

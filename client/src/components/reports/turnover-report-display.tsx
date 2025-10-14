@@ -54,10 +54,10 @@ export default function TurnoverReportDisplay({ data, loading }: TurnoverReportD
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Sales
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <TrendingUp className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent className="p-0">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-success">
               {formatCurrency(data.totalSales)}
             </div>
           </CardContent>
@@ -69,10 +69,10 @@ export default function TurnoverReportDisplay({ data, loading }: TurnoverReportD
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Purchases
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
+            <DollarSign className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent className="p-0">
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-info">
               {formatCurrency(data.totalPurchases)}
             </div>
           </CardContent>
@@ -84,10 +84,10 @@ export default function TurnoverReportDisplay({ data, loading }: TurnoverReportD
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Net Turnover
             </CardTitle>
-            <BarChart3 className="h-4 w-4 text-purple-600" />
+            <BarChart3 className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent className="p-0">
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-info">
               {formatCurrency(data.netTurnover)}
             </div>
           </CardContent>

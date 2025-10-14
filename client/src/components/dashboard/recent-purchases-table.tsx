@@ -32,13 +32,13 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
   if (loading) {
     return (
       <Card>
-        <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+        <CardHeader size="default" className="py-5 sm:py-7">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <ShoppingCart className="h-5 w-5" />
             Recent Purchases
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+        <CardContent size="default" className="pb-5 sm:pb-7">
           <Table>
             <TableHeader>
               <TableRow>
@@ -69,13 +69,13 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
   if (!purchases || purchases.length === 0) {
     return (
       <Card>
-        <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+        <CardHeader size="default" className="py-5 sm:py-7">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <ShoppingCart className="h-5 w-5" />
             Recent Purchases
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+        <CardContent size="default" className="pb-5 sm:pb-7">
           <p className="text-xs sm:text-sm text-muted-foreground text-center py-4 sm:py-6">No recent purchases found</p>
         </CardContent>
       </Card>
@@ -96,10 +96,10 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
   };
 
   const MobileCardView = () => (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {purchases.map((purchase) => (
-        <Card key={purchase.id} className="hover:bg-muted/50 cursor-pointer">
-          <CardHeader className="pb-3">
+        <Card key={purchase.id} hover className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+          <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
               <div className="font-medium">{purchase.invoiceNumber}</div>
               <div className="text-xs text-muted-foreground">
@@ -107,7 +107,7 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div>
               <div className="text-xs text-muted-foreground">Vendor</div>
               <div className="text-sm">{purchase.vendorName}</div>
@@ -142,7 +142,7 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
         </TableHeader>
         <TableBody>
           {purchases.map((purchase) => (
-            <TableRow key={purchase.id} className="hover:bg-muted/50 cursor-pointer">
+            <TableRow key={purchase.id} className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
               <TableCell className="text-xs sm:text-sm font-medium">{purchase.invoiceNumber}</TableCell>
               <TableCell className="text-xs sm:text-sm text-muted-foreground">
                 {format(new Date(purchase.invoiceDate), "MMM dd, yyyy")}
@@ -163,13 +163,13 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
 
   return (
     <Card>
-      <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
+      <CardHeader size="default" className="py-5 sm:py-7">
         <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
           <ShoppingCart className="h-5 w-5" />
           Recent Purchases
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+      <CardContent size="default" className="pb-5 sm:pb-7">
         {isMobile ? <MobileCardView /> : <TableView />}
       </CardContent>
     </Card>
