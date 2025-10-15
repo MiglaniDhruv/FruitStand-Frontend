@@ -388,6 +388,16 @@ export default function RetailerManagement() {
     handleSearchChange(value);
   };
 
+  const handleRefresh = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/retailers"] });
+  };
+
+  const handleSwipeDelete = async (retailer: any) => {
+    if (retailer && retailer.id) {
+      handleDelete(retailer);
+    }
+  };
+
   // Extract retailers and metadata from paginated result
   const retailers = retailersResult?.data || [];
   const paginationMetadata = retailersResult?.pagination;
@@ -641,6 +651,7 @@ export default function RetailerManagement() {
                     onChange={handleSearchInputChange}
                     className="pl-8"
                     data-testid="input-search-retailers"
+                    data-search-input
                   />
                 </div>
               </div>
@@ -659,10 +670,11 @@ export default function RetailerManagement() {
                 rowKey="id"
                 emptyStateIcon={Users}
                 emptyStateTitle="No retailers yet"
-                onEmptyAction={handleCreateNew}
-                emptyActionLabel="Add Retailer"
                 searchTerm={searchInput}
                 hasActiveFilters={false}
+                onRefresh={handleRefresh}
+                enableSwipeToDelete={true}
+                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>

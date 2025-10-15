@@ -1,3 +1,4 @@
+import { useEffect, useRef, useLayoutEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { authService } from "@/lib/auth";
@@ -148,6 +149,23 @@ export default function AppSidebar() {
 
   const navigationItems = getNavigationItems(tenantSlug);
 
+  // Refs for scroll position preservation
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
+
+  // Capture scroll position as user scrolls
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    scrollPositionRef.current = event.currentTarget.scrollTop;
+  };
+
+  // Restore scroll position after DOM updates
+  useLayoutEffect(() => {
+    // Restore the scroll position after the component re-renders
+    if (sidebarContentRef.current) {
+      sidebarContentRef.current.scrollTop = scrollPositionRef.current;
+    }
+  }, [location]);
+
   const handleLogout = () => {
     authService.logout();
     toast({
@@ -167,7 +185,7 @@ export default function AppSidebar() {
     <Sidebar collapsible="icon" side="left" id="navigation" tabIndex={-1}>
       {/* Logo and Brand */}
       <SidebarHeader className="border-b border-border">
-        <div className="flex items-center space-x-3 p-6">
+        <div className="flex items-center space-x-3 p-2 group-data-[collapsible=icon]:p-1">
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
             <Apple className="text-primary-foreground text-lg" />
           </div>
@@ -183,7 +201,7 @@ export default function AppSidebar() {
         </div>
 
         {/* User Info */}
-        <div className="p-4 border-b border-border">
+        <div className="p-2 group-data-[collapsible=icon]:p-1 border-b border-border">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
               <User className="text-secondary-foreground text-sm" />
@@ -209,7 +227,7 @@ export default function AppSidebar() {
       </SidebarHeader>
 
       {/* Navigation Menu */}
-      <SidebarContent>
+      <SidebarContent ref={sidebarContentRef} onScroll={handleScroll}>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>

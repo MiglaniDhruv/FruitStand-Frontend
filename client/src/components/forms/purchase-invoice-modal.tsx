@@ -4,12 +4,7 @@ import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { MobileDrawerModal } from "@/components/ui/mobile-drawer-modal";
 import {
   Form,
   FormControl,
@@ -516,33 +511,34 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[90vh] overflow-y-auto">
-        <ErrorBoundary 
-          resetKeys={[open ? 1 : 0]}
-          fallback={({ error, resetError }) => (
-            <div className="p-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Failed to load form</AlertTitle>
-                <AlertDescription className="mt-2 space-y-2">
-                  <p>An error occurred while loading the purchase invoice form.</p>
-                  <div className="flex gap-2">
-                    <Button onClick={resetError} size="sm">
-                      Try Again
-                    </Button>
-                    <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
-                      Close
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-        >
-          <DialogHeader>
-            <DialogTitle>Create Purchase Invoice</DialogTitle>
-          </DialogHeader>
+    <MobileDrawerModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Create Purchase Invoice"
+      fullScreenOnMobile={true}
+    >
+      <ErrorBoundary 
+        resetKeys={[open ? 1 : 0]}
+        fallback={({ error, resetError }) => (
+          <div className="p-4">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Failed to load form</AlertTitle>
+              <AlertDescription className="mt-2 space-y-2">
+                <p>An error occurred while loading the purchase invoice form.</p>
+                <div className="flex gap-2">
+                  <Button onClick={resetError} size="sm">
+                    Try Again
+                  </Button>
+                  <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
+                    Close
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+      >
 
         <Form {...form}>
           <form 
@@ -625,7 +621,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                     <FormItem>
                       <FormLabel>Invoice Date *</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-invoice-date" />
+                        <Input type="date" autoComplete="off" enterKeyHint="next" {...field} data-testid="input-invoice-date" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -690,6 +686,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                             <Input 
                               type="number" 
                               step="0.01" 
+                              inputMode="decimal"
+                              enterKeyHint="next"
+                              autoComplete="off"
                               placeholder="0.00" 
                               {...field} 
                               data-testid={`input-weight-${index}`}
@@ -710,6 +709,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                             <Input 
                               type="number" 
                               step="0.01" 
+                              inputMode="numeric"
+                              enterKeyHint="next"
+                              autoComplete="off"
                               placeholder="0.00" 
                               {...field} 
                               data-testid={`input-crates-${index}`}
@@ -730,6 +732,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                             <Input 
                               type="number" 
                               step="0.01" 
+                              inputMode="numeric"
+                              enterKeyHint="next"
+                              autoComplete="off"
                               placeholder="0.00" 
                               {...field} 
                               data-testid={`input-boxes-${index}`}
@@ -750,6 +755,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                             <Input 
                               type="number" 
                               step="0.01" 
+                              inputMode="decimal"
+                              enterKeyHint="done"
+                              autoComplete="off"
                               placeholder="0.00" 
                               {...field} 
                               data-testid={`input-rate-${index}`}
@@ -814,6 +822,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                           step="0.01" 
                           min="0"
                           max="100"
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-commission" 
@@ -839,6 +850,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-labour" 
@@ -859,6 +873,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-truck-freight" 
@@ -879,6 +896,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-crate-freight" 
@@ -899,6 +919,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-post-expenses" 
@@ -919,6 +942,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-draft-expenses" 
@@ -939,6 +965,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-vatav" 
@@ -959,6 +988,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="next"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-other-expenses" 
@@ -979,6 +1011,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                         <Input 
                           type="number" 
                           step="0.01" 
+                          inputMode="decimal"
+                          enterKeyHint="done"
+                          autoComplete="off"
                           placeholder="0.00" 
                           {...field} 
                           data-testid="input-advance" 
@@ -1037,6 +1072,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                           <Input
                             type="number"
                             min="1"
+                            inputMode="numeric"
+                            enterKeyHint="done"
+                            autoComplete="off"
                             placeholder="Enter number of crates"
                             {...field}
                             value={field.value || ""}
@@ -1203,7 +1241,6 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
           </form>
         </Form>
         </ErrorBoundary>
-      </DialogContent>
-    </Dialog>
+      </MobileDrawerModal>
   );
 }

@@ -101,13 +101,16 @@ export default function Stock() {
     },
   });
 
-  const { data: items, isError: itemsError } = useQuery<ItemWithVendor[]>({
+  const { data: itemsResult, isError: itemsError } = useQuery({
     queryKey: ["/api/items"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/items");
+      const response = await authenticatedApiRequest("GET", "/api/items?limit=1000&paginated=false");
       return response.json();
     },
   });
+
+  // Handle both paginated and non-paginated responses
+  const items = Array.isArray(itemsResult) ? itemsResult : (itemsResult?.data || []);
 
   const { data: vendorsResult } = useQuery({
     queryKey: ["/api/vendors"],

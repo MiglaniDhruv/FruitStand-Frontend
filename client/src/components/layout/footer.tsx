@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@shared/permissions";
@@ -6,10 +7,15 @@ import SalesInvoiceModal from "@/components/forms/sales-invoice-modal";
 import PurchaseInvoiceModal from "@/components/forms/purchase-invoice-modal";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 import VendorPaymentForm from "@/components/forms/vendor-payment-form";
-import { FileText, Receipt, DollarSign, Wallet } from "lucide-react";
+import { FileText, Receipt, DollarSign, Wallet, Home } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTenantSlug } from "@/contexts/tenant-slug-context";
 
 export default function Footer() {
   const ref = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const { slug } = useTenantSlug();
+  const [location, navigate] = useLocation();
   // State management for modals
   const [salesInvoiceOpen, setSalesInvoiceOpen] = useState<boolean>(false);
   const [purchaseInvoiceOpen, setPurchaseInvoiceOpen] = useState<boolean>(false);
@@ -30,6 +36,12 @@ export default function Footer() {
     return () => { ro.disconnect(); window.removeEventListener("resize", setVar); };
   }, []);
 
+  // Hide footer on mobile to prevent overlap with bottom navigation
+  if (isMobile) return null;
+
+  // Guard against undefined slug
+  if (!slug) return null;
+
   return (
     <>
       {/* Footer container */}
@@ -41,7 +53,20 @@ export default function Footer() {
         {/* Inner container for buttons */}
         <div className="w-full px-6 py-3">
           {/* Buttons grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+            {/* Dashboard button */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => navigate(`/${slug}/dashboard`)}
+              className="w-full flex items-center justify-center gap-2"
+              data-testid="button-quick-dashboard"
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+              <span className="sm:hidden">Home</span>
+            </Button>
+
             {/* Sales Invoice button */}
             <PermissionGuard permission={PERMISSIONS.CREATE_SALES_INVOICES}>
               <Button

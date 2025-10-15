@@ -140,6 +140,16 @@ export default function PurchaseInvoices() {
     handleSearchChange(value);
   };
 
+  const handleRefresh = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/purchase-invoices"] });
+  };
+
+  const handleSwipeDelete = async (invoice: any) => {
+    if (invoice && invoice.id) {
+      handleDelete(invoice);
+    }
+  };
+
   // Define table columns
   const columns = [
     {
@@ -338,6 +348,7 @@ export default function PurchaseInvoices() {
                       onChange={handleSearchInputChange}
                       className="pl-8"
                       data-testid="input-search-invoices"
+                      data-search-input
                     />
                   </div>
                   <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
@@ -368,10 +379,11 @@ export default function PurchaseInvoices() {
                 rowKey="id"
                 emptyStateIcon={FileText}
                 emptyStateTitle="No purchase invoices yet"
-                onEmptyAction={() => setShowCreateModal(true)}
-                emptyActionLabel="Create Invoice"
                 searchTerm={searchInput}
                 hasActiveFilters={statusFilter !== 'all'}
+                onRefresh={handleRefresh}
+                enableSwipeToDelete={true}
+                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>

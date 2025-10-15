@@ -32,6 +32,9 @@ export function useOptimisticMutation<TData, TVariables, TContext = { previousDa
         queryClient.setQueriesData(
           { queryKey, exact: false },
           (old: any, query: Query) => {
+            // Guard against undefined query
+            if (!query) return old;
+            
             // Store each variant's previous data using its query key
             previousVariants.set(JSON.stringify(query.queryKey), old);
             return updateFn(old, variables);
@@ -54,6 +57,9 @@ export function useOptimisticMutation<TData, TVariables, TContext = { previousDa
           queryClient.setQueriesData(
             { queryKey, exact: false },
             (old: any, query: Query) => {
+              // Guard against undefined query
+              if (!query) return old;
+              
               const cacheKey = JSON.stringify(query.queryKey);
               return previousVariants.get(cacheKey) ?? old;
             }

@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, LucideIcon } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, LucideIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { PaginationMetadata } from "@shared/schema";
@@ -18,6 +18,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { SkeletonTable, SkeletonList } from "@/components/ui/skeleton-loaders";
 import { EmptyState, EmptySearchState } from "@/components/ui/empty-state";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { useSwipeGesture } from "@/hooks/use-swipe-gesture";
+import { useHapticFeedback } from "@/hooks/use-haptic-feedback";
+import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh-indicator";
 
 interface DataTableColumn<T> {
   accessorKey: string;
@@ -81,6 +85,22 @@ interface DataTableProps<T> {
    * Whether there are active filters for differentiated empty states
    */
   hasActiveFilters?: boolean;
+  /**
+   * Callback for pull-to-refresh action on mobile
+   */
+  onRefresh?: () => Promise<void>;
+  /**
+   * Enable swipe-to-delete on mobile card views
+   */
+  enableSwipeToDelete?: boolean;
+  /**
+   * Callback when item is swiped to delete
+   */
+  onSwipeDelete?: (item: T) => void | Promise<void>;
+  /**
+   * Swipe distance threshold in pixels (default: 80)
+   */
+  swipeDeleteThreshold?: number;
 }
 
 export function DataTable<T>({
@@ -109,6 +129,10 @@ export function DataTable<T>({
   emptyActionLabel,
   searchTerm,
   hasActiveFilters = false,
+  onRefresh,
+  enableSwipeToDelete = false,
+  onSwipeDelete,
+  swipeDeleteThreshold = 80,
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
   const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
@@ -116,6 +140,19 @@ export function DataTable<T>({
 
   // Mobile detection and responsive logic
   const isMobile = useIsMobile();
+  const { hapticHeavy } = useHapticFeedback();
+  
+  // Pull-to-refresh support
+  const {
+    ref: pullToRefreshRef,
+    shouldShowIndicator,
+    pullProgress,
+    isRefreshing,
+    refreshStatus,
+  } = usePullToRefresh({
+    onRefresh: onRefresh || (() => Promise.resolve()),
+    enabled: !!onRefresh && isMobile,
+  });
   
   // Custom breakpoint detection for card view
   const [isNarrowScreen, setIsNarrowScreen] = useState(() => {
@@ -379,7 +416,12 @@ export function DataTable<T>({
           {data.map((item, index) => {
             const rowId = getRowId(item, index);
             return (
-              <div key={rowId} className="space-y-2">
+              <SwipeableCard
+                key={rowId}
+                item={item}
+                rowId={rowId}
+                index={index}
+              >
                 {enableRowSelection && (
                   <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
                     <Checkbox
@@ -390,7 +432,7 @@ export function DataTable<T>({
                   </div>
                 )}
                 {mobileCardRenderer(item)}
-              </div>
+              </SwipeableCard>
             );
           })}
         </div>
@@ -405,47 +447,110 @@ export function DataTable<T>({
           const otherColumns = visibleColumns.slice(1);
           
           return (
-            <Card key={rowId} size="sm" hover>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">
-                    {primaryColumn ? (
-                      primaryColumn.cell 
-                        ? primaryColumn.cell(getNestedValue(item, primaryColumn.accessorKey), item)
-                        : String(getNestedValue(item, primaryColumn.accessorKey) || '')
-                    ) : ''}
-                  </CardTitle>
-                  {enableRowSelection && (
-                    <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
-                      <Checkbox
-                        checked={selectedRows.has(rowId)}
-                        onCheckedChange={() => handleRowToggle(rowId)}
-                        aria-label={`Select ${primaryColumn?.header || 'item'}`}
-                      />
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  {otherColumns.map((column) => (
-                    <div key={column.accessorKey} className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">
-                        {column.mobileLabel || column.header}:
-                      </span>
-                      <span>
-                        {column.cell 
-                          ? column.cell(getNestedValue(item, column.accessorKey), item)
-                          : String(getNestedValue(item, column.accessorKey) || '')
-                        }
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <SwipeableCard
+              key={rowId}
+              item={item}
+              rowId={rowId}
+              index={index}
+            >
+              <Card size="sm" hover>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">
+                      {primaryColumn ? (
+                        primaryColumn.cell 
+                          ? primaryColumn.cell(getNestedValue(item, primaryColumn.accessorKey), item)
+                          : String(getNestedValue(item, primaryColumn.accessorKey) || '')
+                      ) : ''}
+                    </CardTitle>
+                    {enableRowSelection && (
+                      <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                        <Checkbox
+                          checked={selectedRows.has(rowId)}
+                          onCheckedChange={() => handleRowToggle(rowId)}
+                          aria-label={`Select ${primaryColumn?.header || 'item'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {otherColumns.map((column) => (
+                      <div key={column.accessorKey} className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">
+                          {column.mobileLabel || column.header}:
+                        </span>
+                        <span>
+                          {column.cell 
+                            ? column.cell(getNestedValue(item, column.accessorKey), item)
+                            : String(getNestedValue(item, column.accessorKey) || '')
+                          }
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </SwipeableCard>
           );
         })}
+      </div>
+    );
+  };
+
+  // Swipeable Card Wrapper Component
+  const SwipeableCard = ({ children, item, rowId, index }: {
+    children: React.ReactNode;
+    item: T;
+    rowId: any;
+    index: number;
+  }) => {
+    const {
+      ref: swipeRef,
+      swipeDistance,
+      isSwiping,
+      swipeDirection,
+    } = useSwipeGesture({
+      onSwipeLeft: () => {
+        if (onSwipeDelete) {
+          hapticHeavy();
+          onSwipeDelete(item);
+        }
+      },
+      enabled: enableSwipeToDelete && isMobile,
+      threshold: swipeDeleteThreshold,
+    });
+
+    if (!enableSwipeToDelete || !isMobile) {
+      return <>{children}</>;
+    }
+
+    const showDeleteIndicator = isSwiping && swipeDirection === 'left' && Math.abs(swipeDistance) > swipeDeleteThreshold / 2;
+    const willTriggerDelete = Math.abs(swipeDistance) >= swipeDeleteThreshold;
+
+    return (
+      <div className="relative" ref={swipeRef as React.RefObject<HTMLDivElement>}>
+        {/* Delete indicator background */}
+        {showDeleteIndicator && (
+          <div 
+            className={`absolute inset-0 flex items-center justify-end px-6 rounded-lg transition-colors ${
+              willTriggerDelete ? 'bg-destructive' : 'bg-destructive/50'
+            }`}
+          >
+            <Trash2 className="h-5 w-5 text-destructive-foreground" />
+          </div>
+        )}
+        
+        {/* Card content with swipe transform */}
+        <div
+          style={{
+            transform: isSwiping ? `translateX(${swipeDistance}px)` : 'translateX(0)',
+            transition: isSwiping ? 'none' : 'transform 0.2s ease-out',
+          }}
+        >
+          {children}
+        </div>
       </div>
     );
   };
@@ -487,7 +592,17 @@ export function DataTable<T>({
     <ErrorBoundary resetKeys={generateResetKeys()} fallback={TableErrorFallback}>
       <div className="space-y-6">
         {shouldShowCardView ? (
-          <MobileCardView />
+          <div ref={pullToRefreshRef as React.RefObject<HTMLDivElement>} className="relative">
+            {/* Pull-to-refresh indicator */}
+            {shouldShowIndicator && (
+              <PullToRefreshIndicator
+                refreshStatus={refreshStatus}
+                pullProgress={pullProgress}
+                isRefreshing={isRefreshing}
+              />
+            )}
+            <MobileCardView />
+          </div>
         ) : (
           <div className="rounded-md border">
             <Table className="min-w-full">

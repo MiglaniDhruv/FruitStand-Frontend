@@ -110,6 +110,16 @@ export default function Items() {
     setSearchInput(value);
     handleSearchChange(value);
   };
+
+  const handleRefresh = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/items"] });
+  };
+
+  const handleSwipeDelete = async (item: any) => {
+    if (item && item.id) {
+      handleDelete(item);
+    }
+  };
   
   const handleSortChange = (sortBy: string, sortOrder: string) => {
     setPaginationOptions(prev => ({ ...prev, sortBy, sortOrder: sortOrder as 'asc' | 'desc' }));
@@ -326,6 +336,7 @@ export default function Items() {
                       onChange={handleSearchInputChange}
                       className="pl-8"
                       data-testid="input-search-items"
+                      data-search-input
                     />
                   </div>
                   <Select
@@ -362,10 +373,11 @@ export default function Items() {
                 rowKey="id"
                 emptyStateIcon={Package}
                 emptyStateTitle="No items yet"
-                onEmptyAction={() => setShowForm(true)}
-                emptyActionLabel="Add Item"
                 searchTerm={searchInput}
                 hasActiveFilters={statusFilter !== 'all'}
+                onRefresh={handleRefresh}
+                enableSwipeToDelete={true}
+                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>

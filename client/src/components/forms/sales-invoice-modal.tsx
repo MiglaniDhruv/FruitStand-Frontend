@@ -4,12 +4,7 @@ import { useOptimisticMutation, optimisticCreate, optimisticUpdate } from "@/hoo
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { MobileDrawerModal } from "@/components/ui/mobile-drawer-modal";
 import {
   Form,
   FormControl,
@@ -271,9 +266,33 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
   const getAvailableStock = (itemId: string) => {
     try {
       const stock = stockResult.find((s: any) => s.itemId === itemId);
-      return Number(stock?.availableQuantity) || 0;
+      if (!stock) {
+        return {
+          crates: 0,
+          boxes: 0,
+          kgs: 0
+        };
+      }
+      return {
+        crates: Number(stock.quantityInCrates) || 0,
+        boxes: Number(stock.quantityInBoxes) || 0,
+        kgs: Number(stock.quantityInKgs) || 0
+      };
     } catch (error) {
-      return 0;
+      return {
+        crates: 0,
+        boxes: 0,
+        kgs: 0
+      };
+    }
+  };
+
+  const getItemUnit = (itemId: string): "box" | "crate" | "kgs" | null => {
+    try {
+      const item = items.find((i: any) => i.id === itemId);
+      return item?.unit || null;
+    } catch (error) {
+      return null;
     }
   };
 
@@ -459,80 +478,87 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {editingInvoice ? "Edit Sales Invoice" : "Create Sales Invoice"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form 
-            onSubmit={form.handleSubmit(onSubmit)} 
-            className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}
-          >
-            {/* Invoice details section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="invoice.retailerId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Retailer *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-retailer">
-                          <SelectValue placeholder="Select retailer" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {retailers.map((retailer: any) => (
-                          <SelectItem key={retailer.id} value={retailer.id}>
-                            {retailer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="invoice.invoiceDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice Date *</FormLabel>
+    <MobileDrawerModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editingInvoice ? "Edit Sales Invoice" : "Create Sales Invoice"}
+      fullScreenOnMobile={true}
+    >
+      <Form {...form}>
+        <form 
+          onSubmit={form.handleSubmit(onSubmit)} 
+          className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}
+        >
+          {/* Invoice details section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="invoice.retailerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Retailer *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-invoice-date" />
+                      <SelectTrigger data-testid="select-retailer">
+                        <SelectValue placeholder="Select retailer" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      {retailers.map((retailer: any) => (
+                        <SelectItem key={retailer.id} value={retailer.id}>
+                          {retailer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="invoice.paidAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Paid Amount</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        data-testid="input-paid-amount"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="invoice.invoiceDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Invoice Date *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                      data-testid="input-invoice-date"
+                      autoComplete="off"
+                      enterKeyHint="next"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="invoice.paidAmount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Paid Amount</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      {...field}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      data-testid="input-paid-amount"
+                      inputMode="decimal"
+                      enterKeyHint="done"
+                      autoComplete="off"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
             {/* Invoice items section */}
             <div className="space-y-4">
@@ -589,7 +615,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <SelectContent>
                               {items.map((item: any) => (
                                 <SelectItem key={item.id} value={item.id}>
-                                  {item.name}
+                                  {item.name} - {item.vendor?.name || 'Unknown Vendor'}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -610,8 +636,26 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               type="number"
                               step="0.01"
                               {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value) || 0;
+                                const itemId = form.watch(`items.${index}.itemId`);
+                                const availableStock = getAvailableStock(itemId);
+                                
+                                if (value > availableStock.kgs) {
+                                  toast({
+                                    title: "Insufficient Stock",
+                                    description: `Only ${availableStock.kgs} kgs available. Cannot enter ${value} kgs.`,
+                                    variant: "destructive",
+                                  });
+                                  field.onChange(availableStock.kgs);
+                                } else {
+                                  field.onChange(value);
+                                }
+                              }}
                               data-testid={`input-weight-${index}`}
+                              inputMode="decimal"
+                              enterKeyHint="next"
+                              autoComplete="off"
                             />
                           </FormControl>
                           <FormMessage />
@@ -629,8 +673,26 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <Input
                               type="number"
                               {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                const itemId = form.watch(`items.${index}.itemId`);
+                                const availableStock = getAvailableStock(itemId);
+                                
+                                if (value > availableStock.crates) {
+                                  toast({
+                                    title: "Insufficient Stock",
+                                    description: `Only ${availableStock.crates} crates available. Cannot enter ${value} crates.`,
+                                    variant: "destructive",
+                                  });
+                                  field.onChange(Math.floor(availableStock.crates));
+                                } else {
+                                  field.onChange(value);
+                                }
+                              }}
                               data-testid={`input-crates-${index}`}
+                              inputMode="numeric"
+                              enterKeyHint="next"
+                              autoComplete="off"
                             />
                           </FormControl>
                           <FormMessage />
@@ -648,8 +710,26 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <Input
                               type="number"
                               {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                const itemId = form.watch(`items.${index}.itemId`);
+                                const availableStock = getAvailableStock(itemId);
+                                
+                                if (value > availableStock.boxes) {
+                                  toast({
+                                    title: "Insufficient Stock",
+                                    description: `Only ${availableStock.boxes} boxes available. Cannot enter ${value} boxes.`,
+                                    variant: "destructive",
+                                  });
+                                  field.onChange(Math.floor(availableStock.boxes));
+                                } else {
+                                  field.onChange(value);
+                                }
+                              }}
                               data-testid={`input-boxes-${index}`}
+                              inputMode="numeric"
+                              enterKeyHint="next"
+                              autoComplete="off"
                             />
                           </FormControl>
                           <FormMessage />
@@ -670,6 +750,9 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               {...field}
                               onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               data-testid={`input-rate-${index}`}
+                              inputMode="decimal"
+                              enterKeyHint="done"
+                              autoComplete="off"
                             />
                           </FormControl>
                           <FormMessage />
@@ -687,11 +770,16 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
 
                   {/* Available stock display */}
                   {form.watch(`items.${index}.itemId`) && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Package className="w-4 h-4" />
-                      <span>
-                        Available stock for {getItemName(form.watch(`items.${index}.itemId`))}: {getAvailableStock(form.watch(`items.${index}.itemId`))} units
-                      </span>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Package className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium">Available stock for {getItemName(form.watch(`items.${index}.itemId`))}: </span>
+                        <span className="text-muted-foreground">
+                          {getAvailableStock(form.watch(`items.${index}.itemId`)).crates} crates, {' '}
+                          {getAvailableStock(form.watch(`items.${index}.itemId`)).boxes} boxes, {' '}
+                          {getAvailableStock(form.watch(`items.${index}.itemId`)).kgs} kgs
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -741,6 +829,9 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
                             data-testid="input-crate-quantity"
+                            inputMode="numeric"
+                            enterKeyHint="done"
+                            autoComplete="off"
                           />
                         </FormControl>
                         <FormMessage />
@@ -793,7 +884,6 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
             </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </MobileDrawerModal>
   );
 }

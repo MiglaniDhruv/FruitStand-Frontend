@@ -22,12 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import SalesInvoiceModal from "@/components/forms/sales-invoice-modal";
 import { toast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { logEventHandlerError, logMutationError, logNavigationError } from "@/lib/error-logger";
 import { Plus } from "lucide-react";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
+import SalesInvoiceModal from "@/components/forms/sales-invoice-modal";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -44,8 +44,8 @@ import { format } from "date-fns";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 
 export default function SalesInvoiceManagement() {
-  const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>(
     {
       page: 1,
@@ -170,10 +170,20 @@ export default function SalesInvoiceManagement() {
     handleSearchChange(value);
   };
 
+  const handleRefresh = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/sales-invoices"] });
+  };
+
+  const handleSwipeDelete = async (invoice: any) => {
+    if (invoice && invoice.id) {
+      handleDelete(invoice.id);
+    }
+  };
+
   const handleCreateNew = () => {
     try {
       setEditingInvoice(null);
-      setOpen(true);
+      setShowInvoiceModal(true);
     } catch (error) {
       logEventHandlerError(error, 'handleCreateNew');
       toast({
@@ -495,6 +505,7 @@ export default function SalesInvoiceManagement() {
                       onChange={handleSearchInputChange}
                       className="pl-8"
                       data-testid="input-search-invoices"
+                      data-search-input
                     />
                   </div>
                   <Select
@@ -531,23 +542,17 @@ export default function SalesInvoiceManagement() {
                 rowKey="id"
                 emptyStateIcon={FileText}
                 emptyStateTitle="No invoices yet"
-                onEmptyAction={() => setOpen(true)}
-                emptyActionLabel="Create Invoice"
                 searchTerm={searchInput}
                 hasActiveFilters={statusFilter !== 'all'}
+                onRefresh={handleRefresh}
+                enableSwipeToDelete={true}
+                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>
           </section>
         </main>
       </div>
-
-      {/* Sales Invoice Modal */}
-      <SalesInvoiceModal
-        open={open}
-        onOpenChange={setOpen}
-        editingInvoice={editingInvoice}
-      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
@@ -559,6 +564,13 @@ export default function SalesInvoiceManagement() {
         variant="destructive"
         isLoading={deleteInvoiceMutation.isPending}
         onConfirm={confirmDelete}
+      />
+
+      {/* Sales Invoice Modal */}
+      <SalesInvoiceModal
+        open={showInvoiceModal}
+        onOpenChange={setShowInvoiceModal}
+        editingInvoice={editingInvoice}
       />
     </AppLayout>
   );

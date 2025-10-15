@@ -87,6 +87,9 @@
   --spacing: 0.25rem;
   --footer-h: 72px; /* Footer bar height */
   
+  /* Mobile navigation height */
+  --bottom-nav-h: 0px;
+  
   /* Fluid Typography Variables */
   --font-size-xs: clamp(0.625rem, 0.6rem + 0.125vw, 0.75rem);
   --font-size-sm: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
@@ -408,6 +411,15 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
   
+  /* Touch action utilities for better mobile interaction */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  .touch-none {
+    touch-action: none;
+  }
+  
   /* Heading hierarchy utilities for consistent typography
    * Usage:
    * - heading-page: Main page titles (h1)
@@ -445,6 +457,89 @@
       margin-top: 2rem;
       margin-bottom: 2rem;
     }
+  }
+}
+
+/* Mobile-specific CSS variable overrides */
+@media (max-width: 767px) {
+  :root {
+    --bottom-nav-h: 56px;
+    --footer-h: 0px;
+  }
+  
+  body {
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Mobile keyframe animations */
+@keyframes swipe-out-right {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes swipe-out-left {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes pull-refresh-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Animation utility classes */
+.animate-swipe-out-right {
+  animation: swipe-out-right 0.3s ease-in forwards;
+}
+
+.animate-swipe-out-left {
+  animation: swipe-out-left 0.3s ease-in forwards;
+}
+
+.animate-pull-refresh-bounce {
+  animation: pull-refresh-bounce 0.5s ease-in-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .animate-swipe-out-right,
+  .animate-swipe-out-left,
+  .animate-pull-refresh-bounce,
+  .animate-slide-up {
+    animation: none;
   }
 }
 

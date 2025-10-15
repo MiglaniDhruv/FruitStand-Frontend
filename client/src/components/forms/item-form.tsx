@@ -93,13 +93,15 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     }
   }, [open]);
 
-  const { data: vendors, isError: vendorsError, error: vendorsErrorMessage } = useQuery<any[]>({
+  const { data: vendorsResult, isError: vendorsError, error: vendorsErrorMessage } = useQuery({
     queryKey: ["/api/vendors"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest('GET', '/api/vendors');
+      const response = await authenticatedApiRequest('GET', '/api/vendors?limit=100');
       return response.json();
     },
   });
+
+  const vendors = vendorsResult?.data || [];
 
   const mutation = useMutation({
     mutationFn: async (data: ItemFormData) => {
