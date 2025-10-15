@@ -6,6 +6,7 @@ import { TrendingUp } from "lucide-react";
 import { RecentSale } from "@/types";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface RecentSalesTableProps {
   sales: RecentSale[] | undefined;
@@ -76,7 +77,11 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
           </CardTitle>
         </CardHeader>
         <CardContent size="default">
-          <p className="text-xs sm:text-sm text-muted-foreground text-center py-4 sm:py-6">No recent sales found</p>
+          <EmptyState 
+            icon={TrendingUp}
+            title="No recent sales"
+            description="Sales invoices will appear here once you start creating them."
+          />
         </CardContent>
       </Card>
     );

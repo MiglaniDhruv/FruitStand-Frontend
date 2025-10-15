@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
 import { useLocation } from "wouter";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,14 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Eye, Trash2, Search } from "lucide-react";
+import { Plus, Eye, Trash2, Search, FileText } from "lucide-react";
 import PurchaseInvoiceModal from "@/components/forms/purchase-invoice-modal";
 import { format } from "date-fns";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { buildPaginationParams } from "@/lib/pagination";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { logEventHandlerError, logMutationError, logNavigationError } from "@/lib/error-logger";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 export default function PurchaseInvoices() {
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
@@ -36,49 +39,63 @@ export default function PurchaseInvoices() {
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    invoiceId: string;
+    invoiceNumber: string;
+  }>({
+    open: false,
+    invoiceId: "",
+    invoiceNumber: ""
+  });
   
   const [, setLocation] = useLocation();
   const { slug } = useTenantSlug();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const deleteInvoiceMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/purchase-invoices/${id}`);
-    },
+  const deleteInvoiceMutation = useOptimisticMutation<void, string>({
+    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/purchase-invoices/${id}`); },
+    queryKey: ["/api/purchase-invoices", paginationOptions, statusFilter],
+    updateFn: (old, id) => optimisticDelete(old, id),
     onSuccess: () => {
-      toast({
-        title: "Invoice deleted",
-        description: "Purchase invoice has been deleted successfully",
-      });
+      toast.success("Invoice deleted", "Purchase invoice has been deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
     },
     onError: (error) => {
       logMutationError(error, 'deletePurchaseInvoice');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete invoice",
-        variant: "destructive",
-      });
+      toast.error(
+        "Error",
+        error.message || "Failed to delete invoice",
+        {
+          onRetry: () => {
+            if (deleteConfirm.invoiceId) {
+              deleteInvoiceMutation.mutateAsync(deleteConfirm.invoiceId);
+            }
+          }
+        }
+      );
     },
   });
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (invoice: any) => {
+    setDeleteConfirm({
+      open: true,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber
+    });
+  };
+
+  const confirmDelete = async () => {
     try {
-      if (!id) {
+      if (!deleteConfirm.invoiceId) {
         throw new Error('Invalid invoice ID');
       }
       
-      if (confirm("Are you sure you want to delete this purchase invoice? This action cannot be undone.")) {
-        await deleteInvoiceMutation.mutateAsync(id);
-      }
+      await deleteInvoiceMutation.mutateAsync(deleteConfirm.invoiceId);
+      setDeleteConfirm({ open: false, invoiceId: "", invoiceNumber: "" });
     } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { invoiceId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete purchase invoice",
-        variant: "destructive",
-      });
+      logEventHandlerError(error, 'confirmDelete', { invoiceId: deleteConfirm.invoiceId });
+      toast.error("Error", "Failed to delete purchase invoice");
     }
   };
 
@@ -185,7 +202,7 @@ export default function PurchaseInvoices() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDelete(invoice.id)}
+            onClick={() => handleDelete(invoice)}
             data-testid={`button-delete-invoice-${invoice.id}`}
             title="Delete Invoice"
             disabled={deleteInvoiceMutation.isPending}
@@ -236,11 +253,7 @@ export default function PurchaseInvoices() {
       setLocation(`/${slug}/purchase-invoices/${invoice.id}`);
     } catch (error) {
       logNavigationError(error, `purchase-invoice-${invoice?.id}`);
-      toast({
-        title: "Error",
-        description: "Failed to navigate to invoice details",
-        variant: "destructive",
-      });
+      toast.error("Error", "Failed to navigate to invoice details");
     }
   };
 
@@ -248,14 +261,19 @@ export default function PurchaseInvoices() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <div className="h-8 bg-muted rounded w-64"></div>
+            
+            {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-muted rounded"></div>
+                <SkeletonCard key={i} variant="stat" />
               ))}
             </div>
-            <div className="h-96 bg-muted rounded"></div>
+            
+            {/* Table skeleton */}
+            <SkeletonTable rows={10} columns={6} showHeader={true} />
           </div>
         </div>
       </AppLayout>
@@ -347,6 +365,12 @@ export default function PurchaseInvoices() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                emptyStateIcon={FileText}
+                emptyStateTitle="No purchase invoices yet"
+                onEmptyAction={() => setShowCreateModal(true)}
+                emptyActionLabel="Create Invoice"
+                searchTerm={searchInput}
+                hasActiveFilters={statusFilter !== 'all'}
               />
             </CardContent>
           </Card>
@@ -356,5 +380,15 @@ export default function PurchaseInvoices() {
       <PurchaseInvoiceModal 
         open={showCreateModal} 
         onOpenChange={setShowCreateModal} 
+      />
+      
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, invoiceId: "", invoiceNumber: "" })}
+        title="Delete Purchase Invoice"
+        description={`Are you sure you want to delete invoice "${deleteConfirm.invoiceNumber}"? This action cannot be undone.`}
+        variant="destructive"
+        onConfirm={confirmDelete}
+        isLoading={deleteInvoiceMutation.isPending}
       />
     </AppLayout>);}

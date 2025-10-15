@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { 
   Download, 
   Book, 
@@ -271,14 +272,14 @@ export default function Ledgers() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="space-y-6">
+            <SkeletonCard />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <SkeletonCard key={i} />
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <SkeletonTable rows={8} columns={5} showHeader={true} />
           </div>
         </div>
       </AppLayout>

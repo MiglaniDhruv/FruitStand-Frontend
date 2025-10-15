@@ -1,9 +1,22 @@
 import * as React from "react"
+import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 
 import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+import { ToastAction } from "@/components/ui/toast"
+
+// Simple haptic feedback function (not a hook, so can be used in toast function)
+function triggerHaptic(pattern: number | number[]) {
+  if ('vibrate' in navigator && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    try {
+      navigator.vibrate(pattern);
+    } catch (error) {
+      // Silently ignore
+    }
+  }
+}
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -13,6 +26,10 @@ type ToasterToast = ToastProps & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  icon?: React.ReactNode
+  duration?: number
+  onRetry?: () => void
+  disableHaptic?: boolean
 }
 
 const actionTypes = {
@@ -142,6 +159,15 @@ type Toast = Omit<ToasterToast, "id">
 function toast({ ...props }: Toast) {
   const id = genId()
 
+  // Trigger haptic feedback based on variant
+  if (!props.disableHaptic) {
+    if (props.variant === 'destructive') {
+      triggerHaptic([100, 50, 100, 50, 100]); // Error pattern
+    } else {
+      triggerHaptic(50); // Light feedback for default toasts
+    }
+  }
+
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
@@ -155,7 +181,7 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      onOpenChange: (open) => {
+      onOpenChange: (open: boolean) => {
         if (!open) dismiss()
       },
     },
@@ -167,6 +193,93 @@ function toast({ ...props }: Toast) {
     update,
   }
 }
+
+// Success toast helper
+toast.success = (title: string, description?: string) => {
+  triggerHaptic([50, 50, 100]); // Success pattern
+  return toast({
+    title,
+    description,
+    icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+    variant: "default",
+    disableHaptic: true, // Already triggered above
+  });
+};
+
+// Error toast helper with retry support
+toast.error = (
+  title: string, 
+  description?: string, 
+  options?: { onRetry?: () => void }
+) => {
+  triggerHaptic([100, 50, 100, 50, 100]); // Error pattern
+  return toast({
+    title,
+    description,
+    icon: <XCircle className="h-5 w-5" />,
+    variant: "destructive",
+    disableHaptic: true, // Already triggered above
+    action: options?.onRetry 
+      ? <ToastAction altText="Retry" onClick={options.onRetry}>Retry</ToastAction>
+      : undefined,
+  });
+};
+
+// Loading toast helper
+toast.loading = (title: string, description?: string) => {
+  return toast({
+    title,
+    description,
+    icon: <Loader2 className="h-5 w-5 animate-spin" />,
+    variant: "default",
+    duration: Infinity, // Don't auto-dismiss loading toasts
+  });
+};
+
+// Update toast helper
+toast.update = (id: string, props: Partial<ToasterToast>) => {
+  dispatch({
+    type: "UPDATE_TOAST",
+    toast: { ...props, id },
+  });
+};
+
+// Promise toast helper
+toast.promise = async <T,>(
+  promise: Promise<T>,
+  msgs: {
+    loading: string;
+    success: string | ((data: T) => string);
+    error: string | ((error: Error) => string);
+  }
+) => {
+  const toastId = toast.loading(msgs.loading);
+
+  try {
+    const data = await promise;
+    const successMsg = typeof msgs.success === 'function' ? msgs.success(data) : msgs.success;
+    toastId.update({
+      id: toastId.id,
+      title: successMsg,
+      icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+      variant: "default",
+      duration: 5000,
+    });
+    return data;
+  } catch (error) {
+    const errorMsg = typeof msgs.error === 'function' 
+      ? msgs.error(error as Error) 
+      : msgs.error;
+    toastId.update({
+      id: toastId.id,
+      title: errorMsg,
+      icon: <XCircle className="h-5 w-5" />,
+      variant: "destructive",
+      duration: 5000,
+    });
+    throw error;
+  }
+};
 
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)

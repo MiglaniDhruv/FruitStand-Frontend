@@ -6,6 +6,7 @@ import { ShoppingCart } from "lucide-react";
 import { RecentPurchase } from "@/types";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface RecentPurchasesTableProps {
   purchases: RecentPurchase[] | undefined;
@@ -76,7 +77,11 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
           </CardTitle>
         </CardHeader>
         <CardContent size="default" className="pb-5 sm:pb-7">
-          <p className="text-xs sm:text-sm text-muted-foreground text-center py-4 sm:py-6">No recent purchases found</p>
+          <EmptyState 
+            icon={ShoppingCart}
+            title="No recent purchases"
+            description="Purchase invoices will appear here once you start creating them."
+          />
         </CardContent>
       </Card>
     );

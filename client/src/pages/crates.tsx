@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type CrateTransactionWithParty } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -432,14 +433,14 @@ export default function CrateManagement() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="space-y-6">
+            <SkeletonCard />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-muted rounded"></div>
+                <SkeletonCard key={i} />
               ))}
             </div>
-            <div className="h-96 bg-muted rounded"></div>
+            <SkeletonTable rows={8} columns={6} showHeader={true} />
           </div>
         </div>
       </AppLayout>

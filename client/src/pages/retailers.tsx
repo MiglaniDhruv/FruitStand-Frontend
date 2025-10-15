@@ -32,6 +32,9 @@ import { logEventHandlerError, logMutationError, logFormError } from "@/lib/erro
 import { z } from "zod";
 import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search, Star } from "lucide-react";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
+import { useOptimisticMutation, optimisticDelete, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 
 const retailerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -62,6 +65,15 @@ export default function RetailerManagement() {
   const [searchInput, setSearchInput] = useState("");
   const [showRetailerPaymentModal, setShowRetailerPaymentModal] = useState(false);
   const [selectedRetailerForPayment, setSelectedRetailerForPayment] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    retailerId: string;
+    retailerName: string;
+  }>({
+    open: false,
+    retailerId: "",
+    retailerName: ""
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -97,17 +109,33 @@ export default function RetailerManagement() {
     },
   });
 
-  const createRetailerMutation = useMutation({
-    mutationFn: async (data: RetailerFormData) => {
+  const createRetailerMutation = useOptimisticMutation<any, RetailerFormData>({
+    mutationFn: async (data) => {
       const response = await authenticatedApiRequest("POST", "/api/retailers", data);
       return response.json();
+    },
+    queryKey: ["/api/retailers", paginationOptions],
+    updateFn: (old, newData) => {
+      // Create optimistic retailer with temporary ID
+      const optimisticRetailer = {
+        id: `temp-${Date.now()}`,
+        name: newData.name,
+        phone: newData.phone,
+        address: newData.address || '',
+        isActive: newData.isActive,
+        isFavourite: false,
+        salesTotal: 0,
+        paymentsTotal: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      return optimisticCreate(old, optimisticRetailer);
     },
     onSuccess: () => {
       toast({
         title: "Retailer created",
         description: "New retailer has been created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
       setOpen(false);
       form.reset();
@@ -116,23 +144,24 @@ export default function RetailerManagement() {
       logMutationError(error, 'createRetailer');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create retailer",
+        description: error.message || "Failed to create retailer",
         variant: "destructive",
       });
     },
   });
 
-  const updateRetailerMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<RetailerFormData> }) => {
+  const updateRetailerMutation = useOptimisticMutation<any, { id: string; data: Partial<RetailerFormData> }>({
+    mutationFn: async ({ id, data }) => {
       const response = await authenticatedApiRequest("PUT", `/api/retailers/${id}`, data);
       return response.json();
     },
+    queryKey: ["/api/retailers", paginationOptions],
+    updateFn: (old, { id, data }) => optimisticUpdate(old, { id, ...data }),
     onSuccess: () => {
       toast({
         title: "Retailer updated",
         description: "Retailer has been updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
       setOpen(false);
       setEditingRetailer(null);
@@ -142,52 +171,62 @@ export default function RetailerManagement() {
       logMutationError(error, 'updateRetailer');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update retailer",
+        description: error.message || "Failed to update retailer",
         variant: "destructive",
       });
     },
   });
 
-  const deleteRetailerMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/retailers/${id}`);
-    },
-    onSuccess: () => {
+  const deleteRetailerMutation = useOptimisticMutation<string, string>({
+    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/retailers/${id}`); return id; },
+    queryKey: ["/api/retailers", paginationOptions],
+    updateFn: (old, id) => optimisticDelete(old, id),
+    onSuccess: () => { 
       toast({
-        title: "Retailer deleted",
-        description: "Retailer has been deleted successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] });
+        title: "Retailer deleted", 
+        description: "Retailer has been deleted successfully"
+      }); 
+      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] }); 
     },
-    onError: (error) => {
-      logMutationError(error, 'deleteRetailer');
+    onError: (e) => {
+      logMutationError(e, 'deleteRetailer');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete retailer",
+        description: (e as Error).message || "Failed to delete retailer",
         variant: "destructive",
       });
     },
   });
 
-  const toggleFavouriteMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const toggleFavouriteMutation = useOptimisticMutation<any, string>({
+    mutationFn: async (id) => {
       const response = await authenticatedApiRequest("PATCH", `/api/retailers/${id}/favourite`);
       return response.json();
+    },
+    queryKey: ["/api/retailers", paginationOptions],
+    updateFn: (old, id) => {
+      if (!old?.data) return old;
+      return {
+        ...old,
+        data: old.data.map((retailer: any) => 
+          retailer.id === id 
+            ? { ...retailer, isFavourite: !retailer.isFavourite }
+            : retailer
+        )
+      };
     },
     onSuccess: () => {
       toast({
         title: "Favourite updated",
         description: "Retailer favourite status has been updated",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] }); // Refresh dashboard
     },
     onError: (error) => {
       logMutationError(error, 'toggleFavourite');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update favourite status",
+        description: error.message || "Failed to update favourite status",
         variant: "destructive",
       });
     },
@@ -216,17 +255,24 @@ export default function RetailerManagement() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (retailer: any) => {
+    setDeleteConfirm({
+      open: true,
+      retailerId: retailer.id,
+      retailerName: retailer.name
+    });
+  };
+
+  const confirmDelete = async () => {
     try {
-      if (!id) {
+      if (!deleteConfirm.retailerId) {
         throw new Error('Invalid retailer ID');
       }
       
-      if (confirm("Are you sure you want to delete this retailer?")) {
-        await deleteRetailerMutation.mutateAsync(id);
-      }
+      await deleteRetailerMutation.mutateAsync(deleteConfirm.retailerId);
+      setDeleteConfirm({ open: false, retailerId: "", retailerName: "" });
     } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { retailerId: id });
+      logEventHandlerError(error, 'confirmDelete', { retailerId: deleteConfirm.retailerId });
       toast({
         title: "Error",
         description: "Failed to delete retailer",
@@ -438,7 +484,7 @@ export default function RetailerManagement() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDelete(value)}
+            onClick={() => handleDelete(row)}
             data-testid={`button-delete-${value}`}
             title="Delete Retailer"
             disabled={deleteRetailerMutation.isPending}
@@ -454,14 +500,19 @@ export default function RetailerManagement() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <div className="h-8 bg-muted rounded w-64"></div>
+            
+            {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <SkeletonCard key={i} variant="stat" />
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            
+            {/* Table skeleton */}
+            <SkeletonTable rows={10} columns={6} showHeader={true} />
           </div>
         </div>
       </AppLayout>
@@ -607,6 +658,12 @@ export default function RetailerManagement() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                emptyStateIcon={Users}
+                emptyStateTitle="No retailers yet"
+                onEmptyAction={handleCreateNew}
+                emptyActionLabel="Add Retailer"
+                searchTerm={searchInput}
+                hasActiveFilters={false}
               />
             </CardContent>
           </Card>
@@ -737,5 +794,15 @@ export default function RetailerManagement() {
         onOpenChange={handleCloseRetailerPaymentModal}
         retailerId={selectedRetailerForPayment?.id || ""}
         retailerName={selectedRetailerForPayment?.name}
+      />
+      
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, retailerId: "", retailerName: "" })}
+        title="Delete Retailer"
+        description={`Are you sure you want to delete "${deleteConfirm.retailerName}"? This action cannot be undone.`}
+        variant="destructive"
+        onConfirm={confirmDelete}
+        isLoading={deleteRetailerMutation.isPending}
       />
     </AppLayout>);}

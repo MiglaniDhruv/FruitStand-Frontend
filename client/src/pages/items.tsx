@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Package } from "lucide-react";
 import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/schema";
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 type StatusFilter = "all" | "true" | "false";
 
@@ -35,6 +38,15 @@ export default function Items() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    itemId: string;
+    itemName: string;
+  }>({
+    open: false,
+    itemId: "",
+    itemName: ""
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -61,10 +73,10 @@ export default function Items() {
 
 
 
-  const deleteItemMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/items/${id}`);
-    },
+  const deleteItemMutation = useOptimisticMutation<void, string>({
+    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/items/${id}`); },
+    queryKey: ["/api/items", paginationOptions, statusFilter],
+    updateFn: (old, id) => optimisticDelete(old, id),
     onSuccess: () => {
       toast({
         title: "Item deleted",
@@ -76,7 +88,7 @@ export default function Items() {
       logMutationError(error, 'deleteItem');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete item",
+        description: error.message || "Failed to delete item",
         variant: "destructive",
       });
     },
@@ -127,17 +139,24 @@ export default function Items() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (item: any) => {
+    setDeleteConfirm({
+      open: true,
+      itemId: item.id,
+      itemName: item.name
+    });
+  };
+
+  const confirmDelete = async () => {
     try {
-      if (!id) {
+      if (!deleteConfirm.itemId) {
         throw new Error('Invalid item ID');
       }
       
-      if (confirm("Are you sure you want to delete this item?")) {
-        await deleteItemMutation.mutateAsync(id);
-      }
+      await deleteItemMutation.mutateAsync(deleteConfirm.itemId);
+      setDeleteConfirm({ open: false, itemId: "", itemName: "" });
     } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { itemId: id });
+      logEventHandlerError(error, 'confirmDelete', { itemId: deleteConfirm.itemId });
       toast({
         title: "Error",
         description: "Failed to delete item",
@@ -222,7 +241,7 @@ export default function Items() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDelete(value)}
+            onClick={() => handleDelete(row)}
             data-testid={`button-delete-${value}`}
             title="Delete Item"
             disabled={deleteItemMutation.isPending}
@@ -237,16 +256,13 @@ export default function Items() {
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex-1 flex flex-col">
-          <div className="p-4 sm:p-6">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              </div>
-            </div>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <div className="h-8 bg-muted rounded w-64"></div>
+            
+            {/* Table skeleton */}
+            <SkeletonTable rows={10} columns={6} showHeader={true} />
           </div>
         </div>
       </AppLayout>
@@ -345,6 +361,12 @@ export default function Items() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                emptyStateIcon={Package}
+                emptyStateTitle="No items yet"
+                onEmptyAction={() => setShowForm(true)}
+                emptyActionLabel="Add Item"
+                searchTerm={searchInput}
+                hasActiveFilters={statusFilter !== 'all'}
               />
             </CardContent>
           </Card>
@@ -355,5 +377,15 @@ export default function Items() {
         open={showForm}
         onOpenChange={handleCloseForm}
         item={editingItem}
+      />
+      
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, itemId: "", itemName: "" })}
+        title="Delete Item"
+        description={`Are you sure you want to delete "${deleteConfirm.itemName}"? This action cannot be undone.`}
+        variant="destructive"
+        onConfirm={confirmDelete}
+        isLoading={deleteItemMutation.isPending}
       />
     </AppLayout>);}

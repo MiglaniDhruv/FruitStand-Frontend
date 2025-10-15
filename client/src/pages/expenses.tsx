@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "@shared/schema";
@@ -50,6 +51,8 @@ import {
   Search
 } from "lucide-react";
 import { format } from "date-fns";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 const expenseCategorySchema = z.object({
   name: z.string().min(1, "Category name is required"),
@@ -84,6 +87,15 @@ export default function ExpenseManagement() {
   const [searchInput, setSearchInput] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedPaymentMode, setSelectedPaymentMode] = useState("all");
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    categoryId: string;
+    categoryName: string;
+  }>({
+    open: false,
+    categoryId: "",
+    categoryName: ""
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -256,10 +268,10 @@ export default function ExpenseManagement() {
     },
   });
 
-  const deleteCategoryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/expense-categories/${id}`);
-    },
+  const deleteCategoryMutation = useOptimisticMutation<void, string>({
+    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/expense-categories/${id}`); },
+    queryKey: ["/api/expense-categories"],
+    updateFn: (old, id) => optimisticDelete(old, id),
     onSuccess: () => {
       toast({
         title: "Category deleted",
@@ -271,7 +283,7 @@ export default function ExpenseManagement() {
       logMutationError(error, 'deleteExpenseCategory');
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete category",
+        description: error.message || "Failed to delete category",
         variant: "destructive",
       });
     },
@@ -336,17 +348,24 @@ export default function ExpenseManagement() {
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = (category: any) => {
+    setDeleteConfirm({
+      open: true,
+      categoryId: category.id,
+      categoryName: category.name
+    });
+  };
+
+  const confirmDeleteCategory = async () => {
     try {
-      if (!id) {
+      if (!deleteConfirm.categoryId) {
         throw new Error('Invalid category ID');
       }
       
-      if (confirm("Are you sure you want to delete this category? This action cannot be undone.")) {
-        await deleteCategoryMutation.mutateAsync(id);
-      }
+      await deleteCategoryMutation.mutateAsync(deleteConfirm.categoryId);
+      setDeleteConfirm({ open: false, categoryId: "", categoryName: "" });
     } catch (error) {
-      logEventHandlerError(error, 'handleDeleteCategory', { categoryId: id });
+      logEventHandlerError(error, 'confirmDeleteCategory', { categoryId: deleteConfirm.categoryId });
       toast({
         title: "Error",
         description: "Failed to delete category",
@@ -535,7 +554,7 @@ export default function ExpenseManagement() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDeleteCategory(value)}
+            onClick={() => handleDeleteCategory(row)}
             data-testid={`button-delete-category-${value}`}
             title="Delete Category"
             disabled={deleteCategoryMutation.isPending}
@@ -557,14 +576,19 @@ export default function ExpenseManagement() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <div className="h-8 bg-muted rounded w-64"></div>
+            
+            {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-muted rounded"></div>
+                <SkeletonCard key={i} variant="stat" />
               ))}
             </div>
-            <div className="h-96 bg-muted rounded"></div>
+            
+            {/* Table skeleton */}
+            <SkeletonTable rows={10} columns={5} showHeader={true} />
           </div>
         </div>
       </AppLayout>
@@ -713,6 +737,12 @@ export default function ExpenseManagement() {
                     isLoading={expensesFetching}
                     enableRowSelection={true}
                     rowKey="id"
+                    emptyStateIcon={Receipt}
+                    emptyStateTitle="No expenses yet"
+                    onEmptyAction={handleCreateExpense}
+                    emptyActionLabel="Add Expense"
+                    searchTerm={searchInput}
+                    hasActiveFilters={selectedCategory !== 'all' || selectedPaymentMode !== 'all'}
                   />
                 </CardContent>
               </Card>
@@ -732,6 +762,12 @@ export default function ExpenseManagement() {
                     isLoading={categoriesFetching}
                     enableRowSelection={true}
                     rowKey="id"
+                    emptyStateIcon={Tag}
+                    emptyStateTitle="No categories yet"
+                    onEmptyAction={handleCreateCategory}
+                    emptyActionLabel="Add Category"
+                    searchTerm=""
+                    hasActiveFilters={false}
                   />
                 </CardContent>
               </Card>
@@ -966,6 +1002,16 @@ export default function ExpenseManagement() {
           </Form>
         </DialogContent>
       </Dialog>
+      
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, categoryId: "", categoryName: "" })}
+        title="Delete Category"
+        description={`Are you sure you want to delete "${deleteConfirm.categoryName}"? This action cannot be undone.`}
+        variant="destructive"
+        onConfirm={confirmDeleteCategory}
+        isLoading={deleteCategoryMutation.isPending}
+      />
     </AppLayout>
     </>
   );

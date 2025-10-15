@@ -93,6 +93,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
   const [selectedStockOutEntries, setSelectedStockOutEntries] = useState<string[]>([]);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [calculationError, setCalculationError] = useState<string | null>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   const { tenant, getTenantSettings } = useTenant();
   const tenantSettings = getTenantSettings();
@@ -191,6 +192,11 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     onSuccess: () => {
       setSubmissionError(null);
       setCalculationError(null);
+      
+      // Trigger success animation
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 500);
+      
       toast({
         title: "Invoice created",
         description: form.watch("crateTransaction.enabled")
@@ -201,10 +207,14 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crate-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
-      onOpenChange(false);
-      form.reset();
-      setSelectedVendorId("");
-      setSelectedStockOutEntries([]);
+      
+      // Close modal after animation
+      setTimeout(() => {
+        onOpenChange(false);
+        form.reset();
+        setSelectedVendorId("");
+        setSelectedStockOutEntries([]);
+      }, 300);
     },
     onError: (error) => {
       let errorMessage = "Failed to create invoice";
@@ -535,7 +545,10 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
           </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit)} 
+            className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}
+          >
             {/* Basic Information */}
             <Card>
               <CardHeader>

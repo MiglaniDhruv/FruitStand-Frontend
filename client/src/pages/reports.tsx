@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { authenticatedApiRequest } from '@/lib/auth';
 import { FileText, Download, FileSpreadsheet, TrendingUp, DollarSign, Users, Store, Receipt, TrendingDown, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
+import { SkeletonCard } from '@/components/ui/skeleton-loaders';
 import { useToast } from '@/hooks/use-toast';
 import type { 
   TurnoverReportData, 
@@ -253,14 +254,11 @@ export default function Reports() {
       <AppLayout>
         <div className="flex-1 flex flex-col overflow-auto">
           <div className="p-4 sm:p-6 space-y-6">
-            <div className="space-y-2">
-              <div className="h-8 bg-muted animate-pulse rounded"></div>
-              <div className="h-4 bg-muted animate-pulse rounded w-2/3"></div>
-            </div>
+            <SkeletonCard />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="h-32 bg-muted animate-pulse rounded"></div>
-              <div className="h-32 bg-muted animate-pulse rounded"></div>
-              <div className="h-32 bg-muted animate-pulse rounded"></div>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
           </div>
         </div>

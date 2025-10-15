@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/ui/data-table";
+import { SkeletonTable } from "@/components/ui/skeleton-loaders";
 import {
   Dialog,
   DialogContent,
@@ -376,14 +377,7 @@ export default function UserManagement() {
       <AppLayout>
         <div className="flex-1 flex flex-col">
           <div className="p-4 sm:p-6">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-full"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              </div>
-            </div>
+            <SkeletonTable rows={5} columns={4} showHeader={true} />
           </div>
         </div>
       </AppLayout>

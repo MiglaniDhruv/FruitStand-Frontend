@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOptimisticMutation, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { logFormError, logCalculationError } from "@/lib/error-logger";
 import { buildPaginationParams } from "@/lib/pagination";
@@ -80,8 +81,8 @@ interface SalesInvoiceModalProps {
 }
 
 export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }: SalesInvoiceModalProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showSuccessAnimation, setShowSuccessAnimation] = React.useState(false);
 
   // Initialize form
   const form = useForm<InvoiceFormData>({
@@ -294,8 +295,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
     }
   };
 
-  // Mutation for creating/updating invoice
-  const mutation = useMutation({
+  // Mutation for creating/updating invoice with optimistic UI
+  // Note: Due to multiple possible queryKey combinations (different pagination/filters),
+  // we optimistically update the base query and invalidate all variants on settle
+  const mutation = useOptimisticMutation({
     mutationFn: async (data: InvoiceFormData) => {
       // Validate form data
       if (!data.invoice.retailerId) {
@@ -364,32 +367,87 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       }
       return response.json();
     },
+    // Optimistically update a default query key
+    // Other filter combinations will be updated via invalidation
+    queryKey: ["/api/sales-invoices"],
+    updateFn: (old: any, variables: InvoiceFormData) => {
+      if (!old) return old;
+      
+      const isEditing = !!editingInvoice;
+      const totalAmount = calculateTotalAmount();
+      const paidAmount = Number(variables.invoice.paidAmount) || 0;
+      const balanceAmount = Math.max(0, totalAmount - paidAmount);
+      
+      let status: "Pending" | "Partial" | "Paid";
+      if (paidAmount <= 0) {
+        status = "Pending";
+      } else if (paidAmount >= totalAmount) {
+        status = "Paid";
+      } else {
+        status = "Partial";
+      }
+      
+      const optimisticInvoice: any = {
+        id: isEditing ? editingInvoice.id : `temp-${Date.now()}`,
+        ...variables.invoice,
+        totalAmount: totalAmount.toString(),
+        paidAmount: paidAmount.toString(),
+        balanceAmount: balanceAmount.toString(),
+        status,
+        createdAt: isEditing ? editingInvoice.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        items: variables.items.map((item: any) => ({
+          ...item,
+          weight: item.weight.toString(),
+          crates: item.crates.toString(),
+          boxes: item.boxes.toString(),
+          rate: item.rate.toString(),
+          amount: calculateItemAmount(item.rate, item).toString(),
+        })),
+      };
+      
+      if (isEditing) {
+        return optimisticUpdate(old, optimisticInvoice);
+      } else {
+        return optimisticCreate(old, optimisticInvoice);
+      }
+    },
+    onError: (error, variables) => {
+      logFormError(error, "SalesInvoiceModal", { editingInvoice });
+      toast.error(
+        "Error",
+        error instanceof Error ? error.message : "Failed to process invoice",
+        {
+          onRetry: () => {
+            mutation.mutateAsync(variables);
+          }
+        }
+      );
+    },
     onSuccess: (data) => {
       const isEditing = !!editingInvoice;
       const crateTransactionEnabled = form.watch("crateTransaction.enabled");
       
-      toast({
-        title: "Success",
-        description: `Invoice ${isEditing ? 'updated' : 'created'} successfully${crateTransactionEnabled ? ' with crate transaction' : ''}`,
-      });
+      // Trigger success animation
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 500);
+      
+      toast.success(
+        "Success",
+        `Invoice ${isEditing ? 'updated' : 'created'} successfully${crateTransactionEnabled ? ' with crate transaction' : ''}`
+      );
 
-      // Invalidate queries
+      // Invalidate all related queries to get fresh server data
       queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crate-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/retailers"] });
 
-      // Close modal and reset form
-      onOpenChange(false);
-      form.reset();
-    },
-    onError: (error) => {
-      logFormError(error, "SalesInvoiceModal", { editingInvoice });
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process invoice",
-        variant: "destructive",
-      });
+      // Close modal and reset form after animation
+      setTimeout(() => {
+        onOpenChange(false);
+        form.reset();
+      }, 300);
     },
   });
 
@@ -412,7 +470,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit)} 
+            className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}
+          >
             {/* Invoice details section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField

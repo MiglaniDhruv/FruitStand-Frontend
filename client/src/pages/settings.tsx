@@ -28,6 +28,7 @@ import {
   Save,
   Loader2
 } from "lucide-react";
+import { SkeletonCard } from "@/components/ui/skeleton-loaders";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<TenantSettings>({
@@ -391,14 +392,13 @@ export default function SettingsPage() {
         {/* Content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6 space-y-6">
           {loading && (
-            <div className="animate-pulse space-y-4">
-              <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                  <SkeletonCard key={i} />
                 ))}
               </div>
-              <div className="h-96 bg-gray-200 rounded"></div>
+              <SkeletonCard />
             </div>
           )}
 

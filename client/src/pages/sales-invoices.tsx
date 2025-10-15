@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
 import { useLocation } from "wouter";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,10 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import SalesInvoiceModal from "@/components/forms/sales-invoice-modal";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { logEventHandlerError, logMutationError, logNavigationError } from "@/lib/error-logger";
 import { Plus } from "lucide-react";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import {
   FileText,
   IndianRupee,
@@ -53,46 +56,50 @@ export default function SalesInvoiceManagement() {
   );
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const { toast } = useToast();
+  
+  // Confirmation dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const deleteInvoiceMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await authenticatedApiRequest("DELETE", `/api/sales-invoices/${id}`);
-    },
+  const deleteInvoiceMutation = useOptimisticMutation<void, string>({
+    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/sales-invoices/${id}`); },
+    queryKey: ["/api/sales-invoices", paginationOptions, statusFilter],
+    updateFn: (old, id) => optimisticDelete(old, id),
     onSuccess: () => {
-      toast({
-        title: "Invoice deleted",
-        description: "Sales invoice has been deleted successfully",
-      });
+      toast.success("Success", "Sales invoice deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
     },
     onError: (error) => {
       logMutationError(error, 'deleteSalesInvoice');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete invoice",
-        variant: "destructive",
-      });
+      toast.error(
+        "Error",
+        error.message || "Failed to delete invoice",
+        {
+          onRetry: () => {
+            if (invoiceToDelete) {
+              deleteInvoiceMutation.mutateAsync(invoiceToDelete);
+            }
+          }
+        }
+      );
     },
   });
 
-  const handleDelete = async (id: string) => {
-    try {
-      if (!id) {
-        throw new Error('Invalid invoice ID');
-      }
-      
-      if (confirm("Are you sure you want to delete this sales invoice? This action cannot be undone.")) {
-        await deleteInvoiceMutation.mutateAsync(id);
-      }
-    } catch (error) {
-      logEventHandlerError(error, 'handleDelete', { invoiceId: id });
-      toast({
-        title: "Error",
-        description: "Failed to delete invoice",
-        variant: "destructive",
-      });
+  const handleDelete = (id: string) => {
+    if (!id) {
+      toast.error("Error", "Invalid invoice ID");
+      return;
+    }
+    setInvoiceToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (invoiceToDelete) {
+      await deleteInvoiceMutation.mutateAsync(invoiceToDelete);
     }
   };
 
@@ -311,14 +318,19 @@ export default function SalesInvoiceManagement() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <div className="h-8 bg-muted rounded w-64"></div>
+            
+            {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-muted rounded"></div>
+                <SkeletonCard key={i} variant="stat" />
               ))}
             </div>
-            <div className="h-96 bg-muted rounded"></div>
+            
+            {/* Table skeleton */}
+            <SkeletonTable rows={10} columns={7} showHeader={true} />
           </div>
         </div>
       </AppLayout>
@@ -517,6 +529,12 @@ export default function SalesInvoiceManagement() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                emptyStateIcon={FileText}
+                emptyStateTitle="No invoices yet"
+                onEmptyAction={() => setOpen(true)}
+                emptyActionLabel="Create Invoice"
+                searchTerm={searchInput}
+                hasActiveFilters={statusFilter !== 'all'}
               />
             </CardContent>
           </Card>
@@ -529,6 +547,18 @@ export default function SalesInvoiceManagement() {
         open={open}
         onOpenChange={setOpen}
         editingInvoice={editingInvoice}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Sales Invoice?"
+        description="This action cannot be undone. The invoice and all associated data will be permanently deleted."
+        confirmLabel="Delete Invoice"
+        variant="destructive"
+        isLoading={deleteInvoiceMutation.isPending}
+        onConfirm={confirmDelete}
       />
     </AppLayout>
   );

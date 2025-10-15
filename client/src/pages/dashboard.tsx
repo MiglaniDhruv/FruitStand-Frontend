@@ -11,6 +11,8 @@ import RecentPurchasesTable from "@/components/dashboard/recent-purchases-table"
 import RecentSalesTable from "@/components/dashboard/recent-sales-table";
 import FavouriteRetailers from "@/components/dashboard/favourite-retailers";
 import FavouriteVendors from "@/components/dashboard/favourite-vendors";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { tenant, isLoading, error } = useTenant();
@@ -35,14 +37,22 @@ export default function Dashboard() {
     return (
       <AppLayout>
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="space-y-6 sm:space-y-8">
+            {/* Header skeleton */}
+            <Skeleton className="h-8 w-64" />
+            
+            {/* KPI cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                <SkeletonCard key={i} variant="stat" />
               ))}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            
+            {/* Tables skeleton */}
+            <div className="space-y-6">
+              <SkeletonTable rows={5} columns={6} />
+              <SkeletonTable rows={4} columns={5} />
+            </div>
           </div>
         </div>
       </AppLayout>

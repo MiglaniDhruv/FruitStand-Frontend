@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { PaginationMetadata } from "@shared/schema";
@@ -16,6 +16,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { SkeletonTable, SkeletonList } from "@/components/ui/skeleton-loaders";
+import { EmptyState, EmptySearchState } from "@/components/ui/empty-state";
 
 interface DataTableColumn<T> {
   accessorKey: string;
@@ -67,6 +69,18 @@ interface DataTableProps<T> {
   enableMobileCardView?: boolean;
   cardViewBreakpoint?: number;
   mobileCardRenderer?: (item: T) => React.ReactNode;
+  emptyStateIcon?: LucideIcon;
+  emptyStateTitle?: string;
+  onEmptyAction?: () => void;
+  emptyActionLabel?: string;
+  /**
+   * Current search term for differentiated empty states
+   */
+  searchTerm?: string;
+  /**
+   * Whether there are active filters for differentiated empty states
+   */
+  hasActiveFilters?: boolean;
 }
 
 export function DataTable<T>({
@@ -89,6 +103,12 @@ export function DataTable<T>({
   enableMobileCardView = false,
   cardViewBreakpoint = 768,
   mobileCardRenderer,
+  emptyStateIcon,
+  emptyStateTitle,
+  onEmptyAction,
+  emptyActionLabel,
+  searchTerm,
+  hasActiveFilters = false,
 }: DataTableProps<T>) {
   const [selectedRows, setSelectedRows] = useState<Set<any>>(new Set());
   const [currentSortBy, setCurrentSortBy] = useState<string | null>(null);
@@ -299,16 +319,39 @@ export function DataTable<T>({
     return keys;
   };
 
+  // Helper function to render the appropriate empty state
+  const renderEmptyState = () => {
+    // If there's a search term or active filters, show search empty state
+    if (searchTerm?.trim() || hasActiveFilters) {
+      return <EmptySearchState searchTerm={searchTerm?.trim()} />;
+    }
+    
+    // Otherwise show regular empty state
+    if (emptyStateIcon) {
+      return (
+        <EmptyState
+          icon={emptyStateIcon}
+          title={emptyStateTitle || "No results"}
+          description={emptyMessage}
+          action={onEmptyAction ? {
+            label: emptyActionLabel || "Add New",
+            onClick: onEmptyAction
+          } : undefined}
+        />
+      );
+    }
+    
+    return (
+      <div className="h-24 text-center text-muted-foreground flex items-center justify-center">
+        {emptyMessage}
+      </div>
+    );
+  };
+
   // Mobile Card View Component
   const MobileCardView = () => {
     if (data.length === 0) {
-      return (
-        <Card className="p-8">
-          <div className="text-center text-muted-foreground">
-            {emptyMessage}
-          </div>
-        </Card>
-      );
+      return renderEmptyState();
     }
 
     if (mobileCardRenderer) {
@@ -391,64 +434,15 @@ export function DataTable<T>({
   // Loading state with mobile card view support
   const LoadingView = () => {
     if (shouldShowCardView) {
-      return (
-        <div className="space-y-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} size="sm">
-              <CardHeader className="pb-2">
-                <div className="h-4 bg-muted rounded animate-pulse" />
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2">
-                  <div className="h-3 bg-muted rounded animate-pulse" />
-                  <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      );
+      return <SkeletonList count={5} variant="list" />;
     }
 
     return (
-      <div className="rounded-md border">
-        <Table className="min-w-full">
-          <TableHeader>
-            <TableRow>
-              {enableRowSelection && (
-                <TableHead className="min-w-[44px] min-h-[44px]">
-                  <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
-                    <div className="h-4 w-4 bg-muted rounded animate-pulse" />
-                  </div>
-                </TableHead>
-              )}
-              {visibleColumns.map((column) => (
-                <TableHead key={column.accessorKey}>
-                  <div className="h-4 bg-muted rounded animate-pulse" />
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
-                {enableRowSelection && (
-                  <TableCell>
-                    <div className="flex items-center justify-center min-w-[44px] min-h-[44px]">
-                      <div className="h-4 w-4 bg-muted rounded animate-pulse" />
-                    </div>
-                  </TableCell>
-                )}
-                {visibleColumns.map((column) => (
-                  <TableCell key={column.accessorKey}>
-                    <div className="h-4 bg-muted rounded animate-pulse" />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <SkeletonTable 
+        rows={5} 
+        columns={visibleColumns.length + (enableRowSelection ? 1 : 0)}
+        showHeader={true}
+      />
     );
   };
 
@@ -542,9 +536,9 @@ export function DataTable<T>({
                   <TableRow>
                     <TableCell
                       colSpan={visibleColumns.length + (enableRowSelection ? 1 : 0)}
-                      className="h-24 text-center text-muted-foreground"
+                      className="p-0"
                     >
-                      {emptyMessage}
+                      {renderEmptyState()}
                     </TableCell>
                   </TableRow>
                 ) : (

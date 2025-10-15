@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import { FavouriteRetailer } from "@/types";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface FavouriteRetailersProps {
   retailers: FavouriteRetailer[] | undefined;
@@ -78,11 +79,11 @@ export default function FavouriteRetailers({ retailers, loading }: FavouriteReta
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-          <div className="text-center py-6 sm:py-8 text-muted-foreground">
-            <Star className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-xs sm:text-sm mb-2">No favourite retailers yet.</p>
-            <p className="text-[10px] sm:text-xs">Mark retailers as favourites from the Retailers page to see them here.</p>
-          </div>
+          <EmptyState 
+            icon={Star}
+            title="No favourite retailers"
+            description="Mark retailers as favourites from the Retailers page to see them here."
+          />
         </CardContent>
       </Card>
     );

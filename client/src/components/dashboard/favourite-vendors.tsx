@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import type { FavouriteVendor } from "@/types";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface FavouriteVendorsProps {
   vendors: FavouriteVendor[] | undefined;
@@ -69,12 +70,11 @@ function FavouriteVendors({ vendors, loading }: FavouriteVendorsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <p className="mb-2">No favourite vendors yet.</p>
-            <p className="text-sm">
-              Mark vendors as favourites from the Vendors page to see them here.
-            </p>
-          </div>
+          <EmptyState 
+            icon={Star}
+            title="No favourite vendors"
+            description="Mark vendors as favourites from the Vendors page to see them here."
+          />
         </CardContent>
       </Card>
     );
