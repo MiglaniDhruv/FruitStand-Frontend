@@ -33,6 +33,7 @@ import { z } from "zod";
 import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search, Star } from "lucide-react";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 import { useOptimisticMutation, optimisticDelete, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 
@@ -55,6 +56,7 @@ interface RetailerStats {
 export default function RetailerManagement() {
   const [open, setOpen] = useState(false);
   const [editingRetailer, setEditingRetailer] = useState<any>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
     page: 1,
     limit: 10,
@@ -132,6 +134,8 @@ export default function RetailerManagement() {
       return optimisticCreate(old, optimisticRetailer);
     },
     onSuccess: () => {
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 500);
       toast({
         title: "Retailer created",
         description: "New retailer has been created successfully",
@@ -142,10 +146,8 @@ export default function RetailerManagement() {
     },
     onError: (error) => {
       logMutationError(error, 'createRetailer');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create retailer",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to create retailer", {
+        onRetry: () => createRetailerMutation.mutateAsync(createRetailerMutation.variables!),
       });
     },
   });
@@ -158,6 +160,8 @@ export default function RetailerManagement() {
     queryKey: ["/api/retailers", paginationOptions],
     updateFn: (old, { id, data }) => optimisticUpdate(old, { id, ...data }),
     onSuccess: () => {
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 500);
       toast({
         title: "Retailer updated",
         description: "Retailer has been updated successfully",
@@ -169,10 +173,8 @@ export default function RetailerManagement() {
     },
     onError: (error) => {
       logMutationError(error, 'updateRetailer');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update retailer",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to update retailer", {
+        onRetry: () => updateRetailerMutation.mutateAsync(updateRetailerMutation.variables!),
       });
     },
   });
@@ -190,10 +192,9 @@ export default function RetailerManagement() {
     },
     onError: (e) => {
       logMutationError(e, 'deleteRetailer');
-      toast({
-        title: "Error",
-        description: (e as Error).message || "Failed to delete retailer",
-        variant: "destructive",
+      const error = e as Error;
+      toast.error("Error", error.message || "Failed to delete retailer", {
+        onRetry: () => deleteRetailerMutation.mutateAsync(deleteRetailerMutation.variables!),
       });
     },
   });
@@ -224,10 +225,8 @@ export default function RetailerManagement() {
     },
     onError: (error) => {
       logMutationError(error, 'toggleFavourite');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update favourite status",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to update favourite status", {
+        onRetry: () => toggleFavouriteMutation.mutateAsync(toggleFavouriteMutation.variables!),
       });
     },
   });
@@ -502,7 +501,7 @@ export default function RetailerManagement() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -681,7 +680,7 @@ export default function RetailerManagement() {
           </DialogHeader>
           
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className={`space-y-4 ${showSuccessAnimation ? 'animate-success' : ''}`}>
               <FormField
                 control={form.control}
                 name="name"

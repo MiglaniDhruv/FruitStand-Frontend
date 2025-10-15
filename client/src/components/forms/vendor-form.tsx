@@ -47,6 +47,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
   const queryClient = useQueryClient();
   const isEditing = !!vendor;
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorSchema),
@@ -91,6 +92,8 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
     },
     onSuccess: () => {
       setSubmissionError(null);
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 500);
       toast({
         title: isEditing ? "Vendor updated" : "Vendor created",
         description: `Vendor has been ${isEditing ? "updated" : "created"} successfully`,
@@ -156,7 +159,7 @@ export default function VendorForm({ open, onOpenChange, vendor }: VendorFormPro
           </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <FormField
                 control={form.control}

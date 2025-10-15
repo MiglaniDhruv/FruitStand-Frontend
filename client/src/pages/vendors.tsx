@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,8 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
-import { SkeletonCard } from "@/components/ui/skeleton-loaders";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 import { useOptimisticMutation, optimisticDelete, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 
@@ -67,7 +68,7 @@ export default function Vendors() {
       const response = await authenticatedApiRequest("GET", `/api/vendors?${params.toString()}`);
       return response.json();
     },
-    placeholderData: keepPreviousData,
+    placeholderData: (prev) => prev,
   });
 
   const toggleFavouriteMutation = useOptimisticMutation<any, string>({
@@ -96,10 +97,8 @@ export default function Vendors() {
     },
     onError: (error) => {
       logMutationError(error, 'toggleFavourite');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update favourite status",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to update favourite status", {
+        onRetry: () => toggleFavouriteMutation.mutateAsync(toggleFavouriteMutation.variables!),
       });
     },
   });
@@ -113,14 +112,11 @@ export default function Vendors() {
         title: "Vendor deleted",
         description: "Vendor has been deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
     },
     onError: (error) => {
       logMutationError(error, 'deleteVendor');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete vendor",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to delete vendor", {
+        onRetry: () => deleteVendorMutation.mutateAsync(deleteVendorMutation.variables!),
       });
     },
   });
@@ -350,10 +346,10 @@ export default function Vendors() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Table skeleton */}
-            <div className="h-96 bg-muted rounded"></div>
+            <SkeletonTable rows={10} columns={6} showHeader={true} />
           </div>
         </div>
       </AppLayout>

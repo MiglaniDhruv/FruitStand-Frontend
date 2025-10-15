@@ -1,35 +1,73 @@
-﻿import { useMutation, useQueryClient, type QueryKey, type UseMutationOptions } from "@tanstack/react-query";
+﻿import { useMutation, useQueryClient, type QueryKey, type UseMutationOptions, type Query } from "@tanstack/react-query";
 
-export interface OptimisticMutationOptions<TData, TVariables, TContext = { previousData?: unknown }>
+export interface OptimisticMutationOptions<TData, TVariables, TContext = { previousData?: unknown; previousVariants?: Map<string, unknown> }>
   extends Omit<UseMutationOptions<TData, Error, TVariables, TContext>, "onMutate"> {
   queryKey: QueryKey;
   mutationFn: (variables: TVariables) => Promise<TData>;
   updateFn: (oldData: any, variables: TVariables) => any;
   rollbackOnError?: boolean;
+  /**
+   * If true, updates all query variants matching the base queryKey (e.g., all pagination/filter combinations)
+   * Uses setQueriesData with exact: false
+   */
+  updateAllVariants?: boolean;
 }
 
-export function useOptimisticMutation<TData, TVariables, TContext = { previousData?: unknown }>(
+export function useOptimisticMutation<TData, TVariables, TContext = { previousData?: unknown; previousVariants?: Map<string, unknown> }>(
   opts: OptimisticMutationOptions<TData, TVariables, TContext>
 ) {
-  const { queryKey, mutationFn, updateFn, rollbackOnError = true, onError, onSettled, ...rest } = opts;
+  const { queryKey, mutationFn, updateFn, rollbackOnError = true, updateAllVariants = false, onError, onSettled, ...rest } = opts;
   const queryClient = useQueryClient();
 
   return useMutation<TData, Error, TVariables, TContext>({
     mutationFn,
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousData = queryClient.getQueryData(queryKey);
-      queryClient.setQueryData(queryKey, (old: any) => updateFn(old, variables));
-      return { previousData } as TContext;
+      // Cancel all queries matching the queryKey pattern
+      await queryClient.cancelQueries({ queryKey, exact: !updateAllVariants });
+      
+      if (updateAllVariants) {
+        // Store previous data for all variants and update them
+        const previousVariants = new Map<string, unknown>();
+        
+        queryClient.setQueriesData(
+          { queryKey, exact: false },
+          (old: any, query: Query) => {
+            // Store each variant's previous data using its query key
+            previousVariants.set(JSON.stringify(query.queryKey), old);
+            return updateFn(old, variables);
+          }
+        );
+        
+        return { previousVariants } as TContext;
+      } else {
+        // Original behavior: update only the exact queryKey
+        const previousData = queryClient.getQueryData(queryKey);
+        queryClient.setQueryData(queryKey, (old: any) => updateFn(old, variables));
+        return { previousData } as TContext;
+      }
     },
     onError: (error, variables, context) => {
-      if (rollbackOnError && context && typeof context === 'object' && 'previousData' in (context as any)) {
-        queryClient.setQueryData(queryKey, (context as any).previousData);
+      if (rollbackOnError && context && typeof context === 'object') {
+        if (updateAllVariants && 'previousVariants' in (context as any)) {
+          // Rollback all variants
+          const previousVariants = (context as any).previousVariants as Map<string, unknown>;
+          queryClient.setQueriesData(
+            { queryKey, exact: false },
+            (old: any, query: Query) => {
+              const cacheKey = JSON.stringify(query.queryKey);
+              return previousVariants.get(cacheKey) ?? old;
+            }
+          );
+        } else if ('previousData' in (context as any)) {
+          // Rollback single query
+          queryClient.setQueryData(queryKey, (context as any).previousData);
+        }
       }
       onError?.(error, variables, context);
     },
     onSettled: (data, error, variables, context) => {
-      queryClient.invalidateQueries({ queryKey });
+      // Invalidate all matching queries to refetch from server
+      queryClient.invalidateQueries({ queryKey, exact: !updateAllVariants });
       onSettled?.(data, error, variables, context);
     },
     onSuccess: rest.onSuccess,

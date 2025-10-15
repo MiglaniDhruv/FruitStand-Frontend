@@ -342,6 +342,9 @@ export default function BankAccounts() {
                       onPageSizeChange={handlePageSizeChange}
                       onSortChange={(column: string, direction: string) => handleSortChange(column, direction)}
                       isLoading={isFetching}
+                      rowKey="id"
+                      searchTerm=""
+                      hasActiveFilters={false}
                     />
                   </>
                 )}

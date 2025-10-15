@@ -569,6 +569,8 @@ export default function CrateManagement() {
                     isLoading={transactionsFetching}
                     enableRowSelection={true}
                     rowKey="id"
+                    searchTerm={paginationOptions.search || ""}
+                    hasActiveFilters={selectedRetailer !== 'all' || selectedTransactionType !== 'all' || selectedPartyType !== 'all'}
                   />
                 </CardContent>
               </Card>
@@ -591,6 +593,8 @@ export default function CrateManagement() {
                     isLoading={false}
                     enableRowSelection={true}
                     rowKey="id"
+                    searchTerm=""
+                    hasActiveFilters={false}
                   />
                 </CardContent>
               </Card>

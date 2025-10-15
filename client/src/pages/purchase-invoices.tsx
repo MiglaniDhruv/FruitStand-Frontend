@@ -26,6 +26,7 @@ import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { toast } from "@/hooks/use-toast";
 import { logEventHandlerError, logMutationError, logNavigationError } from "@/lib/error-logger";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 export default function PurchaseInvoices() {
@@ -263,7 +264,7 @@ export default function PurchaseInvoices() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

@@ -511,6 +511,8 @@ export default function Stock() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                searchTerm={searchInput}
+                hasActiveFilters={false}
               />
             </CardContent>
           </Card>

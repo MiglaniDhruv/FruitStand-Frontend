@@ -296,8 +296,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
   };
 
   // Mutation for creating/updating invoice with optimistic UI
-  // Note: Due to multiple possible queryKey combinations (different pagination/filters),
-  // we optimistically update the base query and invalidate all variants on settle
+  // Updates all query variants (different pagination/filters) using updateAllVariants
   const mutation = useOptimisticMutation({
     mutationFn: async (data: InvoiceFormData) => {
       // Validate form data
@@ -367,12 +366,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       }
       return response.json();
     },
-    // Optimistically update a default query key
-    // Other filter combinations will be updated via invalidation
+    // Update all query variants (different pagination/filter combinations)
     queryKey: ["/api/sales-invoices"],
+    updateAllVariants: true,
     updateFn: (old: any, variables: InvoiceFormData) => {
-      if (!old) return old;
-      
       const isEditing = !!editingInvoice;
       const totalAmount = calculateTotalAmount();
       const paidAmount = Number(variables.invoice.paidAmount) || 0;
@@ -406,6 +403,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         })),
       };
       
+      // Always call optimistic helpers - they handle undefined old data
       if (isEditing) {
         return optimisticUpdate(old, optimisticInvoice);
       } else {

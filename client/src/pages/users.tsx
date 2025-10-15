@@ -542,6 +542,8 @@ export default function UserManagement() {
                 isLoading={isFetching}
                 enableRowSelection={true}
                 rowKey="id"
+                searchTerm={searchInput}
+                hasActiveFilters={false}
               />
             </CardContent>
           </Card>

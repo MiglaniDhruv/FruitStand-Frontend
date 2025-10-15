@@ -18,9 +18,22 @@ export function ErrorFallback({
   const [isRetrying, setIsRetrying] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [retryCooldown, setRetryCooldown] = useState(0);
   const { toast } = useToast();
 
+  // Cooldown timer effect
+  React.useEffect(() => {
+    if (retryCooldown > 0) {
+      const timer = setTimeout(() => {
+        setRetryCooldown(retryCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCooldown]);
+
   const handleRetry = async () => {
+    if (retryCooldown > 0) return;
+    
     setIsRetrying(true);
     try {
       // Small delay to show the loading state
@@ -34,6 +47,8 @@ export function ErrorFallback({
       });
     } finally {
       setIsRetrying(false);
+      // Set 3 second cooldown after retry
+      setRetryCooldown(3);
     }
   };
 
@@ -153,7 +168,7 @@ export function ErrorFallback({
           <div className="flex flex-col sm:flex-row gap-3">
             <Button 
               onClick={handleRetry} 
-              disabled={isRetrying}
+              disabled={isRetrying || retryCooldown > 0}
               className="flex items-center gap-2"
             >
               {isRetrying ? (
@@ -161,7 +176,7 @@ export function ErrorFallback({
               ) : (
                 <RotateCcw className="h-4 w-4" />
               )}
-              {isRetrying ? 'Retrying...' : 'Try Again'}
+              {isRetrying ? 'Retrying...' : retryCooldown > 0 ? `Try Again (${retryCooldown}s)` : 'Try Again'}
             </Button>
             <Button 
               variant="outline" 

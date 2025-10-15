@@ -21,6 +21,7 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/schema";
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 type StatusFilter = "all" | "true" | "false";
@@ -86,10 +87,8 @@ export default function Items() {
     },
     onError: (error) => {
       logMutationError(error, 'deleteItem');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete item",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to delete item", {
+        onRetry: () => deleteItemMutation.mutateAsync(deleteItemMutation.variables!),
       });
     },
   });
@@ -259,7 +258,7 @@ export default function Items() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Table skeleton */}
             <SkeletonTable rows={10} columns={6} showHeader={true} />

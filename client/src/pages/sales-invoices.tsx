@@ -29,6 +29,7 @@ import { logEventHandlerError, logMutationError, logNavigationError } from "@/li
 import { Plus } from "lucide-react";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText,
   IndianRupee,
@@ -68,7 +69,6 @@ export default function SalesInvoiceManagement() {
     updateFn: (old, id) => optimisticDelete(old, id),
     onSuccess: () => {
       toast.success("Success", "Sales invoice deleted successfully");
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
       setDeleteDialogOpen(false);
       setInvoiceToDelete(null);
     },
@@ -320,7 +320,7 @@ export default function SalesInvoiceManagement() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

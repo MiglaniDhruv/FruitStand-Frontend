@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
+import { useOptimisticMutation, optimisticDelete, optimisticCreate } from "@/hooks/use-optimistic-mutation";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "@shared/schema";
@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 const expenseCategorySchema = z.object({
@@ -188,8 +189,8 @@ export default function ExpenseManagement() {
     handleSearchChange(value);
   };
 
-  // Expense mutations
-  const createExpenseMutation = useMutation({
+  // Expense mutations - using optimistic updates
+  const createExpenseMutation = useOptimisticMutation({
     mutationFn: async (data: ExpenseFormData) => {
       const expenseData = {
         ...data,
@@ -199,46 +200,68 @@ export default function ExpenseManagement() {
       const response = await authenticatedApiRequest("POST", "/api/expenses", expenseData);
       return response.json();
     },
+    queryKey: ["/api/expenses"],
+    updateFn: (old, variables: ExpenseFormData) => {
+      const optimisticExpense = {
+        id: `temp-${Date.now()}`,
+        ...variables,
+        amount: variables.amount.toFixed(2),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      return optimisticCreate(old, optimisticExpense);
+    },
     onSuccess: () => {
       toast({
         title: "Expense added",
         description: "New expense has been recorded successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
       setExpenseDialogOpen(false);
       expenseForm.reset();
     },
     onError: (error) => {
       logMutationError(error, 'createExpense');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add expense",
-        variant: "destructive",
+      const errorMessage = error instanceof Error ? error.message : "Failed to add expense";
+      toast.error("Error", errorMessage, {
+        onRetry: () => createExpenseMutation.mutateAsync(createExpenseMutation.variables!),
       });
     },
   });
 
-  // Category mutations
-  const createCategoryMutation = useMutation({
+  // Category mutations - using optimistic updates
+  const createCategoryMutation = useOptimisticMutation({
     mutationFn: async (data: ExpenseCategoryFormData) => {
       const response = await authenticatedApiRequest("POST", "/api/expense-categories", data);
       return response.json();
+    },
+    queryKey: ["/api/expense-categories"],
+    updateFn: (old, variables: ExpenseCategoryFormData) => {
+      const optimisticCategory = {
+        id: `temp-${Date.now()}`,
+        ...variables,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      // For array-based queries (not paginated)
+      if (Array.isArray(old)) {
+        return [optimisticCategory, ...old];
+      }
+      // For paginated queries
+      return optimisticCreate(old, optimisticCategory);
     },
     onSuccess: () => {
       toast({
         title: "Category created",
         description: "New expense category has been created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/expense-categories"] });
       setCategoryDialogOpen(false);
       categoryForm.reset();
     },
     onError: (error) => {
       logMutationError(error, 'createExpenseCategory');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create category",
-        variant: "destructive",
+      const errorMessage = error instanceof Error ? error.message : "Failed to create category";
+      toast.error("Error", errorMessage, {
+        onRetry: () => createCategoryMutation.mutateAsync(createCategoryMutation.variables!),
       });
     },
   });
@@ -260,10 +283,9 @@ export default function ExpenseManagement() {
     },
     onError: (error) => {
       logMutationError(error, 'updateExpenseCategory');
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update category",
-        variant: "destructive",
+      const errorMessage = error instanceof Error ? error.message : "Failed to update category";
+      toast.error("Error", errorMessage, {
+        onRetry: () => updateCategoryMutation.mutateAsync(updateCategoryMutation.variables!),
       });
     },
   });
@@ -281,10 +303,8 @@ export default function ExpenseManagement() {
     },
     onError: (error) => {
       logMutationError(error, 'deleteExpenseCategory');
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete category",
-        variant: "destructive",
+      toast.error("Error", error.message || "Failed to delete category", {
+        onRetry: () => deleteCategoryMutation.mutateAsync(deleteCategoryMutation.variables!),
       });
     },
   });
@@ -578,7 +598,7 @@ export default function ExpenseManagement() {
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="space-y-6 sm:space-y-8">
             {/* Header skeleton */}
-            <div className="h-8 bg-muted rounded w-64"></div>
+            <Skeleton className="h-8 w-64" />
             
             {/* Summary cards skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

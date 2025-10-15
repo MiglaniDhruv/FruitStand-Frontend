@@ -48,11 +48,20 @@ export function ConfirmationDialog({
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog 
+      open={open} 
+      onOpenChange={(newOpen) => {
+        // Prevent closing while loading
+        if (!newOpen && isLoading) {
+          return;
+        }
+        onOpenChange(newOpen);
+      }}
+    >
       <AlertDialogContent aria-busy={isLoading}>
         <AlertDialogHeader>
           <div className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${variant === 'destructive' ? 'text-destructive' : 'text-warning'}`} />
+            <Icon className={`h-5 w-5 ${variant === 'destructive' ? 'text-destructive' : 'text-amber-500'}`} />
             <AlertDialogTitle>{title}</AlertDialogTitle>
           </div>
           <AlertDialogDescription>

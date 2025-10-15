@@ -146,6 +146,13 @@ export function DataTable<T>({
   const shouldShowCardView = isNarrowScreen && enableMobileCardView;
   const visibleColumns = isNarrowScreen ? columns.filter(col => !col.hideOnMobile) : columns;
 
+  // Clear selections when data or rowKey changes (prevents stale selections)
+  useEffect(() => {
+    setSelectedRows(new Set());
+    onRowSelect?.([]);
+    onRowSelectIds?.([]);
+  }, [data, rowKey]);
+
   const handleSort = (columnKey: string) => {
     if (!onSortChange) return;
     
@@ -180,7 +187,19 @@ export function DataTable<T>({
 
   // Helper function to get row ID
   const getRowId = (item: T, index: number) => {
-    return getNestedValue(item, rowKey) || index;
+    const rowId = getNestedValue(item, rowKey);
+    
+    // Guard: Require stable rowKey when selection is enabled
+    if (enableRowSelection && (rowId === undefined || rowId === null)) {
+      console.warn(
+        `DataTable: Missing rowKey "${rowKey}" for item at index ${index}. ` +
+        `Selection may be unstable. Provide a valid rowKey or disable selection.`,
+        item
+      );
+      // Still return index as fallback, but warn about instability
+    }
+    
+    return rowId !== undefined && rowId !== null ? rowId : index;
   };
 
   // Handle page size change
@@ -579,7 +598,7 @@ export function DataTable<T>({
             </Table>
           </div>
         )}
-        {paginationMetadata && (
+        {paginationMetadata && !(data.length === 0 && !isLoading && (!paginationMetadata.totalPages || paginationMetadata.totalPages <= 1)) && (
           <DataTablePagination
             paginationMetadata={paginationMetadata}
             onPageChange={onPageChange || (() => {})}
