@@ -142,7 +142,7 @@ export default function AppSidebar() {
   const { toast } = useToast();
   const currentUser = authService.getCurrentUser();
   const { tenant } = useTenant();
-  const { state } = useSidebar();
+  const { state, isHovering } = useSidebar();
 
   // Get tenant slug from context
   const { slug: tenantSlug } = useTenantSlug();
@@ -176,6 +176,21 @@ export default function AppSidebar() {
       element.scrollTop = parseInt(savedPosition, 10);
     }
   }, []);
+
+  // Scroll to active item when hovering over collapsed sidebar
+  useEffect(() => {
+    if (!isHovering || state !== "collapsed") return;
+
+    const element = sidebarContentRef.current;
+    if (!element) return;
+
+    // Find the active navigation item
+    const activeLink = element.querySelector('[data-active="true"]');
+    if (activeLink) {
+      // Scroll the active item into view with some padding
+      activeLink.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHovering, state]);
 
   const handleLogout = () => {
     authService.logout();

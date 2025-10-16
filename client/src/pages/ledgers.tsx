@@ -38,7 +38,6 @@ import {
   Package,
   AlertCircle,
   FileText,
-  Search,
   Trash2
 } from "lucide-react";
 import { format } from "date-fns";
@@ -63,8 +62,6 @@ export default function Ledgers() {
     startDate: format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd")
   });
-  const [searchInput, setSearchInput] = useState("");
-  const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
   const [selectedBankAccount, setSelectedBankAccount] = useState("all");
   const [activeTab, setActiveTab] = useState("cashbook");
   
@@ -314,148 +311,6 @@ export default function Ledgers() {
     return `₹${parseFloat(amount.toString()).toLocaleString('en-IN')}`;
   };
 
-
-
-  // Filter handler functions
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchInput(value);
-  };
-
-  const handleTransactionTypeChange = (value: string) => {
-    setTransactionTypeFilter(value);
-  };
-
-  // Filter functions for each ledger type
-  const filterLedgerEntries = (entries: any[]) => {
-    if (!searchInput && transactionTypeFilter === "all") return entries;
-
-    return entries.filter(entry => {
-      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
-
-      let matchesType = true;
-      if (transactionTypeFilter !== 'all') {
-        switch (transactionTypeFilter) {
-          case 'Opening':
-          case 'Closing':
-            matchesType = entry.isBalanceEntry && entry.type === transactionTypeFilter;
-            break;
-          case 'Receipt':
-            matchesType = !entry.isBalanceEntry && Number(entry.debit) > 0;
-            break;
-          case 'Payment':
-            matchesType = !entry.isBalanceEntry && Number(entry.credit) > 0 && entry.referenceType !== 'Expense';
-            break;
-          case 'Expense':
-            matchesType = !entry.isBalanceEntry && Number(entry.credit) > 0 && entry.referenceType === 'Expense';
-            break;
-          default:
-            matchesType = true;
-        }
-      }
-      return matchesSearch && matchesType;
-    });
-  };
-
-  const filterVendorLedgerEntries = (entries: any[]) => {
-    if (!searchInput && transactionTypeFilter === "all") return entries;
-    
-    return entries.filter(entry => {
-      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
-      let matchesType = true;
-      if (transactionTypeFilter !== "all") {
-        const map: Record<string, string> = {
-          Purchase: 'Invoice',
-          Payment: 'Payment',
-        };
-        if (map[transactionTypeFilter]) {
-          matchesType = entry.referenceType === map[transactionTypeFilter];
-        }
-      }
-      return matchesSearch && matchesType;
-    });
-  };
-
-  const filterRetailerLedgerEntries = (entries: any[]) => {
-    if (!searchInput && transactionTypeFilter === "all") return entries;
-    
-    return entries.filter(entry => {
-      const matchesSearch = !searchInput || entry.description?.toLowerCase().includes(searchInput.toLowerCase());
-      let matchesType = true;
-      if (transactionTypeFilter !== "all") {
-        const map: Record<string, string> = {
-          Sale: 'Sales Invoice',
-          Receipt: 'Sales Payment',
-        };
-        if (map[transactionTypeFilter]) {
-          matchesType = entry.referenceType === map[transactionTypeFilter];
-        }
-      }
-      return matchesSearch && matchesType;
-    });
-  };
-
-  const filterUdhaarBookEntries = (entries: any[]) => {
-    if (!searchInput) return entries;
-    const q = searchInput.toLowerCase();
-    return entries.filter(entry => {
-      const name = entry.retailerName || entry.retailer?.name;
-      return name?.toLowerCase().includes(q);
-    });
-  };
-
-  const filterCrateLedgerEntries = (entries: any[]) => {
-    if (!searchInput && transactionTypeFilter === "all") return entries;
-    
-    return entries.filter(entry => {
-      let matchesSearch = true;
-      let matchesType = true;
-      
-      // Check if this is summary view (has retailerName property) or detailed view (has transactionType property)
-      if (entry.retailerName) {
-        matchesSearch = !searchInput || entry.retailerName.toLowerCase().includes(searchInput.toLowerCase());
-        matchesType = true;
-      } else if (entry.transactionType) {
-        // Detailed view
-        matchesSearch = !searchInput || (entry.notes && entry.notes.toLowerCase().includes(searchInput.toLowerCase()));
-        
-        if (transactionTypeFilter !== "all") {
-          // Map UI filter values to crate transaction types
-          const typeMapping: { [key: string]: string } = {
-            "Receipt": "Returned",  // Crates returned = receipt of crates back
-            "Payment": "Given",     // Crates given = payment of crates out
-          };
-          
-          // Check if the filter maps to a crate transaction type, otherwise skip filtering
-          if (typeMapping[transactionTypeFilter]) {
-            matchesType = entry.transactionType === typeMapping[transactionTypeFilter];
-          } else {
-            // For transaction types that don't apply to crates (Sale, Purchase, etc.), show all
-            matchesType = true;
-          }
-        }
-      }
-      
-      return matchesSearch && matchesType;
-    });
-  };
-
-
-
-
-
-  const cashbookEntries = filterLedgerEntries(cashbookData);
-  const bankbookEntries = filterLedgerEntries(bankbookData);
-  const vendorLedgerEntries = filterVendorLedgerEntries(vendorLedgerData);
-  const retailerLedgerEntries = filterRetailerLedgerEntries(retailerLedgerData);
-  const udhaarBookEntries = filterUdhaarBookEntries(
-    udhaarBookData.map((entry: any) => ({
-      ...entry,
-      udhaarBalance: entry.udhaarBalance ?? entry.udhaaarBalance ?? 0
-    }))
-  );
-  const crateLedgerEntries = filterCrateLedgerEntries(crateLedgerData);
-
   return (
     <AppLayout>
 
@@ -472,31 +327,6 @@ export default function Ledgers() {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <div className="relative w-full sm:flex-1 sm:max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by party name or description..."
-                  value={searchInput}
-                  onChange={handleSearchInputChange}
-                  className="pl-8"
-                  data-testid="input-search-ledgers"
-                />
-              </div>
-              <Select value={transactionTypeFilter} onValueChange={handleTransactionTypeChange}>
-                <SelectTrigger className="w-full sm:w-40" data-testid="select-transaction-type">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="Receipt">Receipt</SelectItem>
-                  <SelectItem value="Payment">Payment</SelectItem>
-                  <SelectItem value="Expense">Expense</SelectItem>
-                  <SelectItem value="Purchase">Purchase</SelectItem>
-                  <SelectItem value="Sale">Sale</SelectItem>
-                  <SelectItem value="Opening">Opening</SelectItem>
-                  <SelectItem value="Closing">Closing</SelectItem>
-                </SelectContent>
-              </Select>
               <Input
                 type="date"
                 value={dateFilter.startDate}
@@ -512,10 +342,6 @@ export default function Ledgers() {
                 className="w-full sm:w-40"
                 data-testid="input-end-date"
               />
-              <Button variant="outline" data-testid="button-export-ledger" className="w-full sm:w-auto">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
             </div>
           </div>
         </header>
@@ -592,7 +418,7 @@ export default function Ledgers() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cashbookLoading && cashbookEntries.length === 0 ? (
+                      {cashbookLoading && cashbookData.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                             Loading transactions...
@@ -600,7 +426,7 @@ export default function Ledgers() {
                         </TableRow>
                       ) : (
                         <>
-                          {cashbookEntries.map((entry: any, index: number) => (
+                          {cashbookData.map((entry: any, index: number) => (
                             <TableRow 
                               key={index} 
                               className={entry.isBalanceEntry ? "bg-muted/50 font-medium" : ""}
@@ -618,7 +444,7 @@ export default function Ledgers() {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {cashbookEntries.length === 0 && (
+                          {cashbookData.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                 No transactions found for the selected period
@@ -683,7 +509,7 @@ export default function Ledgers() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {bankbookLoading && bankbookEntries.length === 0 ? (
+                        {bankbookLoading && bankbookData.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                               Loading transactions...
@@ -691,7 +517,7 @@ export default function Ledgers() {
                           </TableRow>
                         ) : (
                           <>
-                            {bankbookEntries.map((entry: any, index: number) => (
+                            {bankbookData.map((entry: any, index: number) => (
                               <TableRow 
                                 key={index} 
                                 className={entry.isBalanceEntry ? "bg-muted/50 font-medium" : ""}
@@ -726,7 +552,7 @@ export default function Ledgers() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {bankbookEntries.length === 0 && (
+                            {bankbookData.length === 0 && (
                               <TableRow>
                                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                   No bank transactions found for the selected period and account
@@ -783,7 +609,7 @@ export default function Ledgers() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {vendorLedgerLoading && vendorLedgerEntries.length === 0 ? (
+                        {vendorLedgerLoading && vendorLedgerData.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                               Loading transactions...
@@ -791,7 +617,7 @@ export default function Ledgers() {
                           </TableRow>
                         ) : (
                           <>
-                            {vendorLedgerEntries.map((entry, index) => (
+                            {vendorLedgerData.map((entry: any, index: number) => (
                               <TableRow key={index}>
                                 <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
                                 <TableCell>{entry.description}</TableCell>
@@ -804,7 +630,7 @@ export default function Ledgers() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {vendorLedgerEntries.length === 0 && (
+                            {vendorLedgerData.length === 0 && (
                               <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                   No transactions found for this vendor in the selected period
@@ -861,7 +687,7 @@ export default function Ledgers() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {retailerLedgerLoading && retailerLedgerEntries.length === 0 ? (
+                        {retailerLedgerLoading && retailerLedgerData.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                               Loading transactions...
@@ -869,7 +695,7 @@ export default function Ledgers() {
                           </TableRow>
                         ) : (
                           <>
-                            {retailerLedgerEntries.map((entry, index) => (
+                            {retailerLedgerData.map((entry: any, index: number) => (
                               <TableRow key={index}>
                                 <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
                                 <TableCell>{entry.description}</TableCell>
@@ -882,7 +708,7 @@ export default function Ledgers() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {retailerLedgerEntries.length === 0 && (
+                            {retailerLedgerData.length === 0 && (
                               <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                   No transactions found for this retailer in the selected period
@@ -920,17 +746,17 @@ export default function Ledgers() {
                         <TableHead>Last Sale Date</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {udhaarBookLoading && udhaarBookEntries.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            Loading outstanding balances...
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        <>
-                          {udhaarBookEntries.map((entry, index) => (
-                            <TableRow key={index}>
+                      <TableBody>
+                        {udhaarBookLoading && udhaarBookData.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              Loading outstanding balances...
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          <>
+                            {udhaarBookData.map((entry: any, index: number) => (
+                              <TableRow key={index}>
                               <TableCell className="font-medium">{entry.retailerName}</TableCell>
                               <TableCell>{formatCurrency(entry.totalSales)}</TableCell>
                               <TableCell className="text-green-600">{formatCurrency(entry.totalPayments)}</TableCell>
@@ -952,13 +778,13 @@ export default function Ledgers() {
                               <TableCell>
                                 {entry.lastSaleDate ? format(new Date(entry.lastSaleDate), "dd/MM/yyyy") : "-"}
                               </TableCell>
-                            </TableRow>
-                          ))}
-                          {udhaarBookEntries.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                No outstanding credit balances found
-                              </TableCell>
+                              </TableRow>
+                            ))}
+                            {udhaarBookData.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                  No outstanding credit balances found
+                                </TableCell>
                             </TableRow>
                           )}
                         </>
@@ -1007,7 +833,7 @@ export default function Ledgers() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {crateLedgerLoading && crateLedgerEntries.length === 0 ? (
+                        {crateLedgerLoading && crateLedgerData.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                               Loading crate transactions...
@@ -1015,7 +841,7 @@ export default function Ledgers() {
                           </TableRow>
                         ) : (
                           <>
-                            {crateLedgerEntries.map((entry: any, index) => (
+                            {crateLedgerData.map((entry: any, index: number) => (
                               <TableRow key={index}>
                                 <TableCell className="font-medium">{entry.retailerName}</TableCell>
                                 <TableCell>
@@ -1041,10 +867,10 @@ export default function Ledgers() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {crateLedgerEntries.length === 0 && (
+                            {crateLedgerData.length === 0 && (
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                  No crate transactions found
+                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                  No crate transactions found for this retailer
                                 </TableCell>
                               </TableRow>
                             )}
@@ -1064,7 +890,7 @@ export default function Ledgers() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {crateLedgerLoading && crateLedgerEntries.length === 0 ? (
+                        {crateLedgerLoading && crateLedgerData.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                               Loading crate transactions...
@@ -1072,7 +898,7 @@ export default function Ledgers() {
                           </TableRow>
                         ) : (
                           <>
-                            {crateLedgerEntries.map((entry: any, index) => (
+                            {crateLedgerData.map((entry: any, index: number) => (
                               <TableRow key={index}>
                                 <TableCell>{format(new Date(entry.transactionDate), "dd/MM/yyyy")}</TableCell>
                                 <TableCell>
@@ -1087,7 +913,7 @@ export default function Ledgers() {
                                 <TableCell>{entry.notes || "-"}</TableCell>
                               </TableRow>
                             ))}
-                            {crateLedgerEntries.length === 0 && (
+                            {crateLedgerData.length === 0 && (
                               <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                   No crate transactions found for this retailer
