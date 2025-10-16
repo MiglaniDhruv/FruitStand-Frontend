@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { authenticatedApiRequest } from '@/lib/auth';
 import { FileText, Download, FileSpreadsheet, TrendingUp, DollarSign, Users, Store, Receipt, TrendingDown, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -268,18 +269,25 @@ export default function Reports() {
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col overflow-auto">
-        {/* Header Section */}
-        <div className="p-4 sm:p-6 space-y-6">
-          <div className="space-y-2">
-            <h1 className="text-xl sm:text-2xl font-bold">Reports</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Comprehensive financial reports and analytics for your business
-            </p>
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-card border-b border-border px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground heading-page">Reports</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Comprehensive financial reports and analytics for your business
+              </p>
+            </div>
           </div>
+        </header>
 
+        <Separator className="my-0" />
+
+        {/* Content */}
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           {/* Date Range Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
             <div className="flex gap-2 items-center">
               <label htmlFor="startDate" className="text-sm font-medium">From:</label>
               <Input
@@ -688,6 +696,8 @@ export default function Reports() {
               </Card>
             </TabsContent>
           </Tabs>
-        </div>
+        </main>
       </div>
-    </AppLayout>);}
+    </AppLayout>
+  );
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useLayoutEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { authService } from "@/lib/auth";
@@ -149,22 +149,33 @@ export default function AppSidebar() {
 
   const navigationItems = getNavigationItems(tenantSlug);
 
-  // Refs for scroll position preservation
+  // Ref to track the sidebar content element
   const sidebarContentRef = useRef<HTMLDivElement>(null);
-  const scrollPositionRef = useRef<number>(0);
+  const SCROLL_POSITION_KEY = 'sidebar-scroll-position';
 
-  // Capture scroll position as user scrolls
-  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    scrollPositionRef.current = event.currentTarget.scrollTop;
-  };
+  // Save scroll position to sessionStorage when scrolling
+  useEffect(() => {
+    const element = sidebarContentRef.current;
+    if (!element) return;
 
-  // Restore scroll position after DOM updates
-  useLayoutEffect(() => {
-    // Restore the scroll position after the component re-renders
-    if (sidebarContentRef.current) {
-      sidebarContentRef.current.scrollTop = scrollPositionRef.current;
+    const handleScroll = () => {
+      sessionStorage.setItem(SCROLL_POSITION_KEY, element.scrollTop.toString());
+    };
+
+    element.addEventListener('scroll', handleScroll);
+    return () => element.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Restore scroll position on mount and prevent reset on navigation
+  useEffect(() => {
+    const element = sidebarContentRef.current;
+    if (!element) return;
+
+    const savedPosition = sessionStorage.getItem(SCROLL_POSITION_KEY);
+    if (savedPosition) {
+      element.scrollTop = parseInt(savedPosition, 10);
     }
-  }, [location]);
+  }, []);
 
   const handleLogout = () => {
     authService.logout();
@@ -172,6 +183,9 @@ export default function AppSidebar() {
       title: "Logged out",
       description: "You have been successfully logged out",
     });
+
+    // Clear scroll position on logout
+    sessionStorage.removeItem(SCROLL_POSITION_KEY);
 
     // Always redirect to tenant login page
     if (tenantSlug) {
@@ -189,7 +203,7 @@ export default function AppSidebar() {
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
             <Apple className="text-primary-foreground text-lg" />
           </div>
-          <div className="group-data-[collapsible=icon]:hidden">
+          <div className="group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-data-[hovering=true]:block">
             <h1 className="text-lg-fluid font-semibold text-foreground">
               Mandify
             </h1>
@@ -206,7 +220,7 @@ export default function AppSidebar() {
             <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
               <User className="text-secondary-foreground text-sm" />
             </div>
-            <div className="group-data-[collapsible=icon]:hidden">
+            <div className="group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-data-[hovering=true]:block">
               <p className="text-sm-fluid font-medium">{currentUser?.name}</p>
               <p className="text-xs-fluid text-muted-foreground">
                 {permissionService.getRoleInfo().label}
@@ -216,18 +230,18 @@ export default function AppSidebar() {
         </div>
 
         {/* Tenant Info */}
-        <div className="p-4 border-b border-border group-data-[collapsible=icon]:hidden">
+        {/* <div className="p-4 border-b border-border group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-data-[hovering=true]:block">
           <TenantInfo compact={true} showStatus={false} showSwitcher={false} />
-        </div>
+        </div> */}
 
         {/* Low Credit Warning */}
-        <div className="px-4 group-data-[collapsible=icon]:hidden">
+        <div className="px-4 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:group-data-[hovering=true]:block">
           <LowCreditWarningBanner />
         </div>
       </SidebarHeader>
 
       {/* Navigation Menu */}
-      <SidebarContent ref={sidebarContentRef} onScroll={handleScroll}>
+      <SidebarContent ref={sidebarContentRef}>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>

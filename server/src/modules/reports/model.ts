@@ -175,6 +175,7 @@ export class ReportModel {
         invoiceDate: purchaseInvoices.invoiceDate,
         vendorName: vendors.name,
         netAmount: purchaseInvoices.netAmount,
+        totalSelling: purchaseInvoices.totalSelling,
         commission: purchaseInvoices.commission
       })
       .from(purchaseInvoices)
@@ -184,8 +185,9 @@ export class ReportModel {
     // Map results to commission entries
     const entries: CommissionReportEntry[] = invoiceResults.map(invoice => {
       const netAmount = Number(invoice.netAmount || '0');
+      const totalSelling = Number(invoice.totalSelling || '0');
       const commission = Number(invoice.commission || '0');
-      const commissionRate = netAmount > 0 ? (commission / netAmount) * 100 : 0;
+      const commissionRate = totalSelling > 0 ? (commission / totalSelling) * 100 : 0;
       
       return {
         invoiceNumber: invoice.invoiceNumber,

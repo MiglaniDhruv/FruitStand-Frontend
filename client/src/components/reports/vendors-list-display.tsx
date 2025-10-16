@@ -41,8 +41,6 @@ export default function VendorsListDisplay({ data, loading }: VendorsListDisplay
     Number(b.balance) - Number(a.balance)
   );
 
-  const averagePayable = Number(data.totalPayable) / data.entries.length;
-
   return (
     <div className="space-y-4">
       {/* Statistics */}
@@ -55,9 +53,9 @@ export default function VendorsListDisplay({ data, loading }: VendorsListDisplay
         </Card>
         <Card className="p-4">
           <CardContent className="p-0">
-            <div className="text-sm text-muted-foreground">Average Payable</div>
+            <div className="text-sm text-muted-foreground">Total Payable</div>
             <div className="text-2xl font-bold text-destructive">
-              {formatCurrency(averagePayable)}
+              {formatCurrency(data.totalPayable)}
             </div>
           </CardContent>
         </Card>

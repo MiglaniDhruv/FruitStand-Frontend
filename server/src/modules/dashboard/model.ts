@@ -47,7 +47,7 @@ export class DashboardModel {
         ))),
       
       // Get today's purchases
-      db.select({ total: sum(purchaseInvoices.totalSelling) })
+      db.select({ total: sum(purchaseInvoices.netAmount) })
         .from(purchaseInvoices)
         .where(withTenant(purchaseInvoices, tenantId, and(
           gte(purchaseInvoices.createdAt, startOfToday),

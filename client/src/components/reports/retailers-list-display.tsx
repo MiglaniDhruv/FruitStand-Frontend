@@ -41,8 +41,6 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
     Number(b.udhaaarBalance) - Number(a.udhaaarBalance)
   );
 
-  const averageReceivable = Number(data.totalReceivable) / data.entries.length;
-
   return (
     <div className="space-y-4">
       {/* Statistics */}
@@ -55,9 +53,9 @@ export default function RetailersListDisplay({ data, loading }: RetailersListDis
         </Card>
         <Card className="p-4">
           <CardContent className="p-0">
-            <div className="text-sm text-muted-foreground">Average Receivable</div>
+            <div className="text-sm text-muted-foreground">Total Receivable</div>
             <div className="text-2xl font-bold text-success">
-              {formatCurrency(averageReceivable)}
+              {formatCurrency(data.totalReceivable)}
             </div>
           </CardContent>
         </Card>
