@@ -306,7 +306,7 @@ export default function SalesInvoiceManagement() {
           >
             <Eye className="h-4 w-4" />
           </Button>
-          {invoice.status === "Pending" && (
+          {invoice.status === "Unpaid" && (
             <Button
               variant="ghost"
               size="icon"

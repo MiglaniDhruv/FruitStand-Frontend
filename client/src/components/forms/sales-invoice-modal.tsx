@@ -497,7 +497,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Retailer *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!!editingInvoice}>
                     <FormControl>
                       <SelectTrigger data-testid="select-retailer">
                         <SelectValue placeholder="Select retailer" />
