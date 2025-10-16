@@ -2,6 +2,7 @@ import { BaseRouter } from '../../utils/base';
 import { LedgerController } from './controller';
 import { authenticateToken, validateTenant, attachTenantContext } from '../../middleware/auth';
 import { asyncHandler } from "../../utils/async-handler";
+import { Request, Response, NextFunction } from 'express';
 
 export class LedgerRouter extends BaseRouter {
   private ledgerController: LedgerController;
@@ -12,12 +13,47 @@ export class LedgerRouter extends BaseRouter {
     this.setupRoutes();
   }
 
+  /**
+   * Legacy route wrapper middleware
+   * Maps path parameter vendorId to query parameter for backward compatibility
+   * @deprecated Use query parameter instead. This route will be removed in a future version.
+   */
+  private mapVendorIdParamToQuery(req: Request, res: Response, next: NextFunction) {
+    if (req.params.vendorId) {
+      req.query.vendorId = req.params.vendorId;
+    }
+    next();
+  }
+
+  /**
+   * Legacy route wrapper middleware for retailer ledger
+   * Maps path parameter retailerId to query parameter for backward compatibility
+   * @deprecated Use query parameter instead. This route will be removed in a future version.
+   */
+  private mapRetailerIdParamToQuery(req: Request, res: Response, next: NextFunction) {
+    if (req.params.retailerId) {
+      req.query.retailerId = req.params.retailerId;
+    }
+    next();
+  }
+
   private setupRoutes() {
-    // GET /ledger/vendor/:vendorId - Get vendor ledger
+    // GET /ledger/vendor - Get vendor ledger (NEW - recommended)
+    this.router.get('/ledger/vendor', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.ledgerController, 'getVendorLedger')
+    );
+
+    // GET /ledger/vendor/:vendorId - Get vendor ledger (LEGACY - deprecated)
+    // @deprecated Use GET /ledger/vendor?vendorId=xxx instead. This route will be removed in v2.0.
+    // Migration timeline: Deprecation notice added 2025-01, removal scheduled for 2025-06.
     this.router.get('/ledger/vendor/:vendorId', 
       authenticateToken, 
       asyncHandler(validateTenant),
       attachTenantContext,
+      this.mapVendorIdParamToQuery.bind(this),
       this.ah(this.ledgerController, 'getVendorLedger')
     );
 
@@ -37,11 +73,22 @@ export class LedgerRouter extends BaseRouter {
       this.ah(this.ledgerController, 'getBankbook')
     );
 
-    // GET /ledgers/retailer/:retailerId - Get retailer ledger
+    // GET /ledgers/retailer - Get retailer ledger (NEW - recommended)
+    this.router.get('/ledgers/retailer', 
+      authenticateToken, 
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.ledgerController, 'getRetailerLedger')
+    );
+
+    // GET /ledgers/retailer/:retailerId - Get retailer ledger (LEGACY - deprecated)
+    // @deprecated Use GET /ledgers/retailer?retailerId=xxx instead. This route will be removed in v2.0.
+    // Migration timeline: Deprecation notice added 2025-01, removal scheduled for 2025-06.
     this.router.get('/ledgers/retailer/:retailerId', 
       authenticateToken, 
       asyncHandler(validateTenant),
       attachTenantContext,
+      this.mapRetailerIdParamToQuery.bind(this),
       this.ah(this.ledgerController, 'getRetailerLedger')
     );
 

@@ -21,7 +21,7 @@ const ledgerValidation = {
     message: 'fromDate must be before or equal to toDate'
   }),
   getBankbook: z.object({
-    bankAccountId: z.string().uuid(),
+    bankAccountId: z.string().uuid().optional(),
     fromDate: z.string().optional().refine(val => {
       if (!val) return true;
       const date = new Date(val);
@@ -36,6 +36,7 @@ const ledgerValidation = {
     message: 'fromDate must be before or equal to toDate'
   }),
   getVendorLedger: z.object({
+    vendorId: z.string().uuid().optional(),
     fromDate: z.string().optional().refine(val => {
       if (!val) return true;
       const date = new Date(val);
@@ -50,6 +51,7 @@ const ledgerValidation = {
     message: 'fromDate must be before or equal to toDate'
   }),
   getRetailerLedger: z.object({
+    retailerId: z.string().uuid().optional(),
     fromDate: z.string().optional().refine(val => {
       if (!val) return true;
       const date = new Date(val);
@@ -106,8 +108,15 @@ export class LedgerController extends BaseController {
     const validatedQuery = ledgerValidation.getBankbook.parse(req.query);
     const { bankAccountId, fromDate, toDate } = validatedQuery;
     
-    const bankbook = await this.ledgerModel.getBankbook(tenantId, bankAccountId!, fromDate, toDate);
-    res.json(bankbook);
+    // If bankAccountId is provided, return individual transactions
+    // Otherwise, return summary of all bank accounts
+    if (bankAccountId) {
+      const bankbook = await this.ledgerModel.getBankbook(tenantId, bankAccountId, fromDate, toDate);
+      res.json(bankbook);
+    } else {
+      const summary = await this.ledgerModel.getAllBankAccountsSummary(tenantId, fromDate, toDate);
+      res.json(summary);
+    }
   }
 
   async getVendorLedger(req: AuthenticatedRequest, res: Response) {
@@ -115,17 +124,21 @@ export class LedgerController extends BaseController {
     const tenantId = req.tenantId;
     
     const validatedQuery = ledgerValidation.getVendorLedger.parse(req.query);
-    const { fromDate, toDate } = validatedQuery;
+    const { vendorId, fromDate, toDate } = validatedQuery;
     
-    const { vendorId } = req.params;
-    this.validateUUID(vendorId, 'Vendor ID');
+    if (vendorId) {
+      this.validateUUID(vendorId, 'Vendor ID');
 
-    // Check if vendor exists
-    const vendor = await this.ledgerModel.getVendorById(tenantId, vendorId);
-    this.ensureResourceExists(vendor, 'Vendor');
+      // Check if vendor exists
+      const vendor = await this.ledgerModel.getVendorById(tenantId, vendorId);
+      this.ensureResourceExists(vendor, 'Vendor');
 
-    const ledger = await this.ledgerModel.getVendorLedger(tenantId, vendorId, fromDate, toDate);
-    res.json(ledger);
+      const ledger = await this.ledgerModel.getVendorLedger(tenantId, vendorId, fromDate, toDate);
+      res.json(ledger);
+    } else {
+      const summary = await this.ledgerModel.getAllVendorsSummary(tenantId, fromDate, toDate);
+      res.json(summary);
+    }
   }
 
   async getRetailerLedger(req: AuthenticatedRequest, res: Response) {
@@ -133,17 +146,21 @@ export class LedgerController extends BaseController {
     const tenantId = req.tenantId;
     
     const validatedQuery = ledgerValidation.getRetailerLedger.parse(req.query);
-    const { fromDate, toDate } = validatedQuery;
+    const { retailerId, fromDate, toDate } = validatedQuery;
     
-    const { retailerId } = req.params;
-    this.validateUUID(retailerId, 'Retailer ID');
+    if (retailerId) {
+      this.validateUUID(retailerId, 'Retailer ID');
 
-    // Check if retailer exists
-    const retailer = await this.ledgerModel.getRetailerById(tenantId, retailerId);
-    this.ensureResourceExists(retailer, 'Retailer');
+      // Check if retailer exists
+      const retailer = await this.ledgerModel.getRetailerById(tenantId, retailerId);
+      this.ensureResourceExists(retailer, 'Retailer');
 
-    const ledger = await this.ledgerModel.getRetailerLedger(tenantId, retailerId, fromDate, toDate);
-    res.json(ledger);
+      const ledger = await this.ledgerModel.getRetailerLedger(tenantId, retailerId, fromDate, toDate);
+      res.json(ledger);
+    } else {
+      const summary = await this.ledgerModel.getAllRetailersSummary(tenantId, fromDate, toDate);
+      res.json(summary);
+    }
   }
 
   async getUdhaaarBook(req: AuthenticatedRequest, res: Response) {

@@ -28,6 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
+import type { BankAccountSummary, VendorSummary, RetailerSummary } from "@shared/schema";
 import { 
   Download, 
   Book, 
@@ -126,10 +127,11 @@ export default function Ledgers() {
   const { data: bankbookData = [], isLoading: bankbookLoading, isError: bankbookError } = useQuery({
     queryKey: ["/api/bankbook", selectedBankAccount, dateFilter.startDate, dateFilter.endDate],
     placeholderData: (prevData) => prevData,
-    enabled: selectedBankAccount !== "all",
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.append("bankAccountId", selectedBankAccount);
+      if (selectedBankAccount !== "all") {
+        params.append("bankAccountId", selectedBankAccount);
+      }
       if (dateFilter.startDate) params.append("fromDate", dateFilter.startDate);
       if (dateFilter.endDate) params.append("toDate", dateFilter.endDate);
       const response = await authenticatedApiRequest("GET", `/api/bankbook?${params.toString()}`);
@@ -140,28 +142,72 @@ export default function Ledgers() {
     },
   });
 
+  // Vendor Summary Query (when "All Vendors" selected)
+  const { data: vendorSummaryData = [], isLoading: vendorSummaryLoading } = useQuery<VendorSummary[]>({
+    queryKey: ["/api/ledger/vendor/summary", dateFilter.startDate, dateFilter.endDate],
+    placeholderData: (prevData) => prevData,
+    enabled: selectedVendor === "all",
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (dateFilter.startDate) params.append("fromDate", dateFilter.startDate);
+      if (dateFilter.endDate) params.append("toDate", dateFilter.endDate);
+      const response = await authenticatedApiRequest("GET", `/api/ledger/vendor?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Vendor summary API error: ${response.status} - ${response.statusText}`);
+      }
+      return response.json() as Promise<VendorSummary[]>;
+    },
+  });
+
+  // Vendor Ledger Detail Query (when specific vendor selected)
   const { data: vendorLedgerData = [], isLoading: vendorLedgerLoading } = useQuery({
-    queryKey: ["/api/ledger/vendor", selectedVendor, dateFilter.startDate, dateFilter.endDate],
+    queryKey: ["/api/ledger/vendor/detail", selectedVendor, dateFilter.startDate, dateFilter.endDate],
     placeholderData: (prevData) => prevData,
     enabled: selectedVendor !== "all",
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.append("vendorId", selectedVendor);
       if (dateFilter.startDate) params.append("fromDate", dateFilter.startDate);
       if (dateFilter.endDate) params.append("toDate", dateFilter.endDate);
-      const response = await authenticatedApiRequest("GET", `/api/ledger/vendor/${selectedVendor}?${params.toString()}`);
+      const response = await authenticatedApiRequest("GET", `/api/ledger/vendor?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Vendor ledger API error: ${response.status} - ${response.statusText}`);
+      }
       return response.json();
     },
   });
 
-  const { data: retailerLedgerData = [], isLoading: retailerLedgerLoading } = useQuery({
-    queryKey: ["/api/ledgers/retailer", selectedRetailer, dateFilter.startDate, dateFilter.endDate],
+  // Retailer Summary Query (when "All Retailers" selected)
+  const { data: retailerSummaryData = [], isLoading: retailerSummaryLoading } = useQuery<RetailerSummary[]>({
+    queryKey: ["/api/ledgers/retailer/summary", dateFilter.startDate, dateFilter.endDate],
     placeholderData: (prevData) => prevData,
-    enabled: selectedRetailer !== "all",
+    enabled: selectedRetailer === "all",
     queryFn: async () => {
       const params = new URLSearchParams();
       if (dateFilter.startDate) params.append("fromDate", dateFilter.startDate);
       if (dateFilter.endDate) params.append("toDate", dateFilter.endDate);
-      const response = await authenticatedApiRequest("GET", `/api/ledgers/retailer/${selectedRetailer}?${params.toString()}`);
+      const response = await authenticatedApiRequest("GET", `/api/ledgers/retailer?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Retailer summary API error: ${response.status} - ${response.statusText}`);
+      }
+      return response.json() as Promise<RetailerSummary[]>;
+    },
+  });
+
+  // Retailer Ledger Detail Query (when specific retailer selected)
+  const { data: retailerLedgerData = [], isLoading: retailerLedgerLoading } = useQuery({
+    queryKey: ["/api/ledgers/retailer/detail", selectedRetailer, dateFilter.startDate, dateFilter.endDate],
+    placeholderData: (prevData) => prevData,
+    enabled: selectedRetailer !== "all",
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("retailerId", selectedRetailer);
+      if (dateFilter.startDate) params.append("fromDate", dateFilter.startDate);
+      if (dateFilter.endDate) params.append("toDate", dateFilter.endDate);
+      const response = await authenticatedApiRequest("GET", `/api/ledgers/retailer?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Retailer ledger API error: ${response.status} - ${response.statusText}`);
+      }
       return response.json();
     },
   });
@@ -485,9 +531,75 @@ export default function Ledgers() {
                 </CardHeader>
                 <CardContent>
                   {selectedBankAccount === "all" ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Please select a bank account to view transactions
-                    </div>
+                    // Summary view for all bank accounts
+                    bankbookError ? (
+                      <div className="text-center py-8 text-red-600">
+                        <AlertCircle className="mx-auto h-8 w-8 mb-2" />
+                        <p className="font-medium">Error loading bank accounts summary</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Please try again later
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-sm text-muted-foreground mb-4">
+                          Summary of all bank accounts for the selected period
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Bank Name</TableHead>
+                              <TableHead>Account Number</TableHead>
+                              <TableHead>Account Holder</TableHead>
+                              <TableHead className="text-right">Total Debits</TableHead>
+                              <TableHead className="text-right">Total Credits</TableHead>
+                              <TableHead className="text-right">Current Balance</TableHead>
+                              <TableHead className="text-center">Transactions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {bankbookLoading && bankbookData.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                  Loading bank accounts summary...
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              <>
+                                {(bankbookData as BankAccountSummary[]).map((summary) => (
+                                  <TableRow key={summary.bankAccountId}>
+                                    <TableCell className="font-medium">{summary.bankName}</TableCell>
+                                    <TableCell>{summary.accountNumber}</TableCell>
+                                    <TableCell>{summary.accountHolderName}</TableCell>
+                                    <TableCell className="text-right text-green-600">
+                                      {summary.totalDebits > 0 ? formatCurrency(summary.totalDebits) : "-"}
+                                    </TableCell>
+                                    <TableCell className="text-right text-red-600">
+                                      {summary.totalCredits > 0 ? formatCurrency(summary.totalCredits) : "-"}
+                                    </TableCell>
+                                    <TableCell className={`text-right font-medium ${
+                                      parseFloat(summary.currentBalance) >= 0 ? "text-green-600" : "text-red-600"
+                                    }`}>
+                                      {formatCurrency(summary.currentBalance)}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Badge variant="secondary">{summary.transactionCount}</Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                {bankbookData.length === 0 && (
+                                  <TableRow>
+                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                      No bank accounts found
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </>
+                    )
                   ) : bankbookError ? (
                     <div className="text-center py-8 text-red-600">
                       <AlertCircle className="mx-auto h-8 w-8 mb-2" />
@@ -522,7 +634,9 @@ export default function Ledgers() {
                                 key={index} 
                                 className={entry.isBalanceEntry ? "bg-muted/50 font-medium" : ""}
                               >
-                                <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
+                                <TableCell>
+                                  {entry.date ? format(new Date(entry.date), "dd/MM/yyyy") : "-"}
+                                </TableCell>
                                 <TableCell>{entry.description}</TableCell>
                                 <TableCell className="text-green-600">
                                   {entry.debit > 0 ? formatCurrency(entry.debit) : "-"}
@@ -594,53 +708,119 @@ export default function Ledgers() {
                 </CardHeader>
                 <CardContent>
                   {selectedVendor === "all" ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Please select a vendor to view their ledger
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Debit</TableHead>
-                          <TableHead>Credit</TableHead>
-                          <TableHead>Balance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {vendorLedgerLoading && vendorLedgerData.length === 0 ? (
+                    // Summary view for all vendors
+                    <>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Summary of all vendor balances
+                      </div>
+                      <Table>
+                        <TableHeader>
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                              Loading transactions...
-                            </TableCell>
+                            <TableHead>Vendor Name</TableHead>
+                            <TableHead className="hidden md:table-cell">Phone</TableHead>
+                            <TableHead className="text-right">Total Invoices</TableHead>
+                            <TableHead className="text-right">Total Payments</TableHead>
+                            <TableHead className="text-right">Current Balance</TableHead>
+                            <TableHead className="text-center">Invoices</TableHead>
+                            <TableHead className="hidden lg:table-cell">Last Invoice</TableHead>
                           </TableRow>
-                        ) : (
-                          <>
-                            {vendorLedgerData.map((entry: any, index: number) => (
-                              <TableRow key={index}>
-                                <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
-                                <TableCell>{entry.description}</TableCell>
-                                <TableCell>{entry.debit > 0 ? formatCurrency(entry.debit) : "-"}</TableCell>
-                                <TableCell className="text-green-600">
-                                  {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
-                                </TableCell>
-                                <TableCell className={entry.balance > 0 ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
-                                  {formatCurrency(entry.balance)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {vendorLedgerData.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                  No transactions found for this vendor in the selected period
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {vendorSummaryLoading && vendorSummaryData.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                Loading vendors summary...
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            <>
+                              {vendorSummaryData.map((summary) => (
+                                <TableRow key={summary.vendorId}>
+                                  <TableCell className="font-medium">{summary.vendorName}</TableCell>
+                                  <TableCell className="hidden md:table-cell">{summary.phone || "-"}</TableCell>
+                                  <TableCell className="text-right text-red-600">
+                                    {summary.totalInvoices > 0 ? formatCurrency(summary.totalInvoices) : "-"}
+                                  </TableCell>
+                                  <TableCell className="text-right text-green-600">
+                                    {summary.totalPayments > 0 ? formatCurrency(summary.totalPayments) : "-"}
+                                  </TableCell>
+                                  <TableCell className={`text-right font-medium ${
+                                    parseFloat(summary.currentBalance) > 0 ? "text-red-600" : "text-green-600"
+                                  }`}>
+                                    {formatCurrency(summary.currentBalance)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant="outline">{summary.invoiceCount}</Badge>
+                                  </TableCell>
+                                  <TableCell className="hidden lg:table-cell">
+                                    {summary.lastInvoiceDate ? format(new Date(summary.lastInvoiceDate), "dd/MM/yyyy") : "-"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {vendorSummaryData.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                    No vendors found
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </>
+                  ) : (
+                    // Transaction view for specific vendor
+                    <>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Detailed transaction history
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Debit</TableHead>
+                            <TableHead>Credit</TableHead>
+                            <TableHead>Balance</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {vendorLedgerLoading && vendorLedgerData.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                Loading transactions...
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            <>
+                              {vendorLedgerData.map((entry: any, index: number) => (
+                                <TableRow key={index}>
+                                  <TableCell>
+                                    {entry.date ? format(new Date(entry.date), "dd/MM/yyyy") : "-"}
+                                  </TableCell>
+                                  <TableCell>{entry.description}</TableCell>
+                                  <TableCell>{entry.debit > 0 ? formatCurrency(entry.debit) : "-"}</TableCell>
+                                  <TableCell className="text-green-600">
+                                    {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
+                                  </TableCell>
+                                  <TableCell className={entry.balance > 0 ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
+                                    {formatCurrency(entry.balance)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {vendorLedgerData.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                    No transactions found for this vendor in the selected period
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -672,53 +852,113 @@ export default function Ledgers() {
                 </CardHeader>
                 <CardContent>
                   {selectedRetailer === "all" ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Please select a retailer to view their ledger
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Debit</TableHead>
-                          <TableHead>Credit</TableHead>
-                          <TableHead>Balance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {retailerLedgerLoading && retailerLedgerData.length === 0 ? (
+                    <>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Summary of all retailer balances including sales, payments, udhaar, and shortfall amounts
+                      </div>
+                      <Table>
+                        <TableHeader>
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                              Loading transactions...
-                            </TableCell>
+                            <TableHead>Retailer Name</TableHead>
+                            <TableHead className="hidden md:table-cell">Phone</TableHead>
+                            <TableHead className="text-right">Total Sales</TableHead>
+                            <TableHead className="text-right">Total Payments</TableHead>
+                            <TableHead className="text-right">Udhaar Balance</TableHead>
+                            <TableHead className="text-right">Shortfall</TableHead>
+                            <TableHead className="text-center">Invoices</TableHead>
+                            <TableHead className="hidden lg:table-cell">Last Sale</TableHead>
                           </TableRow>
-                        ) : (
-                          <>
-                            {retailerLedgerData.map((entry: any, index: number) => (
-                              <TableRow key={index}>
-                                <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
-                                <TableCell>{entry.description}</TableCell>
-                                <TableCell>{entry.debit > 0 ? formatCurrency(entry.debit) : "-"}</TableCell>
-                                <TableCell className="text-green-600">
-                                  {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
-                                </TableCell>
-                                <TableCell className={entry.balance > 0 ? "text-amber-600 font-medium" : "text-green-600 font-medium"}>
-                                  {formatCurrency(entry.balance)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {retailerLedgerData.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                  No transactions found for this retailer in the selected period
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {retailerSummaryLoading && retailerSummaryData.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                Loading retailer summary...
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            <>
+                              {retailerSummaryData.map((summary) => (
+                                <TableRow key={summary.retailerId}>
+                                  <TableCell className="font-medium">{summary.retailerName}</TableCell>
+                                  <TableCell className="hidden md:table-cell">{summary.phone || "-"}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(summary.totalSales)}</TableCell>
+                                  <TableCell className="text-right text-green-600">{formatCurrency(summary.totalPayments)}</TableCell>
+                                  <TableCell className={`text-right font-medium ${parseFloat(summary.udhaaarBalance) > 0 ? "text-amber-600" : "text-green-600"}`}>
+                                    {formatCurrency(summary.udhaaarBalance)}
+                                  </TableCell>
+                                  <TableCell className={`text-right font-medium ${parseFloat(summary.shortfallBalance) > 0 ? "text-red-600" : "text-green-600"}`}>
+                                    {formatCurrency(summary.shortfallBalance)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant="outline">{summary.invoiceCount}</Badge>
+                                  </TableCell>
+                                  <TableCell className="hidden lg:table-cell">
+                                    {summary.lastSaleDate ? format(new Date(summary.lastSaleDate), "dd/MM/yyyy") : "-"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {retailerSummaryData.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                    No retailers found
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Detailed transaction history including sales and payments
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Debit</TableHead>
+                            <TableHead>Credit</TableHead>
+                            <TableHead>Balance</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {retailerLedgerLoading && retailerLedgerData.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                Loading transactions...
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            <>
+                              {retailerLedgerData.map((entry: any, index: number) => (
+                                <TableRow key={index}>
+                                  <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
+                                  <TableCell>{entry.description}</TableCell>
+                                  <TableCell>{entry.debit > 0 ? formatCurrency(entry.debit) : "-"}</TableCell>
+                                  <TableCell className="text-green-600">
+                                    {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
+                                  </TableCell>
+                                  <TableCell className={entry.balance > 0 ? "text-amber-600 font-medium" : "text-green-600 font-medium"}>
+                                    {formatCurrency(entry.balance)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {retailerLedgerData.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                    No transactions found for this retailer in the selected period
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </>
                   )}
                 </CardContent>
               </Card>

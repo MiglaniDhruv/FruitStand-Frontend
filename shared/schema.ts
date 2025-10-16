@@ -1116,17 +1116,14 @@ export interface RetailerLedgerEntry {
   tenantId: string;
   date: Date;
   description: string;
-  referenceType: 'Sales Invoice' | 'Sales Payment' | 'Crate Transaction';
+  referenceType: 'Sales Invoice' | 'Sales Payment';
   referenceId: string;
   debit: number;
   credit: number;
   balance: number;
-  crateBalance?: number;
   invoiceNumber?: string;
   status?: string;
   paymentMode?: string;
-  transactionType?: string;
-  quantity?: number;
   notes?: string | null;
   createdAt?: Date | null;
 }
@@ -1159,6 +1156,42 @@ export interface CrateLedgerEntry {
   notes: string | null;
   runningBalance: number;
   createdAt: Date | null;
+}
+
+export interface BankAccountSummary {
+  bankAccountId: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolderName: string;
+  totalDebits: number;
+  totalCredits: number;
+  currentBalance: string;
+  transactionCount: number;
+}
+
+export interface VendorSummary {
+  vendorId: string;
+  vendorName: string;
+  phone: string | null;
+  address: string | null;
+  totalInvoices: number;
+  totalPayments: number;
+  currentBalance: string;
+  invoiceCount: number;
+  lastInvoiceDate: Date | null;
+}
+
+export interface RetailerSummary {
+  retailerId: string;
+  retailerName: string;
+  phone: string | null;
+  address: string | null;
+  totalSales: number;
+  totalPayments: number;
+  udhaaarBalance: string;
+  shortfallBalance: string;
+  invoiceCount: number;
+  lastSaleDate: Date | null;
 }
 
 // Dashboard Types
