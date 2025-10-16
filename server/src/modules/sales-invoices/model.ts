@@ -1,6 +1,6 @@
 import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count, sql, sum } from 'drizzle-orm';
 import { db } from '../../../db';
-import { salesInvoices, salesInvoiceItems, retailers, salesPayments, invoiceShareLinks, stockMovements, crateTransactions, items, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type InsertCrateTransaction, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
+import { salesInvoices, salesInvoiceItems, retailers, salesPayments, invoiceShareLinks, stockMovements, crateTransactions, items, CRATE_TRANSACTION_TYPES, INVOICE_STATUS, type SalesInvoice, type InsertSalesInvoice, type InsertSalesInvoiceItem, type InsertCrateTransaction, type SalesInvoiceWithDetails, type PaginationOptions, type PaginatedResult, type Retailer, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { InvoiceShareLinkModel } from '../invoice-share-links/model';
@@ -161,7 +161,7 @@ export class SalesInvoiceModel {
         invoiceNumber,
         udhaaarAmount: invoiceData.totalAmount,
         balanceAmount: invoiceData.totalAmount,
-        status: 'Unpaid'
+        status: INVOICE_STATUS.UNPAID
       }, tenantId);
       const [invoice] = await tx.insert(salesInvoices).values(invoiceWithTenant).returning();
       
@@ -238,7 +238,7 @@ export class SalesInvoiceModel {
         }
 
         // Add validation for invoice status
-        if (invoice.status === 'Paid') {
+        if (invoice.status === INVOICE_STATUS.PAID) {
           throw new ValidationError('Invoice is already marked as paid', {
             status: 'Cannot mark an already paid invoice as paid'
           });
@@ -258,7 +258,7 @@ export class SalesInvoiceModel {
       // Update invoice with paid status and amounts
       const [updatedInvoice] = await tx.update(salesInvoices)
         .set({ 
-          status: 'Paid',
+          status: INVOICE_STATUS.PAID,
           paidAmount: invoice.totalAmount,
           udhaaarAmount: '0.00',
           shortfallAmount: shortfallAmount.toFixed(2)
@@ -303,6 +303,11 @@ export class SalesInvoiceModel {
       if (!invoice) {
         return false;
       }
+
+      // Status validation: only allow deletion of unpaid invoices
+      if (invoice.status !== INVOICE_STATUS.UNPAID) {
+        return false;
+      }
       
       let retailer = null;
       if (parseFloat(invoice.shortfallAmount || '0') > 0 || parseFloat(invoice.udhaaarAmount || '0') > 0) {
@@ -310,6 +315,50 @@ export class SalesInvoiceModel {
           .where(and(
             withTenant(retailers, tenantId),
             eq(retailers.id, invoice.retailerId)
+          ));
+      }
+      
+      // Phase 1: Fetch all associated crate transactions (Comment 1 & 2: fetch all, filter by partyType)
+      const crateTransactionsList = await tx.select().from(crateTransactions)
+        .where(and(
+          withTenant(crateTransactions, tenantId),
+          eq(crateTransactions.salesInvoiceId, id),
+          eq(crateTransactions.partyType, 'retailer'),
+          eq(crateTransactions.retailerId, invoice.retailerId)
+        ));
+      
+      // Phase 2: Reverse retailer crate balance (Comment 1: compute netReverse for all transactions)
+      if (crateTransactionsList.length > 0) {
+        // Calculate net reverse balance change across all crate transactions
+        // Given: was added, so subtract to reverse (multiply by -1)
+        // Returned: was subtracted, so add back to reverse (multiply by +1)
+        let netReverse = 0;
+        for (const tx of crateTransactionsList) {
+          const multiplier = tx.transactionType === CRATE_TRANSACTION_TYPES.GIVEN ? -1 : 1;
+          netReverse += tx.quantity * multiplier;
+        }
+        
+        // Only update if there's a net change
+        if (netReverse !== 0) {
+          await tx.update(retailers)
+            .set({
+              crateBalance: sql`COALESCE(${retailers.crateBalance}, 0) + ${netReverse}`
+            })
+            .where(and(
+              withTenant(retailers, tenantId),
+              eq(retailers.id, invoice.retailerId)
+            ));
+        }
+      }
+      
+      // Phase 3: Delete all crate transactions (Comment 2: apply same filters)
+      if (crateTransactionsList.length > 0) {
+        await tx.delete(crateTransactions)
+          .where(and(
+            withTenant(crateTransactions, tenantId),
+            eq(crateTransactions.salesInvoiceId, id),
+            eq(crateTransactions.partyType, 'retailer'),
+            eq(crateTransactions.retailerId, invoice.retailerId)
           ));
       }
       
@@ -323,6 +372,16 @@ export class SalesInvoiceModel {
           eq(invoiceShareLinks.invoiceType, 'sales')
         ));
       
+      // Phase 4: Collect affected item IDs before deleting stock movements
+      const stockMovementsToDelete = await tx.select().from(stockMovements)
+        .where(and(
+          withTenant(stockMovements, tenantId),
+          eq(stockMovements.referenceType, 'SALES_INVOICE'),
+          eq(stockMovements.referenceId, id)
+        ));
+      
+      const affectedItemIds = Array.from(new Set(stockMovementsToDelete.map(movement => movement.itemId)));
+      
       // Delete stock movements
       await tx.delete(stockMovements)
         .where(and(
@@ -330,6 +389,21 @@ export class SalesInvoiceModel {
           eq(stockMovements.referenceType, 'SALES_INVOICE'),
           eq(stockMovements.referenceId, id)
         ));
+      
+      // Phase 5: Recalculate stock balances for affected items (Comment 3: round to 2 decimals)
+      for (const itemId of affectedItemIds) {
+        const balance = await this.stockModel.calculateStockBalance(tenantId, itemId, tx);
+        await this.stockModel.updateStock(
+          tenantId,
+          itemId,
+          {
+            quantityInCrates: balance.crates.toFixed(2),
+            quantityInBoxes: balance.boxes.toFixed(2),
+            quantityInKgs: balance.kgs.toFixed(2)
+          },
+          tx
+        );
+      }
       
       // Delete sales payments
       await tx.delete(salesPayments)
@@ -393,11 +467,11 @@ export class SalesInvoiceModel {
     
     // Apply status filter
     if (options?.status === 'paid') {
-      whereConditions.push(eq(salesInvoices.status, 'Paid'));
+      whereConditions.push(eq(salesInvoices.status, INVOICE_STATUS.PAID));
     } else if (options?.status === 'unpaid') {
       whereConditions.push(or(
-        eq(salesInvoices.status, 'Unpaid'),
-        eq(salesInvoices.status, 'Partially Paid')
+        eq(salesInvoices.status, INVOICE_STATUS.UNPAID),
+        eq(salesInvoices.status, INVOICE_STATUS.PARTIALLY_PAID)
       )!);
     }
     

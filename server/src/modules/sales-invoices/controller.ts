@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertCrateTransactionSchema } from '@shared/schema';
+import { insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertCrateTransactionSchema, INVOICE_STATUS } from '@shared/schema';
 import { BaseController } from '../../utils/base';
 import { SalesInvoiceModel } from './model';
 import { type AuthenticatedRequest, NotFoundError, ValidationError, BadRequestError, ForbiddenError } from '../../types';
@@ -169,11 +169,35 @@ export class SalesInvoiceController extends BaseController {
     if (!id) throw new BadRequestError('Sales invoice ID is required');
     this.validateUUID(id, 'Sales Invoice ID');
 
+    // Fetch invoice to validate existence and status
+    const invoice = await this.wrapDatabaseOperation(() =>
+      this.salesInvoiceModel.getSalesInvoice(tenantId, id)
+    );
+    
+    if (!invoice) {
+      throw new NotFoundError('Sales invoice not found');
+    }
+
+    if (invoice.status !== INVOICE_STATUS.UNPAID) {
+      throw new BadRequestError('Cannot delete a paid or partially paid invoice. Only unpaid invoices can be deleted.');
+    }
+
     const success = await this.wrapDatabaseOperation(() =>
       this.salesInvoiceModel.deleteSalesInvoice(tenantId, id)
     );
     
-    if (!success) throw new NotFoundError('Sales invoice not found');
+    if (!success) {
+      // Race condition: re-fetch to determine if invoice was deleted or status changed
+      const invoiceCheck = await this.wrapDatabaseOperation(() =>
+        this.salesInvoiceModel.getSalesInvoice(tenantId, id)
+      );
+      
+      if (invoiceCheck && invoiceCheck.status !== INVOICE_STATUS.UNPAID) {
+        throw new BadRequestError('Cannot delete a paid or partially paid invoice. Only unpaid invoices can be deleted.');
+      }
+      
+      throw new NotFoundError('Sales invoice not found');
+    }
 
     res.status(204).send();
   }

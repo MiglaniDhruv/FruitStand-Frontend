@@ -23,6 +23,15 @@ export const CRATE_TRANSACTION_TYPES = {
 
 export type CrateTransactionType = typeof CRATE_TRANSACTION_TYPES[keyof typeof CRATE_TRANSACTION_TYPES];
 
+// Invoice Status Constants
+export const INVOICE_STATUS = {
+  UNPAID: 'Unpaid',
+  PARTIALLY_PAID: 'Partially Paid',
+  PAID: 'Paid'
+} as const;
+
+export type InvoiceStatus = typeof INVOICE_STATUS[keyof typeof INVOICE_STATUS];
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),

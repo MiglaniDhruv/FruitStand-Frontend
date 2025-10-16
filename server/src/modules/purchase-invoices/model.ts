@@ -1,6 +1,6 @@
 import { eq, desc, asc, and, or, gte, lte, ilike, inArray, count, sql, isNull } from 'drizzle-orm';
 import { db } from '../../../db';
-import { purchaseInvoices, invoiceItems, vendors, items, invoiceShareLinks, stockMovements, payments, crateTransactions, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InsertCrateTransaction, type InvoiceWithItems, type PaginationOptions, type PaginatedResult, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
+import { purchaseInvoices, invoiceItems, vendors, items, invoiceShareLinks, stockMovements, payments, crateTransactions, CRATE_TRANSACTION_TYPES, INVOICE_STATUS, type PurchaseInvoice, type InsertPurchaseInvoice, type InsertInvoiceItem, type InsertCrateTransaction, type InvoiceWithItems, type PaginationOptions, type PaginatedResult, type InvoiceShareLink, type CrateTransaction } from '@shared/schema';
 import { normalizePaginationOptions, buildPaginationMetadata, withTenantPagination } from '../../utils/pagination';
 import { withTenant, ensureTenantInsert } from '../../utils/tenant-scope';
 import { assertSameTenant } from '../../utils/tenant';
@@ -169,7 +169,7 @@ export class PurchaseInvoiceModel {
         ...invoiceData,
         invoiceNumber,
         balanceAmount: invoiceData.netAmount,
-        status: 'Unpaid'
+        status: INVOICE_STATUS.UNPAID
       }, tenantId);
       
       const [invoice] = await tx.insert(purchaseInvoices).values(invoiceWithTenant).returning();
@@ -319,11 +319,11 @@ export class PurchaseInvoiceModel {
     
     // Apply status filter
     if (options?.status === 'paid') {
-      whereConditions.push(eq(purchaseInvoices.status, 'Paid'));
+      whereConditions.push(eq(purchaseInvoices.status, INVOICE_STATUS.PAID));
     } else if (options?.status === 'unpaid') {
       whereConditions.push(or(
-        eq(purchaseInvoices.status, 'Unpaid'),
-        eq(purchaseInvoices.status, 'Partially Paid')
+        eq(purchaseInvoices.status, INVOICE_STATUS.UNPAID),
+        eq(purchaseInvoices.status, INVOICE_STATUS.PARTIALLY_PAID)
       )!);
     }
     
@@ -468,7 +468,74 @@ export class PurchaseInvoiceModel {
   async deletePurchaseInvoice(tenantId: string, id: string): Promise<boolean> {
     try {
       return await db.transaction(async (tx) => {
-      // Delete related records in cascade order (children first, then parent)
+      // Step 1: Fetch the invoice before deletion
+      const [invoice] = await tx.select().from(purchaseInvoices)
+        .where(and(
+          withTenant(purchaseInvoices, tenantId),
+          eq(purchaseInvoices.id, id)
+        ));
+      
+      if (!invoice) {
+        return false;
+      }
+
+      // Status validation: only allow deletion of unpaid invoices
+      if (invoice.status !== INVOICE_STATUS.UNPAID) {
+        return false;
+      }
+      
+      // Step 2: Fetch all associated crate transactions
+      const crateTransactionsList = await tx.select().from(crateTransactions)
+        .where(and(
+          withTenant(crateTransactions, tenantId),
+          eq(crateTransactions.purchaseInvoiceId, id)
+        ));
+      
+      // Step 3: Calculate total reverse balance change for all crate transactions
+      let totalReverseChange = 0;
+      for (const crateTransaction of crateTransactionsList) {
+        // Calculate reverse balance change per transaction
+        // Received: was added, so subtract to reverse
+        // Returned: was subtracted, so add back to reverse
+        if (crateTransaction.transactionType === CRATE_TRANSACTION_TYPES.RECEIVED) {
+          totalReverseChange -= crateTransaction.quantity;
+        } else if (crateTransaction.transactionType === CRATE_TRANSACTION_TYPES.RETURNED) {
+          totalReverseChange += crateTransaction.quantity;
+        }
+      }
+      
+      // Step 4: Update vendor crate balance once with total reverse change
+      if (crateTransactionsList.length > 0) {
+        await tx.update(vendors)
+          .set({
+            crateBalance: sql`COALESCE(${vendors.crateBalance}, 0) + ${totalReverseChange}`
+          })
+          .where(and(
+            withTenant(vendors, tenantId),
+            eq(vendors.id, invoice.vendorId)
+          ));
+      }
+      
+      // Step 5: Delete all crate transactions for this invoice
+      if (crateTransactionsList.length > 0) {
+        await tx.delete(crateTransactions)
+          .where(and(
+            withTenant(crateTransactions, tenantId),
+            eq(crateTransactions.purchaseInvoiceId, id)
+          ));
+      }
+      
+      // Step 7: Reverse vendor monetary balance
+      await tx.update(vendors)
+        .set({
+          balance: sql`COALESCE(${vendors.balance}, 0) - ${invoice.netAmount}`
+        })
+        .where(and(
+          withTenant(vendors, tenantId),
+          eq(vendors.id, invoice.vendorId)
+        ));
+      
+      // Step 8: Delete related records in cascade order (children first, then parent)
       
       // Delete invoice share links
       await tx.delete(invoiceShareLinks)

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { BaseController } from '../../utils/base';
 import { PurchaseInvoiceModel } from './model';
-import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema, insertCrateTransactionSchema, payments } from '@shared/schema';
+import { insertPurchaseInvoiceSchema, insertInvoiceItemSchema, insertCrateTransactionSchema, payments, INVOICE_STATUS } from '@shared/schema';
 import { type AuthenticatedRequest, ForbiddenError, BadRequestError, NotFoundError } from '../../types';
 import { invoiceGenerator } from '../../services/pdf';
 import { TenantModel } from '../tenants/model';
@@ -165,11 +165,36 @@ export class PurchaseInvoiceController extends BaseController {
       throw new BadRequestError('Invoice ID is required');
     }
 
+    // Validate UUID format
+    this.validateUUID(id, 'Purchase invoice ID');
+
+    // Fetch invoice to validate existence and status
+    const invoice = await this.wrapDatabaseOperation(() =>
+      this.purchaseInvoiceModel.getPurchaseInvoice(tenantId, id)
+    );
+    
+    if (!invoice) {
+      throw new NotFoundError('Purchase invoice not found');
+    }
+
+    if (invoice.status !== INVOICE_STATUS.UNPAID) {
+      throw new BadRequestError('Cannot delete a paid or partially paid invoice. Only unpaid invoices can be deleted.');
+    }
+
     const success = await this.wrapDatabaseOperation(() =>
       this.purchaseInvoiceModel.deletePurchaseInvoice(tenantId, id)
     );
     
     if (!success) {
+      // Race condition: re-fetch to determine if invoice was deleted or status changed
+      const invoiceCheck = await this.wrapDatabaseOperation(() =>
+        this.purchaseInvoiceModel.getPurchaseInvoice(tenantId, id)
+      );
+      
+      if (invoiceCheck && invoiceCheck.status !== INVOICE_STATUS.UNPAID) {
+        throw new BadRequestError('Cannot delete a paid or partially paid invoice. Only unpaid invoices can be deleted.');
+      }
+      
       throw new NotFoundError('Invoice not found');
     }
 

@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, Bell, Download } from "lucide-react";
+import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, CheckCircle, Bell, Download, Trash2 } from "lucide-react";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { useQueryClient } from "@tanstack/react-query";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 export default function SalesInvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -29,6 +30,7 @@ export default function SalesInvoiceDetailPage() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Fetch invoice data
   const { data: invoice, isLoading: invoiceLoading, error: invoiceError, refetch: refetchInvoice } = useQuery({
@@ -194,6 +196,30 @@ export default function SalesInvoiceDetailPage() {
     },
   });
 
+  // Delete invoice mutation
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async () => {
+      await authenticatedApiRequest('DELETE', `/api/sales-invoices/${invoiceId}`);
+    },
+    onSuccess: () => {
+      setDeleteDialogOpen(false);
+      toast({
+        title: 'Invoice deleted',
+        description: 'Sales invoice has been deleted successfully',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales-invoices', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales-invoices'] });
+      setLocation(`/${slug}/sales-invoices`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete invoice',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleBack = () => {
     setLocation(`/${slug}/sales-invoices`);
   };
@@ -297,6 +323,14 @@ export default function SalesInvoiceDetailPage() {
 
   const handleAddPayment = () => {
     setShowPaymentForm(true);
+  };
+
+  const handleDeleteInvoice = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    await deleteInvoiceMutation.mutateAsync();
   };
 
   // Loading state
@@ -527,6 +561,21 @@ export default function SalesInvoiceDetailPage() {
                       <span>Download PDF</span>
                     </Button>
                   </PermissionGuard>
+                  {invoice?.status === "Unpaid" && (
+                    <PermissionGuard permission={PERMISSIONS.DELETE_SALES_INVOICES}>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteInvoice}
+                        disabled={deleteInvoiceMutation.isPending}
+                        className="flex items-center space-x-2"
+                        data-testid="button-delete-invoice"
+                      >
+                        {deleteInvoiceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        <span>Delete</span>
+                      </Button>
+                    </PermissionGuard>
+                  )}
                 </div>
               </div>
             </div>
@@ -579,6 +628,18 @@ export default function SalesInvoiceDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Sales Invoice?"
+        description="Are you sure you want to delete this sales invoice? This action cannot be undone. The invoice, all associated payments, stock movements, and crate transactions will be permanently deleted."
+        confirmLabel="Delete Invoice"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteInvoiceMutation.isPending}
+        onConfirm={confirmDeleteInvoice}
+      />
     </>
   );
 }

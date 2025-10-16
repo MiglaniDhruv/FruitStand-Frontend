@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, Download } from "lucide-react";
+import { ArrowLeft, Loader2, Share, Copy, Check, MessageSquare, Download, Trash2 } from "lucide-react";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
+import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 export default function PurchaseInvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -27,6 +28,7 @@ export default function PurchaseInvoiceDetailPage() {
   const [copied, setCopied] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Fetch invoice data
   const { data: invoice, isLoading: invoiceLoading, error: invoiceError, refetch: refetchInvoice } = useQuery({
@@ -120,6 +122,30 @@ export default function PurchaseInvoiceDetailPage() {
     },
   });
 
+  // Delete invoice mutation
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async () => {
+      await authenticatedApiRequest('DELETE', `/api/purchase-invoices/${invoiceId}`);
+    },
+    onSuccess: () => {
+      setDeleteDialogOpen(false);
+      toast({
+        title: 'Invoice deleted',
+        description: 'Purchase invoice has been deleted successfully',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/purchase-invoices', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/purchase-invoices'] });
+      setLocation(`/${slug}/purchase-invoices`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete invoice',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleBack = () => {
     setLocation(`/${slug}/purchase-invoices`);
   };
@@ -201,6 +227,14 @@ export default function PurchaseInvoiceDetailPage() {
     } finally {
       setDownloadingPDF(false);
     }
+  };
+
+  const handleDeleteInvoice = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    await deleteInvoiceMutation.mutateAsync();
   };
 
   // Loading state
@@ -391,6 +425,21 @@ export default function PurchaseInvoiceDetailPage() {
                       <span>Download PDF</span>
                     </Button>
                   </PermissionGuard>
+                  {invoice?.status === "Unpaid" && (
+                    <PermissionGuard permission={PERMISSIONS.DELETE_PURCHASE_INVOICES}>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteInvoice}
+                        disabled={deleteInvoiceMutation.isPending}
+                        className="flex items-center space-x-2"
+                        data-testid="button-delete-invoice"
+                      >
+                        {deleteInvoiceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        <span>Delete</span>
+                      </Button>
+                    </PermissionGuard>
+                  )}
                 </div>
               </div>
             </div>
@@ -443,6 +492,18 @@ export default function PurchaseInvoiceDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Purchase Invoice?"
+        description="Are you sure you want to delete this purchase invoice? This action cannot be undone. The invoice, all associated payments, stock movements, and crate transactions will be permanently deleted."
+        confirmLabel="Delete Invoice"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteInvoiceMutation.isPending}
+        onConfirm={confirmDeleteInvoice}
+      />
     </>
   );
 }
