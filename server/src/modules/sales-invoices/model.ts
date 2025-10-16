@@ -226,6 +226,220 @@ export class SalesInvoiceModel {
     }
   }
 
+  async updateSalesInvoice(tenantId: string, invoiceId: string, invoiceData: InsertSalesInvoice, itemsData: InsertSalesInvoiceItem[], crateTransactionData?: InsertCrateTransaction): Promise<SalesInvoiceWithDetails> {
+    // Add business logic validation
+    if (!itemsData || itemsData.length === 0) {
+      throw new ValidationError('Invoice must contain at least one item', {
+        items: 'At least one item is required'
+      });
+    }
+
+    const totalAmount = parseFloat(invoiceData.totalAmount);
+    if (isNaN(totalAmount) || totalAmount <= 0) {
+      throw new ValidationError('Invalid invoice amount', {
+        totalAmount: 'Total amount must be a positive number'
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
+        // Phase 1: Validation - Fetch existing invoice
+        const [oldInvoice] = await tx.select().from(salesInvoices)
+          .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)));
+        
+        if (!oldInvoice) {
+          throw new NotFoundError('Sales invoice');
+        }
+
+        // Validate invoice status is UNPAID
+        if (oldInvoice.status !== INVOICE_STATUS.UNPAID) {
+          throw new BadRequestError('Only unpaid invoices can be edited');
+        }
+
+        // Phase 2: Reverse old retailer balance
+        const [retailer] = await tx.select().from(retailers)
+          .where(and(
+            withTenant(retailers, tenantId),
+            eq(retailers.id, oldInvoice.retailerId)
+          ));
+        
+        if (!retailer) {
+          throw new NotFoundError('Retailer');
+        }
+
+        const newBalanceAfterReversal = parseFloat(retailer.udhaaarBalance || '0') - parseFloat(oldInvoice.udhaaarAmount || '0');
+        await tx.update(retailers)
+          .set({ udhaaarBalance: newBalanceAfterReversal.toFixed(2) })
+          .where(and(
+            withTenant(retailers, tenantId),
+            eq(retailers.id, oldInvoice.retailerId)
+          ));
+
+        // Phase 3: Delete old crate transactions
+        const crateTransactionsList = await tx.select().from(crateTransactions)
+          .where(and(
+            withTenant(crateTransactions, tenantId),
+            eq(crateTransactions.salesInvoiceId, invoiceId),
+            eq(crateTransactions.partyType, 'retailer'),
+            eq(crateTransactions.retailerId, oldInvoice.retailerId)
+          ));
+        
+        if (crateTransactionsList.length > 0) {
+          // Calculate net reverse balance change
+          let netReverse = 0;
+          for (const crateTransaction of crateTransactionsList) {
+            const multiplier = crateTransaction.transactionType === CRATE_TRANSACTION_TYPES.GIVEN ? -1 : 1;
+            netReverse += crateTransaction.quantity * multiplier;
+          }
+          
+          // Update retailer's crateBalance if there's a net change
+          if (netReverse !== 0) {
+            await tx.update(retailers)
+              .set({
+                crateBalance: sql`COALESCE(${retailers.crateBalance}, 0) + ${netReverse}`
+              })
+              .where(and(
+                withTenant(retailers, tenantId),
+                eq(retailers.id, oldInvoice.retailerId)
+              ));
+          }
+          
+          // Delete all crate transactions
+          await tx.delete(crateTransactions)
+            .where(and(
+              withTenant(crateTransactions, tenantId),
+              eq(crateTransactions.salesInvoiceId, invoiceId),
+              eq(crateTransactions.partyType, 'retailer'),
+              eq(crateTransactions.retailerId, oldInvoice.retailerId)
+            ));
+        }
+
+        // Phase 4: Delete old stock movements and recalculate stock
+        const stockMovementsToDelete = await tx.select().from(stockMovements)
+          .where(and(
+            withTenant(stockMovements, tenantId),
+            eq(stockMovements.referenceType, 'SALES_INVOICE'),
+            eq(stockMovements.referenceId, invoiceId)
+          ));
+        
+        const affectedItemIds = Array.from(new Set(stockMovementsToDelete.map(movement => movement.itemId)));
+        
+        // Delete stock movements
+        await tx.delete(stockMovements)
+          .where(and(
+            withTenant(stockMovements, tenantId),
+            eq(stockMovements.referenceType, 'SALES_INVOICE'),
+            eq(stockMovements.referenceId, invoiceId)
+          ));
+        
+        // Recalculate stock balances for affected items
+        for (const itemId of affectedItemIds) {
+          const balance = await this.stockModel.calculateStockBalance(tenantId, itemId, tx);
+          await this.stockModel.updateStock(
+            tenantId,
+            itemId,
+            {
+              quantityInCrates: balance.crates.toFixed(2),
+              quantityInBoxes: balance.boxes.toFixed(2),
+              quantityInKgs: balance.kgs.toFixed(2)
+            },
+            tx
+          );
+        }
+
+        // Phase 5: Delete old invoice items
+        await tx.delete(salesInvoiceItems)
+          .where(withTenant(salesInvoiceItems, tenantId, eq(salesInvoiceItems.invoiceId, invoiceId)));
+
+        // Phase 6: Update invoice with new data
+        const [updatedInvoice] = await tx.update(salesInvoices)
+          .set({
+            ...invoiceData,
+            invoiceNumber: oldInvoice.invoiceNumber,
+            udhaaarAmount: invoiceData.totalAmount,
+            balanceAmount: invoiceData.totalAmount,
+            status: INVOICE_STATUS.UNPAID,
+            paidAmount: '0.00',
+            shortfallAmount: '0.00'
+          })
+          .where(withTenant(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)))
+          .returning();
+
+        // Phase 7: Create new invoice items
+        const itemsWithInvoiceId = itemsData.map(item => ensureTenantInsert({
+          ...item,
+          invoiceId: invoiceId
+        }, tenantId));
+        
+        const createdItems = await tx.insert(salesInvoiceItems).values(itemsWithInvoiceId).returning();
+
+        // Phase 8: Create new stock movements
+        for (const item of createdItems) {
+          const movementData = {
+            tenantId,
+            itemId: item.itemId,
+            movementType: 'OUT' as const,
+            quantityInCrates: item.crates || '0',
+            quantityInBoxes: item.boxes || '0',
+            quantityInKgs: item.weight,
+            rate: item.rate,
+            referenceType: 'SALES_INVOICE' as const,
+            referenceId: updatedInvoice.id,
+            referenceNumber: updatedInvoice.invoiceNumber,
+            retailerId: updatedInvoice.retailerId,
+            movementDate: updatedInvoice.invoiceDate,
+            notes: 'Auto-generated from sales invoice'
+          };
+          
+          await this.stockModel.createStockMovement(tenantId, movementData, tx);
+        }
+
+        // Phase 9: Apply new retailer balance
+        const [freshRetailer] = await tx.select().from(retailers)
+          .where(withTenant(retailers, tenantId, eq(retailers.id, updatedInvoice.retailerId)));
+        
+        if (!freshRetailer) {
+          throw new NotFoundError('Retailer');
+        }
+
+        const newUdhaaarBalance = parseFloat(freshRetailer.udhaaarBalance || '0') + parseFloat(updatedInvoice.totalAmount);
+        await tx.update(retailers)
+          .set({ udhaaarBalance: newUdhaaarBalance.toFixed(2) })
+          .where(withTenant(retailers, tenantId, eq(retailers.id, updatedInvoice.retailerId)));
+
+        // Update retailer object with fresh udhaaar balance
+        freshRetailer.udhaaarBalance = newUdhaaarBalance.toFixed(2);
+
+        // Phase 10: Create new crate transaction (if provided)
+        let crateTransaction: CrateTransaction | undefined;
+        if (crateTransactionData) {
+          // Validate crate transaction party and retailer consistency
+          if (crateTransactionData.partyType !== 'retailer') {
+            throw new ValidationError('Crate transaction party type must be "retailer" for sales invoices', {
+              partyType: 'Expected "retailer"'
+            });
+          }
+          if (crateTransactionData.retailerId !== updatedInvoice.retailerId) {
+            throw new ValidationError('Crate transaction retailer must match invoice retailer', {
+              retailerId: 'Retailer ID mismatch'
+            });
+          }
+          
+          crateTransaction = await this.crateModel.createCrateTransaction(tenantId, {
+            ...crateTransactionData,
+            salesInvoiceId: invoiceId
+          }, tx);
+        }
+
+        // Phase 11: Return updated invoice with details
+        return { ...updatedInvoice, retailer: freshRetailer, items: createdItems, payments: [], crateTransaction };
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
   async markSalesInvoiceAsPaid(tenantId: string, invoiceId: string): Promise<{ invoice: SalesInvoice; shortfallAdded: string; retailer: any }> {
     try {
       return await db.transaction(async (tx) => {

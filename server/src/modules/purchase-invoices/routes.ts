@@ -39,6 +39,15 @@ export class PurchaseInvoiceRouter extends BaseRouter {
       this.ah(this.purchaseInvoiceController, 'create')
     );
 
+    // PUT /purchase-invoices/:id - Update a purchase invoice (Admin/Operator only)
+    this.router.put('/purchase-invoices/:id', 
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      asyncHandler(requireRole([UserRole.ADMIN, UserRole.OPERATOR])), 
+      this.ah(this.purchaseInvoiceController, 'update')
+    );
+
     // POST /purchase-invoices/:id/share-link - Create share link for purchase invoice
     this.router.post('/purchase-invoices/:id/share-link', 
       authenticateToken,

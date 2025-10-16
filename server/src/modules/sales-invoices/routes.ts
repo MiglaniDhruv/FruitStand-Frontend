@@ -44,6 +44,14 @@ export class SalesInvoiceRouter extends BaseRouter {
       this.ah(this.salesInvoiceController, 'createSalesInvoice')
     );
 
+    // PUT /sales-invoices/:id - Update a sales invoice
+    this.router.put('/sales-invoices/:id', 
+      authenticateToken,
+      asyncHandler(validateTenant),
+      attachTenantContext,
+      this.ah(this.salesInvoiceController, 'updateSalesInvoice')
+    );
+
     // PUT /sales-invoices/:id/mark-paid - Mark sales invoice as paid
     this.router.put('/sales-invoices/:id/mark-paid', 
       authenticateToken,

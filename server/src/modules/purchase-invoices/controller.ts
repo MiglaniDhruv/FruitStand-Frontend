@@ -9,7 +9,7 @@ import { TenantModel } from '../tenants/model';
 import { db } from '../../../db';
 import { and, eq } from 'drizzle-orm';
 
-const createPurchaseInvoiceBodySchema = z.object({
+const purchaseInvoiceBodySchema = z.object({
   invoice: insertPurchaseInvoiceSchema.omit({ tenantId: true }),
   items: z.array(insertInvoiceItemSchema.omit({ invoiceId: true, tenantId: true })),
   crateTransaction: z.object({
@@ -107,7 +107,7 @@ export class PurchaseInvoiceController extends BaseController {
     if (!req.tenantId) throw new ForbiddenError('No tenant context found');
     const tenantId = req.tenantId;
     
-    const validatedData = this.validateZodSchema(createPurchaseInvoiceBodySchema, req.body);
+    const validatedData = this.validateZodSchema(purchaseInvoiceBodySchema, req.body);
 
     const { invoice: invoiceData, items: itemsData, crateTransaction, stockOutEntryIds } = validatedData;
     
@@ -137,6 +137,47 @@ export class PurchaseInvoiceController extends BaseController {
     );
     
     res.status(201).json(invoice);
+  }
+
+  async update(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const { id } = req.params;
+    if (!id) throw new BadRequestError('Purchase invoice ID is required');
+    this.validateUUID(id, 'Purchase invoice ID');
+    
+    const validatedData = this.validateZodSchema(purchaseInvoiceBodySchema, req.body);
+
+    const { invoice: invoiceData, items: itemsData, crateTransaction, stockOutEntryIds } = validatedData;
+    
+    // Add tenantId to the data before passing to model
+    const invoiceWithTenant = { 
+      ...invoiceData, 
+      tenantId,
+      // Ensure invoiceDate is properly transformed to Date
+      invoiceDate: invoiceData.invoiceDate instanceof Date ? invoiceData.invoiceDate : new Date(invoiceData.invoiceDate)
+    };
+    const itemsWithTenant = itemsData.map(item => ({ ...item, tenantId }));
+    const crateTransactionWithTenant = crateTransaction ? { 
+      ...crateTransaction, 
+      tenantId,
+      // Ensure transactionDate is properly transformed to Date
+      transactionDate: crateTransaction.transactionDate instanceof Date ? crateTransaction.transactionDate : new Date(crateTransaction.transactionDate)
+    } : undefined;
+    
+    const invoice = await this.wrapDatabaseOperation(() =>
+      this.purchaseInvoiceModel.updatePurchaseInvoice(
+        tenantId, 
+        id,
+        invoiceWithTenant, 
+        itemsWithTenant as any,
+        crateTransactionWithTenant,
+        stockOutEntryIds
+      )
+    );
+    
+    res.status(200).json(invoice);
   }
 
   async createShareLink(req: AuthenticatedRequest, res: Response) {

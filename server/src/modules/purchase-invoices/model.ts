@@ -306,6 +306,276 @@ export class PurchaseInvoiceModel {
     }
   }
 
+  async updatePurchaseInvoice(
+    tenantId: string, 
+    invoiceId: string,
+    invoiceData: InsertPurchaseInvoice, 
+    itemsData: InsertInvoiceItem[],
+    crateTransactionData?: InsertCrateTransaction,
+    stockOutEntryIds?: string[]
+  ): Promise<InvoiceWithItemsAndCrate> {
+    // Add business logic validation
+    if (!itemsData || itemsData.length === 0) {
+      throw new ValidationError('Invoice must contain at least one item', {
+        items: 'At least one item is required'
+      });
+    }
+
+    const netAmount = parseFloat(invoiceData.netAmount);
+    if (isNaN(netAmount) || netAmount <= 0) {
+      throw new ValidationError('Invalid invoice amount', {
+        netAmount: 'Net amount must be a positive number'
+      });
+    }
+
+    // Add preflight validation for stockOutEntryIds format
+    if (stockOutEntryIds && stockOutEntryIds.some(id => !id || typeof id !== 'string' || id.trim().length === 0)) {
+      throw new ValidationError('Invalid stock movement IDs provided', {
+        stockOutEntryIds: 'All stock movement IDs must be non-empty strings'
+      });
+    }
+
+    try {
+      return await db.transaction(async (tx) => {
+        // Phase 1: Validation - Fetch existing invoice
+        const [oldInvoice] = await tx.select().from(purchaseInvoices)
+          .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoiceId)));
+        
+        if (!oldInvoice) {
+          throw new NotFoundError('Purchase invoice');
+        }
+
+        // Validate invoice status is UNPAID
+        if (oldInvoice.status !== INVOICE_STATUS.UNPAID) {
+          throw new BadRequestError('Only unpaid invoices can be edited');
+        }
+
+        // Phase 2: Reverse old vendor monetary balance
+        const [vendor] = await tx.select().from(vendors)
+          .where(and(
+            withTenant(vendors, tenantId),
+            eq(vendors.id, oldInvoice.vendorId)
+          ));
+        
+        if (!vendor) {
+          throw new NotFoundError('Vendor');
+        }
+
+        await tx.update(vendors)
+          .set({
+            balance: sql`COALESCE(${vendors.balance}, 0) - ${oldInvoice.netAmount}`
+          })
+          .where(and(
+            withTenant(vendors, tenantId),
+            eq(vendors.id, oldInvoice.vendorId)
+          ));
+
+        // Phase 3: Delete old crate transactions and reverse crate balance
+        const crateTransactionsList = await tx.select().from(crateTransactions)
+          .where(and(
+            withTenant(crateTransactions, tenantId),
+            eq(crateTransactions.purchaseInvoiceId, invoiceId)
+          ));
+        
+        if (crateTransactionsList.length > 0) {
+          // Calculate total reverse balance change for all crate transactions
+          let totalReverseChange = 0;
+          for (const crateTransaction of crateTransactionsList) {
+            // Received: was added, so subtract to reverse
+            // Returned: was subtracted, so add back to reverse
+            if (crateTransaction.transactionType === CRATE_TRANSACTION_TYPES.RECEIVED) {
+              totalReverseChange -= crateTransaction.quantity;
+            } else if (crateTransaction.transactionType === CRATE_TRANSACTION_TYPES.RETURNED) {
+              totalReverseChange += crateTransaction.quantity;
+            }
+          }
+          
+          // Update vendor crate balance
+          await tx.update(vendors)
+            .set({
+              crateBalance: sql`COALESCE(${vendors.crateBalance}, 0) + ${totalReverseChange}`
+            })
+            .where(and(
+              withTenant(vendors, tenantId),
+              eq(vendors.id, oldInvoice.vendorId)
+            ));
+          
+          // Delete all crate transactions
+          await tx.delete(crateTransactions)
+            .where(and(
+              withTenant(crateTransactions, tenantId),
+              eq(crateTransactions.purchaseInvoiceId, invoiceId)
+            ));
+        }
+
+        // Phase 4: Unlink old stock movements
+        await tx.update(stockMovements)
+          .set({ purchaseInvoiceId: null })
+          .where(withTenant(stockMovements, tenantId, eq(stockMovements.purchaseInvoiceId, invoiceId)));
+
+        // Phase 5: Delete old invoice items
+        await tx.delete(invoiceItems)
+          .where(withTenant(invoiceItems, tenantId, eq(invoiceItems.invoiceId, invoiceId)));
+
+        // Validate tenant references for updated vendorId
+        await assertSameTenant(tx, tenantId, [
+          { table: 'vendors', id: invoiceData.vendorId }
+        ]);
+
+        // Phase 6: Update invoice with new data
+        const invoiceWithTenant = ensureTenantInsert({
+          ...invoiceData,
+          invoiceNumber: oldInvoice.invoiceNumber,
+          balanceAmount: invoiceData.netAmount,
+          status: INVOICE_STATUS.UNPAID
+        }, tenantId);
+
+        const [updatedInvoice] = await tx.update(purchaseInvoices)
+          .set(invoiceWithTenant)
+          .where(withTenant(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoiceId)))
+          .returning();
+
+        // Phase 7: Link new stock OUT entries (if provided)
+        if (stockOutEntryIds && stockOutEntryIds.length > 0) {
+          // Fetch selected movements with their items to validate
+          const selectedMovements = await tx.select({
+            movement: stockMovements,
+            item: items
+          })
+          .from(stockMovements)
+          .innerJoin(items, eq(stockMovements.itemId, items.id))
+          .where(
+            and(
+              withTenant(stockMovements, tenantId),
+              inArray(stockMovements.id, stockOutEntryIds)
+            )
+          );
+          
+          // Validate all movements exist
+          if (selectedMovements.length !== stockOutEntryIds.length) {
+            throw new ValidationError('Some selected stock movements not found', {
+              stockOutEntryIds: 'One or more stock movement IDs are invalid'
+            });
+          }
+          
+          // Validate none are already allocated
+          const alreadyAllocated = selectedMovements.filter(sm => sm.movement.purchaseInvoiceId !== null);
+          if (alreadyAllocated.length > 0) {
+            throw new ConflictError('Some selected stock movements are already allocated to another purchase invoice');
+          }
+          
+          // Validate all belong to the correct vendor
+          const wrongVendor = selectedMovements.filter(sm => sm.item.vendorId !== updatedInvoice.vendorId);
+          if (wrongVendor.length > 0) {
+            throw new ValidationError('Some selected stock movements do not belong to the selected vendor', {
+              stockOutEntryIds: 'All stock movements must belong to the selected vendor'
+            });
+          }
+          
+          // Validate all movements are of type OUT
+          const nonOutMovements = selectedMovements.filter(sm => sm.movement.movementType !== 'OUT');
+          if (nonOutMovements.length > 0) {
+            throw new ValidationError('Some selected stock movements are not of type OUT', {
+              stockOutEntryIds: 'Only OUT type stock movements can be linked to purchase invoices'
+            });
+          }
+          
+          // Link movements to this invoice with concurrent protection
+          const updatedMovements = await tx.update(stockMovements)
+            .set({ purchaseInvoiceId: updatedInvoice.id })
+            .where(
+              and(
+                withTenant(stockMovements, tenantId),
+                inArray(stockMovements.id, stockOutEntryIds),
+                isNull(stockMovements.purchaseInvoiceId)
+              )
+            )
+            .returning();
+          
+          // Verify all movements were updated (protect against concurrent allocation)
+          if (updatedMovements.length !== stockOutEntryIds.length) {
+            throw new ConflictError('Some stock movements were concurrently allocated to another purchase invoice. Please refresh and try again.');
+          }
+        }
+
+        // Phase 8: Create new invoice items
+        const itemsWithInvoiceIdAndTenant = itemsData.map(item => 
+          ensureTenantInsert({
+            ...item,
+            invoiceId: invoiceId
+          }, tenantId)
+        );
+        
+        const createdItems = await tx.insert(invoiceItems).values(itemsWithInvoiceIdAndTenant).returning();
+
+        // Phase 9: Apply new vendor monetary balance
+        const [freshVendor] = await tx.select().from(vendors)
+          .where(withTenant(vendors, tenantId, eq(vendors.id, updatedInvoice.vendorId)));
+        
+        if (!freshVendor) {
+          throw new NotFoundError('Vendor');
+        }
+
+        await tx.update(vendors)
+          .set({ 
+            balance: sql`COALESCE(${vendors.balance}, 0) + ${updatedInvoice.netAmount}`
+          })
+          .where(withTenant(vendors, tenantId, eq(vendors.id, updatedInvoice.vendorId)));
+
+        // Phase 10: Create new crate transaction (if provided)
+        let crateTransaction: CrateTransaction | null = null;
+        if (crateTransactionData) {
+          // Link crate transaction to the updated invoice and ensure it references the same vendor
+          const crateDataWithInvoice = ensureTenantInsert({
+            ...crateTransactionData,
+            purchaseInvoiceId: invoiceId,
+            partyType: 'vendor',
+            vendorId: updatedInvoice.vendorId,
+            retailerId: null,
+          }, tenantId);
+          
+          // Insert crate transaction within the same transaction
+          const [createdCrateTransaction] = await tx.insert(crateTransactions)
+            .values(crateDataWithInvoice)
+            .returning();
+          
+          crateTransaction = createdCrateTransaction;
+          
+          // Update vendor crate balance
+          // 'Received' increases balance (we receive crates from vendor)
+          // 'Returned' decreases balance (we return crates to vendor)
+          const balanceChange = crateTransactionData.transactionType === 'Received' 
+            ? crateTransactionData.quantity 
+            : -crateTransactionData.quantity;
+          
+          await tx.update(vendors)
+            .set({ 
+              crateBalance: sql`COALESCE(${vendors.crateBalance}, 0) + ${balanceChange}`
+            })
+            .where(withTenant(vendors, tenantId, eq(vendors.id, updatedInvoice.vendorId)));
+        }
+
+        // Phase 11: Fetch fresh vendor with updated balances and return result
+        const [finalVendor] = await tx.select().from(vendors)
+          .where(withTenant(vendors, tenantId, eq(vendors.id, updatedInvoice.vendorId)));
+        
+        if (!finalVendor) {
+          throw new NotFoundError('Vendor');
+        }
+
+        return { 
+          ...updatedInvoice, 
+          vendor: finalVendor, 
+          items: createdItems,
+          crateTransaction 
+        };
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
   async getPurchaseInvoicesPaginated(tenantId: string, options?: PaginationOptions & {
     search?: string;
     status?: 'paid' | 'unpaid';

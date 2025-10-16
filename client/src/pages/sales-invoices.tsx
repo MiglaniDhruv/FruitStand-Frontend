@@ -39,6 +39,7 @@ import {
   Trash2,
   Search,
   AlertCircle,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useTenantSlug } from "@/contexts/tenant-slug-context";
@@ -194,6 +195,20 @@ export default function SalesInvoiceManagement() {
     }
   };
 
+  const handleEdit = (invoice: any) => {
+    try {
+      setEditingInvoice(invoice);
+      setShowInvoiceModal(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleEdit');
+      toast({
+        title: "Error",
+        description: "Failed to open edit invoice form",
+        variant: "destructive",
+      });
+    }
+  };
+
   
 
 
@@ -291,6 +306,17 @@ export default function SalesInvoiceManagement() {
           >
             <Eye className="h-4 w-4" />
           </Button>
+          {invoice.status === "Pending" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleEdit(invoice)}
+              data-testid={`button-edit-${invoice.id}`}
+              title="Edit Invoice"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -569,7 +595,12 @@ export default function SalesInvoiceManagement() {
       {/* Sales Invoice Modal */}
       <SalesInvoiceModal
         open={showInvoiceModal}
-        onOpenChange={setShowInvoiceModal}
+        onOpenChange={(open) => {
+          setShowInvoiceModal(open);
+          if (!open) {
+            setEditingInvoice(null);
+          }
+        }}
         editingInvoice={editingInvoice}
       />
     </AppLayout>

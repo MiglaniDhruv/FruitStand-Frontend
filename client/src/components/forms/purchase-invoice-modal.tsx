@@ -29,6 +29,7 @@ import { useTenant } from "@/hooks/use-tenant";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { InvoiceWithItems } from "@shared/schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const invoiceItemSchema = z.object({
@@ -79,9 +80,10 @@ type InvoiceFormData = z.infer<typeof invoiceSchema>;
 interface PurchaseInvoiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  invoice?: InvoiceWithItems | null;
 }
 
-export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInvoiceModalProps) {
+export default function PurchaseInvoiceModal({ open, onOpenChange, invoice }: PurchaseInvoiceModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedVendorId, setSelectedVendorId] = useState("");
@@ -122,13 +124,18 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     },
   });
 
-  // Clear errors when modal opens/closes
+  // Clear errors when modal opens/closes and reset form when closed
   useEffect(() => {
     if (open) {
       setSubmissionError(null);
       setCalculationError(null);
+    } else {
+      // Reset form and local state when modal is closed
+      form.reset();
+      setSelectedVendorId("");
+      setSelectedStockOutEntries([]);
     }
-  }, [open]);
+  }, [open, form]);
 
   useEffect(() => {
     const rate = getTenantSettings().commissionRate;
@@ -137,6 +144,51 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       form.setValue('commission', clampedRate.toString());
     }
   }, [open, tenant, form]);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (invoice && open) {
+      try {
+        setSelectedVendorId(invoice.vendorId);
+        
+        form.setValue('vendorId', invoice.vendorId);
+        form.setValue('invoiceDate', new Date(invoice.invoiceDate).toISOString().split('T')[0]);
+        form.setValue('items', invoice.items.map(item => ({
+          itemId: item.itemId,
+          weight: item.weight.toString(),
+          crates: item.crates?.toString() || '',
+          boxes: item.boxes?.toString() || '',
+          rate: item.rate.toString(),
+          amount: item.amount.toString(),
+        })));
+        form.setValue('commission', (invoice.commission ?? 0).toString());
+        form.setValue('labour', (invoice.labour ?? 0).toString());
+        form.setValue('truckFreight', (invoice.truckFreight ?? 0).toString());
+        form.setValue('crateFreight', (invoice.crateFreight ?? 0).toString());
+        form.setValue('postExpenses', (invoice.postExpenses ?? 0).toString());
+        form.setValue('draftExpenses', (invoice.draftExpenses ?? 0).toString());
+        form.setValue('vatav', (invoice.vatav ?? 0).toString());
+        form.setValue('otherExpenses', (invoice.otherExpenses ?? 0).toString());
+        form.setValue('advance', (invoice.advance ?? 0).toString());
+        form.setValue('totalExpense', invoice.totalExpense.toString());
+        form.setValue('totalSelling', invoice.totalSelling.toString());
+        form.setValue('totalLessExpenses', invoice.totalLessExpenses.toString());
+        form.setValue('netAmount', invoice.netAmount.toString());
+        
+        if ((invoice as any).crateTransaction) {
+          form.setValue('crateTransaction.enabled', true);
+          form.setValue('crateTransaction.quantity', (invoice as any).crateTransaction.quantity);
+        }
+      } catch (error) {
+        console.error('Error populating form:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load invoice data",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [invoice, open, form, toast]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -171,20 +223,37 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       const response = await authenticatedApiRequest("GET", `/api/stock-movements/vendor/${selectedVendorId}/available`);
       return response.json();
     },
-    enabled: !!selectedVendorId,
+    enabled: !!selectedVendorId && !invoice,
   });
 
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Add stockOutEntryIds if any were selected
-      const requestData = {
-        ...data,
-        stockOutEntryIds: selectedStockOutEntries.length > 0 ? selectedStockOutEntries : undefined
-      };
-      const response = await authenticatedApiRequest("POST", "/api/purchase-invoices", requestData);
+      const isEditMode = !!invoice;
+      
+      // In create mode, add stockOutEntryIds if any were selected
+      // In edit mode, do NOT include stockOutEntryIds (stock entries are already linked)
+      const requestData = isEditMode 
+        ? data
+        : {
+            ...data,
+            stockOutEntryIds: selectedStockOutEntries.length > 0 ? selectedStockOutEntries : undefined
+          };
+      
+      const endpoint = isEditMode 
+        ? `/api/purchase-invoices/${invoice.id}`
+        : "/api/purchase-invoices";
+      
+      const method = isEditMode ? "PUT" : "POST";
+      
+      const response = await authenticatedApiRequest(method, endpoint, requestData);
       return response.json();
     },
     onSuccess: () => {
+      const isEditMode = !!invoice;
+      const hadCrateTransaction = isEditMode && !!(invoice as any).crateTransaction;
+      const hasCrateTransaction = form.watch("crateTransaction.enabled");
+      const crateRemoved = isEditMode && hadCrateTransaction && !hasCrateTransaction;
+      
       setSubmissionError(null);
       setCalculationError(null);
       
@@ -192,11 +261,27 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       setShowSuccessAnimation(true);
       setTimeout(() => setShowSuccessAnimation(false), 500);
       
-      toast({
-        title: "Invoice created",
-        description: form.watch("crateTransaction.enabled")
+      // Build success message based on crate transaction state
+      let description = "";
+      if (isEditMode) {
+        if (crateRemoved) {
+          description = "Purchase invoice updated and crate transaction removed successfully";
+        } else if (hasCrateTransaction) {
+          description = hadCrateTransaction 
+            ? "Purchase invoice and crate transaction updated successfully"
+            : "Purchase invoice updated and crate transaction added successfully";
+        } else {
+          description = "Purchase invoice updated successfully";
+        }
+      } else {
+        description = hasCrateTransaction
           ? "Purchase invoice and crate transaction created successfully"
-          : "Purchase invoice created successfully",
+          : "Purchase invoice created successfully";
+      }
+      
+      toast({
+        title: isEditMode ? "Invoice updated" : "Invoice created",
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
@@ -212,7 +297,8 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       }, 300);
     },
     onError: (error) => {
-      let errorMessage = "Failed to create invoice";
+      const isEditMode = !!invoice;
+      let errorMessage = isEditMode ? "Failed to update invoice" : "Failed to create invoice";
       if (error instanceof Error) {
         errorMessage = error.message;
         // Parse specific error types
@@ -426,8 +512,8 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
         throw new Error('Crate quantity is required when crate transaction is enabled');
       }
       
-      // Build invoice data with validation
-      const invoice = {
+      // Build invoice payload data with validation
+      const invoicePayload = {
         vendorId: data.vendorId,
         invoiceDate: data.invoiceDate,
         commission: commissionAmount.toFixed(2),
@@ -447,7 +533,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
         status: "Unpaid",
       };
 
-      const items = data.items.map((item, index) => {
+      const itemsPayload = data.items.map((item, index) => {
         const weight = parseFloat(item.weight || "0");
         const crates = parseFloat(item.crates || "0");
         const boxes = parseFloat(item.boxes || "0");
@@ -469,10 +555,15 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
       });
 
       // Build request data
-      const requestData: any = { invoice, items };
+      const requestData: any = { invoice: invoicePayload, items: itemsPayload };
 
-      // Add crate transaction if enabled
+      // Detect if we're in edit mode using the component prop (not the local payload)
+      const isEditMode = !!invoice;
+      const hadCrateTransaction = isEditMode && !!(invoice as any).crateTransaction;
+
+      // Handle crate transaction
       if (data.crateTransaction?.enabled && data.crateTransaction.quantity) {
+        // User enabled crate transaction with valid quantity - include it
         requestData.crateTransaction = {
           partyType: 'vendor',
           vendorId: data.vendorId,
@@ -481,7 +572,12 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
           transactionDate: data.invoiceDate,
           notes: `Crates received with invoice`,
         };
+      } else if (isEditMode && hadCrateTransaction && !data.crateTransaction?.enabled) {
+        // Edit mode: invoice had a crate transaction but user disabled it - explicitly signal removal
+        requestData.crateTransaction = null;
       }
+      // If create mode and not enabled, don't include crateTransaction (undefined is fine)
+      // If edit mode but invoice never had a crate transaction, also don't include it
 
       createInvoiceMutation.mutate(requestData);
     } catch (error) {
@@ -514,7 +610,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
     <MobileDrawerModal
       open={open}
       onOpenChange={onOpenChange}
-      title="Create Purchase Invoice"
+      title={invoice ? "Edit Purchase Invoice" : "Create Purchase Invoice"}
       fullScreenOnMobile={true}
     >
       <ErrorBoundary 
@@ -557,7 +653,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Vendor *</FormLabel>
-                      <Select onValueChange={handleVendorChange} value={field.value}>
+                      <Select onValueChange={handleVendorChange} value={field.value} disabled={!!invoice}>
                         <FormControl>
                           <SelectTrigger data-testid="select-vendor">
                             <SelectValue placeholder="Select vendor" />
@@ -576,7 +672,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                   )}
                 />
 
-                {selectedVendorId && availableStockOutEntries && availableStockOutEntries.length > 0 && (
+                {!invoice && selectedVendorId && availableStockOutEntries && availableStockOutEntries.length > 0 && (
                   <div className="col-span-full">
                     <label className="text-sm font-medium">Select Stock Out Entries (Optional)</label>
                     <div className="mt-2 max-h-32 sm:max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
@@ -1235,7 +1331,9 @@ export default function PurchaseInvoiceModal({ open, onOpenChange }: PurchaseInv
                 disabled={createInvoiceMutation.isPending}
                 data-testid="button-create-invoice"
               >
-                {createInvoiceMutation.isPending ? "Creating..." : "Create Invoice"}
+                {createInvoiceMutation.isPending 
+                  ? (invoice ? "Updating..." : "Creating...") 
+                  : (invoice ? "Update Invoice" : "Create Invoice")}
               </Button>
             </div>
           </form>

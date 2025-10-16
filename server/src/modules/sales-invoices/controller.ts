@@ -13,6 +13,11 @@ const salesInvoiceValidation = {
     items: z.array(insertSalesInvoiceItemSchema).min(1),
     crateTransaction: insertCrateTransactionSchema.optional(),
   }),
+  updateSalesInvoice: z.object({
+    invoice: insertSalesInvoiceSchema,
+    items: z.array(insertSalesInvoiceItemSchema).min(1),
+    crateTransaction: insertCrateTransactionSchema.optional(),
+  }),
   getSalesInvoicesPaginated: z.object({
     page: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
     limit: z.string().optional().transform(val => val ? parseInt(val, 10) : undefined),
@@ -97,6 +102,44 @@ export class SalesInvoiceController extends BaseController {
     const result = await this.salesInvoiceModel.createSalesInvoice(tenantId, processedInvoice, items, processedCrateTransaction);
     
     res.status(201).json(result);
+  }
+
+  async updateSalesInvoice(req: AuthenticatedRequest, res: Response) {
+    if (!req.tenantId) throw new ForbiddenError('No tenant context found');
+    const tenantId = req.tenantId;
+    
+    const { id } = req.params;
+    if (!id) throw new BadRequestError('Sales invoice ID is required');
+    this.validateUUID(id, 'Sales invoice ID');
+    
+    // Inject tenantId into invoice, items, and crateTransaction before validation
+    const requestData = {
+      invoice: { ...req.body.invoice, tenantId },
+      items: req.body.items?.map((item: any) => ({ ...item, tenantId })) || [],
+      crateTransaction: req.body.crateTransaction ? { ...req.body.crateTransaction, tenantId } : undefined,
+    };
+    
+    const validatedData = this.validateZodSchema(salesInvoiceValidation.updateSalesInvoice, requestData);
+
+    const { invoice, items, crateTransaction } = validatedData;
+    
+    // Ensure invoiceDate is a Date object
+    const processedInvoice = {
+      ...invoice,
+      invoiceDate: typeof invoice.invoiceDate === 'string' ? new Date(invoice.invoiceDate) : invoice.invoiceDate
+    };
+    
+    // Ensure crateTransaction transactionDate is a Date object if present
+    const processedCrateTransaction = crateTransaction ? {
+      ...crateTransaction,
+      transactionDate: typeof crateTransaction.transactionDate === 'string' 
+        ? new Date(crateTransaction.transactionDate) 
+        : crateTransaction.transactionDate
+    } : crateTransaction;
+    
+    const result = await this.salesInvoiceModel.updateSalesInvoice(tenantId, id, processedInvoice, items, processedCrateTransaction);
+    
+    res.status(200).json(result);
   }
 
   async markSalesInvoiceAsPaid(req: AuthenticatedRequest, res: Response) {

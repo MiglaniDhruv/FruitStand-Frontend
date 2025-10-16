@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Eye, Trash2, Search, FileText } from "lucide-react";
+import { Plus, Eye, Trash2, Search, FileText, Pencil } from "lucide-react";
 import PurchaseInvoiceModal from "@/components/forms/purchase-invoice-modal";
 import { format } from "date-fns";
 import { authenticatedApiRequest } from "@/lib/auth";
@@ -40,6 +40,7 @@ export default function PurchaseInvoices() {
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithItems | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
     invoiceId: string;
@@ -78,12 +79,32 @@ export default function PurchaseInvoices() {
     },
   });
 
+  const handleCreateNew = () => {
+    try {
+      setEditingInvoice(null);
+      setShowCreateModal(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleCreateNew');
+      toast.error("Error", "Failed to open create invoice form");
+    }
+  };
+
   const handleDelete = (invoice: any) => {
     setDeleteConfirm({
       open: true,
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber
     });
+  };
+
+  const handleEdit = (invoice: InvoiceWithItems) => {
+    try {
+      setEditingInvoice(invoice);
+      setShowCreateModal(true);
+    } catch (error) {
+      logEventHandlerError(error, 'handleEdit');
+      toast.error("Error", "Failed to open edit invoice form");
+    }
   };
 
   const confirmDelete = async () => {
@@ -210,6 +231,17 @@ export default function PurchaseInvoices() {
           >
             <Eye className="h-4 w-4" />
           </Button>
+          {invoice.status === "Unpaid" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleEdit(invoice)}
+              data-testid={`button-edit-${invoice.id}`}
+              title="Edit Invoice"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -322,7 +354,7 @@ export default function PurchaseInvoices() {
                 Manage purchase invoices and track payments
               </p>
             </div>
-            <Button onClick={() => setShowCreateModal(true)} data-testid="button-create-invoice">
+            <Button onClick={handleCreateNew} data-testid="button-create-invoice">
               <Plus className="mr-2 h-4 w-4" />
               Create Invoice
             </Button>
@@ -391,8 +423,10 @@ export default function PurchaseInvoices() {
       </div>
 
       <PurchaseInvoiceModal 
+        key={editingInvoice ? editingInvoice.id : 'create'}
         open={showCreateModal} 
-        onOpenChange={setShowCreateModal} 
+        onOpenChange={setShowCreateModal}
+        invoice={editingInvoice}
       />
       
       <ConfirmationDialog
