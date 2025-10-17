@@ -210,32 +210,38 @@ export default function InvoiceDetailsView({ invoice, payments, onAddPayment, is
         </CardHeader>
         <CardContent>
           {invoice.items && invoice.items.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Rate (₹)</TableHead>
-                  <TableHead>Amount (₹)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoice.items.map((item: any, index: number) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{item.item}</TableCell>
-                    <TableCell>{safeParseFloat(item.weight).toFixed(2)}</TableCell>
-                    <TableCell>₹{safeParseFloat(item.rate).toFixed(2)}</TableCell>
-                    <TableCell>₹{safeParseFloat(item.amount).toLocaleString('en-IN')}</TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Weight</TableHead>
+                    <TableHead>Crates</TableHead>
+                    <TableHead>Boxes</TableHead>
+                    <TableHead>Rate (₹)</TableHead>
+                    <TableHead>Amount (₹)</TableHead>
                   </TableRow>
-                ))}
-                <TableRow className="border-t-2">
-                  <TableCell colSpan={3} className="font-semibold">
-                    {isPurchaseInvoice ? 'Total Selling:' : 'Total Amount:'}
-                  </TableCell>
-                  <TableCell className="font-semibold">₹{getTotalSellingAmount().toLocaleString('en-IN')}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {invoice.items.map((item: any, index: number) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.item}</TableCell>
+                      <TableCell>{safeParseFloat(item.weight).toFixed(2)}</TableCell>
+                      <TableCell>{Math.round(safeParseFloat(item.crates))}</TableCell>
+                      <TableCell>{Math.round(safeParseFloat(item.boxes))}</TableCell>
+                      <TableCell>₹{safeParseFloat(item.rate).toFixed(2)}</TableCell>
+                      <TableCell>₹{safeParseFloat(item.amount).toLocaleString('en-IN')}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2">
+                    <TableCell colSpan={5} className="font-semibold">
+                      {isPurchaseInvoice ? 'Total Selling:' : 'Total Amount:'}
+                    </TableCell>
+                    <TableCell className="font-semibold">₹{getTotalSellingAmount().toLocaleString('en-IN')}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <p className="text-muted-foreground text-center py-8">No items found for this invoice</p>
           )}

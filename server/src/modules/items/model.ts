@@ -87,17 +87,14 @@ export class ItemModel {
       });
     }
 
-    const allowedUnits = ['kg', 'gram', 'litre', 'piece', 'box', 'crate'];
-    if (insertItem.unit && !allowedUnits.includes(insertItem.unit)) {
-      throw new ValidationError('Invalid unit', {
-        unit: `Unit must be one of: ${allowedUnits.join(', ')}`
-      });
-    }
+    // Note: Unit validation is handled by Zod schema (allows: KG, GRAM, LITRE, PIECE, BOX, CRATE - uppercased)
+    // The schema automatically transforms units to uppercase before reaching this point
 
     try {
       return await db.transaction(async (tx) => {
         const itemWithTenant = ensureTenantInsert(insertItem, tenantId);
-        const [item] = await tx.insert(items).values(itemWithTenant).returning();
+        // Type assertion: Zod schema ensures all required fields are present and transformed
+        const [item] = await tx.insert(items).values(itemWithTenant as typeof items.$inferInsert).returning();
         const stockWithTenant = ensureTenantInsert({ itemId: item.id }, tenantId);
         await tx.insert(stock).values(stockWithTenant);
         return item;
@@ -116,17 +113,14 @@ export class ItemModel {
       });
     }
 
-    const allowedUnits = ['kg', 'gram', 'litre', 'piece', 'box', 'crate'];
-    if (insertItem.unit !== undefined && insertItem.unit && !allowedUnits.includes(insertItem.unit)) {
-      throw new ValidationError('Invalid unit', {
-        unit: `Unit must be one of: ${allowedUnits.join(', ')}`
-      });
-    }
+    // Note: Unit validation is handled by Zod schema (allows: KG, GRAM, LITRE, PIECE, BOX, CRATE - uppercased)
+    // The schema automatically transforms units to uppercase before reaching this point
 
     try {
       const [item] = await db
         .update(items)
-        .set(insertItem)
+        // Type assertion: Zod schema ensures all fields are properly typed and transformed
+        .set(insertItem as Partial<typeof items.$inferInsert>)
         .where(withTenant(items, tenantId, eq(items.id, id)))
         .returning();
       return item || undefined;

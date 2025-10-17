@@ -762,7 +762,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange, invoice }: Pu
                             <SelectContent>
                               {items?.map((item: any) => (
                                 <SelectItem key={item.id} value={item.id}>
-                                  {item.name} - {item.quality} ({item.unit?.charAt(0).toUpperCase() + item.unit?.slice(1) || 'N/A'})
+                                  {item.name} - {item.quality} - {item.vendor?.name || 'Unknown Vendor'}
                                 </SelectItem>
                               ))}
                             </SelectContent>

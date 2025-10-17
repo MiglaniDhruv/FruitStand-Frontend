@@ -546,7 +546,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                     <Input
                       type="number"
                       step="0.01"
-                      {...field}
+                      value={field.value}
                       onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       data-testid="input-paid-amount"
                       inputMode="decimal"
@@ -615,7 +615,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <SelectContent>
                               {items.map((item: any) => (
                                 <SelectItem key={item.id} value={item.id}>
-                                  {item.name} - {item.vendor?.name || 'Unknown Vendor'}
+                                  {item.name} - {item.quality} - {item.vendor?.name || 'Unknown Vendor'}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -635,7 +635,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <Input
                               type="number"
                               step="0.01"
-                              {...field}
+                              value={field.value}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value) || 0;
                                 const itemId = form.watch(`items.${index}.itemId`);
@@ -672,7 +672,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                           <FormControl>
                             <Input
                               type="number"
-                              {...field}
+                              value={field.value}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value) || 0;
                                 const itemId = form.watch(`items.${index}.itemId`);
@@ -709,7 +709,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                           <FormControl>
                             <Input
                               type="number"
-                              {...field}
+                              value={field.value}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value) || 0;
                                 const itemId = form.watch(`items.${index}.itemId`);
@@ -747,7 +747,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                             <Input
                               type="number"
                               step="0.01"
-                              {...field}
+                              value={field.value}
                               onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               data-testid={`input-rate-${index}`}
                               inputMode="decimal"
@@ -826,7 +826,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                         <FormControl>
                           <Input
                             type="number"
-                            {...field}
+                            value={field.value ?? ''}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
                             data-testid="input-crate-quantity"
                             inputMode="numeric"

@@ -861,7 +861,7 @@ export default function Stock() {
                             <SelectContent>
                               {filteredItems?.map((item: ItemWithVendor) => (
                                 <SelectItem key={item.id} value={item.id}>
-                                  {item.name} - {item.quality}
+                                  {item.name} - {item.quality} - {item.vendor?.name || 'Unknown Vendor'}
                                 </SelectItem>
                               ))}
                             </SelectContent>

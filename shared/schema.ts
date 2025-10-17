@@ -32,6 +32,15 @@ export const INVOICE_STATUS = {
 
 export type InvoiceStatus = typeof INVOICE_STATUS[keyof typeof INVOICE_STATUS];
 
+// Helper function for uppercase transformation
+const toUpperCase = (val: string | null | undefined): string | null | undefined => {
+  if (val === null || val === undefined) return val;
+  return val.toUpperCase();
+};
+
+// Helper for nullable + optional + uppercase transformation pattern
+const upperOpt = () => z.string().nullable().optional().transform(toUpperCase);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
@@ -234,6 +243,7 @@ export const stockMovements = pgTable("stock_movements", {
   // TENANT CONSISTENCY INVARIANT: tenantId must match items.tenantId, vendors.tenantId (if not null), retailers.tenantId (if not null), and purchaseInvoices.tenantId (if not null)
 }, (table) => ({
   stockMovementsTenantIdx: index('idx_stock_movements_tenant').on(table.tenantId),
+  stockMovementsPurchaseInvoiceIdx: index('idx_stock_movements_purchase_invoice').on(table.purchaseInvoiceId),
   // Comment 1: Composite foreign keys for tenant-scoped referential integrity
   fkStockMovementsItem: foreignKey({
     name: 'fk_stock_movements_item_tenant',
@@ -565,11 +575,18 @@ export const invoiceShareLinks = pgTable("invoice_share_links", {
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+}).extend({
+  username: z.string().transform(toUpperCase),
+  role: z.string().transform(toUpperCase),
+  name: z.string().transform(toUpperCase),
 });
 
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
+}).extend({
+  name: z.string().transform(toUpperCase),
+  slug: z.string().transform(toUpperCase),
 });
 
 // Phone Number Validation Schema
@@ -584,8 +601,8 @@ export const indianTenDigitPhone = z.string().trim()
 // Tenant Settings Schema - defines the expected structure for tenant settings
 export const tenantSettingsSchema = z.object({
   // Company Information
-  companyName: z.string().min(1).max(255).optional(),
-  address: z.string().max(1000).optional(),
+  companyName: z.string().min(1).max(255).transform(toUpperCase).optional(),
+  address: z.string().max(1000).transform(toUpperCase).optional(),
   phone: z.string().max(20).optional(),
   email: z.string().email().optional(),
   
@@ -639,16 +656,22 @@ export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
 export const insertVendorSchema = createInsertSchema(vendors)
   .omit({ id: true, balance: true, crateBalance: true, createdAt: true })
-  .extend({ phone: indianTenDigitPhone });
+  .extend({ phone: indianTenDigitPhone })
+  .extend({
+    name: z.string().transform(toUpperCase),
+    address: upperOpt(),
+  });
 
-export const insertItemSchema = createInsertSchema(items, {
+export const insertItemSchema = z.object({
+  name: z.string().min(1, "Name is required").transform(toUpperCase),
+  quality: z.string().min(1, "Quality is required").transform(toUpperCase),
   unit: z.enum(["box", "crate", "kgs"], {
     required_error: "Unit is required",
     invalid_type_error: "Unit must be box, crate, or kgs"
-  })
-}).omit({
-  id: true,
-  createdAt: true,
+  }).transform(toUpperCase),
+  vendorId: z.string().uuid("Valid vendor ID is required"),
+  isActive: z.boolean().default(true),
+  tenantId: z.string().uuid()
 });
 
 export const insertBankAccountSchema = createInsertSchema(bankAccounts, {
@@ -659,7 +682,11 @@ export const insertBankAccountSchema = createInsertSchema(bankAccounts, {
   }).refine((val) => {
     const balanceNum = parseFloat(val);
     return !isNaN(balanceNum) && balanceNum >= 0;
-  }, "Balance must be a valid non-negative number")
+  }, "Balance must be a valid non-negative number"),
+  name: z.string().transform(toUpperCase),
+  accountNumber: z.string().transform(toUpperCase),
+  bankName: z.string().transform(toUpperCase),
+  ifscCode: upperOpt(),
 }).omit({
   id: true,
   createdAt: true,
@@ -674,6 +701,11 @@ export const updateBankAccountSchema = createInsertSchema(bankAccounts).omit({
   id: true,
   balance: true,
   createdAt: true,
+}).extend({
+  name: z.string().transform(toUpperCase),
+  accountNumber: z.string().transform(toUpperCase),
+  bankName: z.string().transform(toUpperCase),
+  ifscCode: upperOpt(),
 });
 
 export const insertPurchaseInvoiceSchema = createInsertSchema(purchaseInvoices, {
@@ -701,6 +733,10 @@ export const insertPaymentSchema = createInsertSchema(payments, {
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  chequeNumber: upperOpt(),
+  upiReference: upperOpt(),
+  notes: upperOpt(),
 });
 
 export const insertStockSchema = createInsertSchema(stock).omit({
@@ -715,11 +751,18 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements, {
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  referenceNumber: upperOpt(),
+  notes: upperOpt(),
 });
 
 export const insertRetailerSchema = createInsertSchema(retailers)
   .omit({ id: true, balance: true, udhaaarBalance: true, shortfallBalance: true, crateBalance: true, createdAt: true })
-  .extend({ phone: indianTenDigitPhone });
+  .extend({ phone: indianTenDigitPhone })
+  .extend({
+    name: z.string().transform(toUpperCase),
+    address: upperOpt(),
+  });
 
 export const insertSalesInvoiceSchema = createInsertSchema(salesInvoices, {
   invoiceDate: z.union([z.string(), z.date()]).transform((val) => 
@@ -734,6 +777,8 @@ export const insertSalesInvoiceSchema = createInsertSchema(salesInvoices, {
   shortfallAmount: true,
   status: true,
   createdAt: true,
+}).extend({
+  notes: upperOpt(),
 });
 
 export const insertSalesInvoiceItemSchema = createInsertSchema(salesInvoiceItems).omit({
@@ -749,6 +794,11 @@ export const insertSalesPaymentSchema = createInsertSchema(salesPayments, {
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  chequeNumber: upperOpt(),
+  upiReference: upperOpt(),
+  paymentLinkId: upperOpt(),
+  notes: upperOpt(),
 });
 
 export const insertVendorPaymentSchema = z.object({
@@ -759,9 +809,9 @@ export const insertVendorPaymentSchema = z.object({
     typeof val === 'string' ? new Date(val) : val
   ),
   bankAccountId: z.string().uuid().optional(),
-  chequeNumber: z.string().optional(),
-  upiReference: z.string().optional(),
-  notes: z.string().optional(),
+  chequeNumber: z.string().optional().transform(toUpperCase),
+  upiReference: z.string().optional().transform(toUpperCase),
+  notes: z.string().optional().transform(toUpperCase),
 }).refine((data) => {
   if (data.paymentMode === 'Bank' && !data.bankAccountId) {
     return false;
@@ -785,10 +835,10 @@ export const insertRetailerPaymentSchema = z.object({
     typeof val === 'string' ? new Date(val) : val
   ),
   bankAccountId: z.string().uuid().optional(),
-  chequeNumber: z.string().optional(),
-  upiReference: z.string().optional(),
-  paymentLinkId: z.string().optional(),
-  notes: z.string().optional(),
+  chequeNumber: z.string().optional().transform(toUpperCase),
+  upiReference: z.string().optional().transform(toUpperCase),
+  paymentLinkId: z.string().optional().transform(toUpperCase),
+  notes: z.string().optional().transform(toUpperCase),
 }).refine((data) => {
   if (data.paymentMode === 'Bank' && !data.bankAccountId) {
     return false;
@@ -816,7 +866,7 @@ export const insertBankDepositSchema = z.object({
     }
     return val;
   }),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().min(1, "Description is required").transform(toUpperCase),
   source: z.enum(['cash', 'external'], {
     errorMap: () => ({ message: "Source must be either 'cash' or 'external'" })
   })
@@ -836,7 +886,7 @@ export const insertBankWithdrawalSchema = z.object({
     }
     return val;
   }),
-  description: z.string().min(1, "Description is required")
+  description: z.string().min(1, "Description is required").transform(toUpperCase)
 }).refine((data) => {
   const amount = parseFloat(data.amount);
   return !isNaN(amount) && amount > 0;
@@ -877,7 +927,14 @@ export const insertCrateTransactionSchema = createInsertSchema(crateTransactions
   transactionDate: z.union([z.string(), z.date()]).transform((val) => 
     typeof val === 'string' ? new Date(val) : val
   ),
-  quantity: z.number().int().positive("Quantity must be a positive integer"),
+  quantity: z.union([z.string(), z.number()]).transform((val) => {
+    const num = typeof val === 'string' ? parseInt(val, 10) : val;
+    if (isNaN(num) || num <= 0) {
+      throw new Error("Quantity must be a positive integer");
+    }
+    return num;
+  }),
+  notes: z.string().nullable().optional().transform(toUpperCase),
 }).omit({
   id: true,
   createdAt: true,
@@ -904,6 +961,9 @@ export const insertCrateTransactionSchema = createInsertSchema(crateTransactions
 export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
   id: true,
   createdAt: true,
+}).extend({
+  name: z.string().transform(toUpperCase),
+  description: upperOpt(),
 });
 
 export const insertExpenseSchema = createInsertSchema(expenses, {
@@ -913,6 +973,11 @@ export const insertExpenseSchema = createInsertSchema(expenses, {
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  chequeNumber: upperOpt(),
+  upiReference: upperOpt(),
+  description: z.string().transform(toUpperCase),
+  notes: upperOpt(),
 });
 
 export const insertWhatsAppMessageSchema = createInsertSchema(whatsappMessages, {
@@ -925,6 +990,9 @@ export const insertWhatsAppMessageSchema = createInsertSchema(whatsappMessages, 
 }).omit({
   id: true,
   createdAt: true,
+}).extend({
+  referenceNumber: z.string().transform(toUpperCase),
+  errorMessage: upperOpt(),
 });
 
 export const insertWhatsAppCreditTransactionSchema = createInsertSchema(whatsappCreditTransactions).omit({

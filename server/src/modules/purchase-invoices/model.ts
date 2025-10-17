@@ -815,8 +815,9 @@ export class PurchaseInvoiceModel {
           eq(invoiceShareLinks.invoiceType, 'purchase')
         ));
       
-      // Delete stock movements
-      await tx.delete(stockMovements)
+      // Unlink stock movements from this invoice
+      await tx.update(stockMovements)
+        .set({ purchaseInvoiceId: null })
         .where(and(
           withTenant(stockMovements, tenantId),
           eq(stockMovements.purchaseInvoiceId, id)

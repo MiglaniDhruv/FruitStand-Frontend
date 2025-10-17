@@ -64,7 +64,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     defaultValues: {
       name: item?.name || "",
       quality: item?.quality || "",
-      unit: item?.unit || "crate",
+      unit: item?.unit?.toLowerCase() || "crate",
       vendorId: item?.vendorId || "",
       isActive: item?.isActive ?? true,
     },
@@ -77,7 +77,7 @@ export default function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
       form.reset({
         name: item?.name || "",
         quality: item?.quality || "",
-        unit: item?.unit || "crate",
+        unit: item?.unit?.toLowerCase() || "crate",
         vendorId: item?.vendorId || "",
         isActive: item?.isActive ?? true,
       });
