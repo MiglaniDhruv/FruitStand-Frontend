@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, ArrowRight } from "lucide-react";
 import type { FavouriteVendor } from "@/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useLocation } from "wouter";
 
 interface FavouriteVendorsProps {
   vendors: FavouriteVendor[] | undefined;
@@ -30,15 +32,30 @@ const parseCurrency = (currencyString: string): number => {
 
 function FavouriteVendors({ vendors, loading }: FavouriteVendorsProps) {
   const isMobile = useIsMobile();
+  const [location, navigate] = useLocation();
+  
+  // Extract tenant slug from current location
+  const tenantSlug = location.split('/')[1];
 
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5" />
-            Favourite Vendors
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5" />
+              Favourite Vendors
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/vendors`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -64,10 +81,21 @@ function FavouriteVendors({ vendors, loading }: FavouriteVendorsProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5" />
-            Favourite Vendors
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5" />
+              Favourite Vendors
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/vendors`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <EmptyState 
@@ -155,10 +183,21 @@ function FavouriteVendors({ vendors, loading }: FavouriteVendorsProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Star className="h-5 w-5" />
-          Favourite Vendors
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Star className="h-5 w-5" />
+            Favourite Vendors
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => navigate(`/${tenantSlug}/vendors`)}
+            className="text-sm"
+          >
+            View All
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {isMobile ? <MobileCardView /> : <TableView />}

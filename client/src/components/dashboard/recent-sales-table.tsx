@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp } from "lucide-react";
+import { ShoppingBag, ArrowRight, TrendingUp } from "lucide-react";
 import { RecentSale } from "@/types";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useLocation } from "wouter";
 
 interface RecentSalesTableProps {
   sales: RecentSale[] | undefined;
@@ -15,6 +17,11 @@ interface RecentSalesTableProps {
 
 export default function RecentSalesTable({ sales, loading }: RecentSalesTableProps) {
   const isMobile = useIsMobile();
+  const [location, navigate] = useLocation();
+  
+  // Extract tenant slug from current location
+  const tenantSlug = location.split('/')[1];
+  
   // Helper to check if value looks already formatted
   const looksFormatted = (value: string): boolean => {
     return value.includes('₹') || value.includes(',');
@@ -71,10 +78,21 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
     return (
       <Card>
         <CardHeader size="default">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <TrendingUp className="h-5 w-5" />
-            Recent Sales
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <TrendingUp className="h-5 w-5" />
+              Recent Sales
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/sales-invoices`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent size="default">
           <EmptyState 
@@ -103,7 +121,12 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
   const MobileCardView = () => (
     <div className="space-y-4">
       {sales.map((sale) => (
-        <Card key={sale.id} hover className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+        <Card 
+          key={sale.id} 
+          hover 
+          className="hover:bg-muted/50 cursor-pointer transition-colors duration-150"
+          onClick={() => navigate(`/${tenantSlug}/sales-invoices/${sale.id}`)}
+        >
           <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
               <div className="font-medium">{sale.invoiceNumber}</div>
@@ -147,7 +170,11 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
         </TableHeader>
         <TableBody>
           {sales.map((sale) => (
-            <TableRow key={sale.id} className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+            <TableRow 
+              key={sale.id} 
+              className="hover:bg-muted/50 cursor-pointer transition-colors duration-150"
+              onClick={() => navigate(`/${tenantSlug}/sales-invoices/${sale.id}`)}
+            >
               <TableCell className="text-xs sm:text-sm font-medium">{sale.invoiceNumber}</TableCell>
               <TableCell className="text-xs sm:text-sm text-muted-foreground">
                 {format(new Date(sale.invoiceDate), "MMM dd, yyyy")}
@@ -169,10 +196,21 @@ export default function RecentSalesTable({ sales, loading }: RecentSalesTablePro
   return (
     <Card>
       <CardHeader size="default" className="py-5 sm:py-7">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-          <TrendingUp className="h-5 w-5" />
-          Recent Sales
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <TrendingUp className="h-5 w-5" />
+            Recent Sales
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => navigate(`/${tenantSlug}/sales-invoices`)}
+            className="text-sm"
+          >
+            View All
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent size="default" className="pb-5 sm:pb-7">
         {isMobile ? <MobileCardView /> : <TableView />}

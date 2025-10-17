@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, ArrowRight } from "lucide-react";
 import { RecentPurchase } from "@/types";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useLocation } from "wouter";
 
 interface RecentPurchasesTableProps {
   purchases: RecentPurchase[] | undefined;
@@ -15,6 +17,11 @@ interface RecentPurchasesTableProps {
 
 export default function RecentPurchasesTable({ purchases, loading }: RecentPurchasesTableProps) {
   const isMobile = useIsMobile();
+  const [location, navigate] = useLocation();
+  
+  // Extract tenant slug from current location
+  const tenantSlug = location.split('/')[1];
+  
   // Helper to check if value looks already formatted
   const looksFormatted = (value: string): boolean => {
     return value.includes('₹') || value.includes(',');
@@ -34,10 +41,21 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
     return (
       <Card>
         <CardHeader size="default" className="py-5 sm:py-7">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <ShoppingCart className="h-5 w-5" />
-            Recent Purchases
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <ShoppingCart className="h-5 w-5" />
+              Recent Purchases
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/purchase-invoices`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent size="default" className="pb-5 sm:pb-7">
           <Table>
@@ -71,10 +89,21 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
     return (
       <Card>
         <CardHeader size="default" className="py-5 sm:py-7">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <ShoppingCart className="h-5 w-5" />
-            Recent Purchases
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <ShoppingCart className="h-5 w-5" />
+              Recent Purchases
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/purchase-invoices`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent size="default" className="pb-5 sm:pb-7">
           <EmptyState 
@@ -103,7 +132,12 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
   const MobileCardView = () => (
     <div className="space-y-4">
       {purchases.map((purchase) => (
-        <Card key={purchase.id} hover className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+        <Card 
+          key={purchase.id} 
+          hover 
+          className="hover:bg-muted/50 cursor-pointer transition-colors duration-150"
+          onClick={() => navigate(`/${tenantSlug}/purchase-invoices/${purchase.id}`)}
+        >
           <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
               <div className="font-medium">{purchase.invoiceNumber}</div>
@@ -147,7 +181,11 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
         </TableHeader>
         <TableBody>
           {purchases.map((purchase) => (
-            <TableRow key={purchase.id} className="hover:bg-muted/50 cursor-pointer transition-colors duration-150">
+            <TableRow 
+              key={purchase.id} 
+              className="hover:bg-muted/50 cursor-pointer transition-colors duration-150"
+              onClick={() => navigate(`/${tenantSlug}/purchase-invoices/${purchase.id}`)}
+            >
               <TableCell className="text-xs sm:text-sm font-medium">{purchase.invoiceNumber}</TableCell>
               <TableCell className="text-xs sm:text-sm text-muted-foreground">
                 {format(new Date(purchase.invoiceDate), "MMM dd, yyyy")}
@@ -169,10 +207,21 @@ export default function RecentPurchasesTable({ purchases, loading }: RecentPurch
   return (
     <Card>
       <CardHeader size="default" className="py-5 sm:py-7">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-          <ShoppingCart className="h-5 w-5" />
-          Recent Purchases
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <ShoppingCart className="h-5 w-5" />
+            Recent Purchases
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => navigate(`/${tenantSlug}/purchase-invoices`)}
+            className="text-sm"
+          >
+            View All
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent size="default" className="pb-5 sm:pb-7">
         {isMobile ? <MobileCardView /> : <TableView />}

@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, ArrowRight } from "lucide-react";
 import { FavouriteRetailer } from "@/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useLocation } from "wouter";
 
 interface FavouriteRetailersProps {
   retailers: FavouriteRetailer[] | undefined;
@@ -21,6 +23,11 @@ interface FavouriteRetailersProps {
 
 export default function FavouriteRetailers({ retailers, loading }: FavouriteRetailersProps) {
   const isMobile = useIsMobile();
+  const [location, navigate] = useLocation();
+  
+  // Extract tenant slug from current location
+  const tenantSlug = location.split('/')[1];
+  
   // Helper function to parse currency strings for display
   const parseCurrency = (currencyStr: string): number => {
     if (!currencyStr) return 0;
@@ -34,10 +41,21 @@ export default function FavouriteRetailers({ retailers, loading }: FavouriteReta
     return (
       <Card>
         <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Star className="w-5 h-5 text-yellow-400 fill-current" />
-            Favourite Retailers
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Star className="w-5 h-5 text-yellow-400 fill-current" />
+              Favourite Retailers
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/retailers`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           <div className="overflow-x-auto">
@@ -73,10 +91,21 @@ export default function FavouriteRetailers({ retailers, loading }: FavouriteReta
     return (
       <Card>
         <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Star className="w-5 h-5 text-yellow-400 fill-current" />
-            Favourite Retailers
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Star className="w-5 h-5 text-yellow-400 fill-current" />
+              Favourite Retailers
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => navigate(`/${tenantSlug}/retailers`)}
+              className="text-sm"
+            >
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           <EmptyState 
@@ -170,10 +199,21 @@ export default function FavouriteRetailers({ retailers, loading }: FavouriteReta
   return (
     <Card>
       <CardHeader className="px-4 py-4 sm:px-6 sm:py-6">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-          <Star className="w-5 h-5 text-yellow-400 fill-current" />
-          Favourite Retailers
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Star className="w-5 h-5 text-yellow-400 fill-current" />
+            Favourite Retailers
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => navigate(`/${tenantSlug}/retailers`)}
+            className="text-sm"
+          >
+            View All
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
         {isMobile ? <MobileCardView /> : <TableView />}
