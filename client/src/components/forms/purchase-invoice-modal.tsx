@@ -161,7 +161,26 @@ export default function PurchaseInvoiceModal({ open, onOpenChange, invoice }: Pu
           rate: item.rate.toString(),
           amount: item.amount.toString(),
         })));
-        form.setValue('commission', (invoice.commission ?? 0).toString());
+        
+        // Calculate commission rate from stored amount
+        const commissionAmount = parseFloat((invoice.commission ?? 0).toString()) || 0;
+        const totalSellingValue = parseFloat(invoice.totalSelling.toString()) || 0;
+        let commissionRate: number;
+        
+        if (commissionAmount === 0) {
+          commissionRate = 0;
+        } else if (totalSellingValue > 0) {
+          // Reverse calculation: rate = (amount / totalSelling) * 100
+          commissionRate = (commissionAmount / totalSellingValue) * 100;
+        } else {
+          // Fallback to tenant's default commission rate when totalSelling is 0
+          commissionRate = parseFloat(defaultCommissionRate);
+        }
+        
+        // Clamp the rate between 0 and 100 and format to 2 decimal places
+        const finalRate = Math.max(0, Math.min(100, commissionRate));
+        form.setValue('commission', finalRate.toFixed(2));
+        
         form.setValue('labour', (invoice.labour ?? 0).toString());
         form.setValue('truckFreight', (invoice.truckFreight ?? 0).toString());
         form.setValue('crateFreight', (invoice.crateFreight ?? 0).toString());
