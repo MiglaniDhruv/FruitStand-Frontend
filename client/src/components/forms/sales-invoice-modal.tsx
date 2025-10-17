@@ -249,16 +249,24 @@ export default function SalesInvoiceModal({
   // Calculation helper functions
   const getQuantityForCalculation = (item: any) => {
     try {
-      const weight = Number(item.weight) || 0;
-      const crates = Number(item.crates) || 0;
-      const boxes = Number(item.boxes) || 0;
-
-      if (weight > 0) return weight;
-      if (crates > 0 || boxes > 0) return crates + boxes;
-      return 0; // Changed from 1 to 0 to prevent accidental charges
+      const itemId = item.itemId;
+      if (!itemId) return 0;
+      
+      const itemUnit = getItemUnit(itemId);
+      
+      // Calculate based on the item's unit
+      if (itemUnit === "KGS") {
+        return Number(item.weight) || 0;
+      } else if (itemUnit === "BOX") {
+        return Number(item.boxes) || 0;
+      } else if (itemUnit === "CRATE") {
+        return Number(item.crates) || 0;
+      }
+      
+      return 0;
     } catch (error) {
       logCalculationError(error, "getQuantityForCalculation", { item });
-      return 0; // Changed from 1 to 0 to prevent accidental charges
+      return 0;
     }
   };
 
@@ -313,7 +321,7 @@ export default function SalesInvoiceModal({
     }
   };
 
-  const getItemUnit = (itemId: string): "box" | "crate" | "kgs" | null => {
+  const getItemUnit = (itemId: string): "BOX" | "CRATE" | "KGS" | null => {
     try {
       const item = items.find((i: any) => i.id === itemId);
       return item?.unit || null;
