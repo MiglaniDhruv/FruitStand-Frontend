@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, DollarSign, Star, Users, Trash2 } from "lucide-react";
+import { Search, Plus, Edit, DollarSign, Star, Users } from "lucide-react";
 import VendorForm from "@/components/forms/vendor-form";
 import VendorPaymentForm from "@/components/forms/vendor-payment-form";
 import { useToast } from "@/hooks/use-toast";
@@ -25,8 +25,7 @@ import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";
-import ConfirmationDialog from "@/components/ui/confirmation-dialog";
-import { useOptimisticMutation, optimisticDelete, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
+import { useOptimisticMutation, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 
 export default function Vendors() {
   const [paginationOptions, setPaginationOptions] = useState<PaginationOptions>({
@@ -42,15 +41,6 @@ export default function Vendors() {
   const [editingVendor, setEditingVendor] = useState<any>(null);
   const [showVendorPaymentModal, setShowVendorPaymentModal] = useState(false);
   const [selectedVendorForPayment, setSelectedVendorForPayment] = useState<any>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    open: boolean;
-    vendorId: string;
-    vendorName: string;
-  }>({
-    open: false,
-    vendorId: "",
-    vendorName: ""
-  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -102,25 +92,6 @@ export default function Vendors() {
       });
     },
   });
-
-  const deleteVendorMutation = useOptimisticMutation<void, string>({
-    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/vendors/${id}`); },
-    queryKey: ["/api/vendors", paginationOptions],
-    updateFn: (old, id) => optimisticDelete(old, id),
-    onSuccess: () => {
-      toast({
-        title: "Vendor deleted",
-        description: "Vendor has been deleted successfully",
-      });
-    },
-    onError: (error) => {
-      logMutationError(error, 'deleteVendor');
-      toast.error("Error", error.message || "Failed to delete vendor", {
-        onRetry: () => deleteVendorMutation.mutateAsync(deleteVendorMutation.variables!),
-      });
-    },
-  });
-
 
   const handlePageChange = (page: number) => {
     setPaginationOptions(prev => ({ ...prev, page }));
@@ -226,18 +197,6 @@ export default function Vendors() {
           >
             <Edit className="h-4 w-4" />
           </Button>
-          <PermissionGuard permission={PERMISSIONS.MANAGE_VENDORS}>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDelete(vendor)}
-              data-testid={`button-delete-vendor-${vendor.id}`}
-              title="Delete Vendor"
-              disabled={deleteVendorMutation.isPending}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </PermissionGuard>
         </div>
       ),
     },
@@ -312,32 +271,6 @@ export default function Vendors() {
   const handleCloseVendorPaymentModal = () => {
     setShowVendorPaymentModal(false);
     setSelectedVendorForPayment(null);
-  };
-
-  const handleDelete = (vendor: any) => {
-    setDeleteConfirm({
-      open: true,
-      vendorId: vendor.id,
-      vendorName: vendor.name
-    });
-  };
-
-  const confirmDelete = async () => {
-    try {
-      if (!deleteConfirm.vendorId) {
-        throw new Error('Invalid vendor ID');
-      }
-      
-      await deleteVendorMutation.mutateAsync(deleteConfirm.vendorId);
-      setDeleteConfirm({ open: false, vendorId: "", vendorName: "" });
-    } catch (error) {
-      logEventHandlerError(error, 'confirmDelete', { vendorId: deleteConfirm.vendorId });
-      toast({
-        title: "Error",
-        description: "Failed to delete vendor",
-        variant: "destructive",
-      });
-    }
   };
 
   if (isLoading) {
@@ -471,16 +404,6 @@ export default function Vendors() {
         onOpenChange={handleCloseVendorPaymentModal}
         vendorId={selectedVendorForPayment?.id || ""}
         vendorName={selectedVendorForPayment?.name}
-      />
-      
-      <ConfirmationDialog
-        open={deleteConfirm.open}
-        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, vendorId: "", vendorName: "" })}
-        title="Delete Vendor"
-        description={`Are you sure you want to delete "${deleteConfirm.vendorName}"? This action cannot be undone.`}
-        variant="destructive"
-        onConfirm={confirmDelete}
-        isLoading={deleteVendorMutation.isPending}
       />
     </AppLayout>
   );

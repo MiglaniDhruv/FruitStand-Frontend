@@ -30,12 +30,11 @@ import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { logEventHandlerError, logMutationError, logFormError } from "@/lib/error-logger";
 import { z } from "zod";
-import { Plus, Edit, Trash2, Users, TrendingUp, IndianRupee, Package, DollarSign, Search, Star } from "lucide-react";
+import { Plus, Edit, Users, TrendingUp, IndianRupee, Package, DollarSign, Search, Star } from "lucide-react";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";
-import ConfirmationDialog from "@/components/ui/confirmation-dialog";
-import { useOptimisticMutation, optimisticDelete, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
+import { useOptimisticMutation, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
 
 const retailerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -67,15 +66,6 @@ export default function RetailerManagement() {
   const [searchInput, setSearchInput] = useState("");
   const [showRetailerPaymentModal, setShowRetailerPaymentModal] = useState(false);
   const [selectedRetailerForPayment, setSelectedRetailerForPayment] = useState<any>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    open: boolean;
-    retailerId: string;
-    retailerName: string;
-  }>({
-    open: false,
-    retailerId: "",
-    retailerName: ""
-  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -179,26 +169,6 @@ export default function RetailerManagement() {
     },
   });
 
-  const deleteRetailerMutation = useOptimisticMutation<string, string>({
-    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/retailers/${id}`); return id; },
-    queryKey: ["/api/retailers", paginationOptions],
-    updateFn: (old, id) => optimisticDelete(old, id),
-    onSuccess: () => { 
-      toast({
-        title: "Retailer deleted", 
-        description: "Retailer has been deleted successfully"
-      }); 
-      queryClient.invalidateQueries({ queryKey: ["/api/retailers/stats"] }); 
-    },
-    onError: (e) => {
-      logMutationError(e, 'deleteRetailer');
-      const error = e as Error;
-      toast.error("Error", error.message || "Failed to delete retailer", {
-        onRetry: () => deleteRetailerMutation.mutateAsync(deleteRetailerMutation.variables!),
-      });
-    },
-  });
-
   const toggleFavouriteMutation = useOptimisticMutation<any, string>({
     mutationFn: async (id) => {
       const response = await authenticatedApiRequest("PATCH", `/api/retailers/${id}/favourite`);
@@ -249,32 +219,6 @@ export default function RetailerManagement() {
       toast({
         title: "Error",
         description: "Failed to open retailer for editing",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = (retailer: any) => {
-    setDeleteConfirm({
-      open: true,
-      retailerId: retailer.id,
-      retailerName: retailer.name
-    });
-  };
-
-  const confirmDelete = async () => {
-    try {
-      if (!deleteConfirm.retailerId) {
-        throw new Error('Invalid retailer ID');
-      }
-      
-      await deleteRetailerMutation.mutateAsync(deleteConfirm.retailerId);
-      setDeleteConfirm({ open: false, retailerId: "", retailerName: "" });
-    } catch (error) {
-      logEventHandlerError(error, 'confirmDelete', { retailerId: deleteConfirm.retailerId });
-      toast({
-        title: "Error",
-        description: "Failed to delete retailer",
         variant: "destructive",
       });
     }
@@ -392,12 +336,6 @@ export default function RetailerManagement() {
     await queryClient.refetchQueries({ queryKey: ["/api/retailers"] });
   };
 
-  const handleSwipeDelete = async (retailer: any) => {
-    if (retailer && retailer.id) {
-      handleDelete(retailer);
-    }
-  };
-
   // Extract retailers and metadata from paginated result
   const retailers = retailersResult?.data || [];
   const paginationMetadata = retailersResult?.pagination;
@@ -489,16 +427,6 @@ export default function RetailerManagement() {
             title="Edit Retailer"
           >
             <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDelete(row)}
-            data-testid={`button-delete-${value}`}
-            title="Delete Retailer"
-            disabled={deleteRetailerMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -673,8 +601,6 @@ export default function RetailerManagement() {
                 searchTerm={searchInput}
                 hasActiveFilters={false}
                 onRefresh={handleRefresh}
-                enableSwipeToDelete={true}
-                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>
@@ -805,15 +731,5 @@ export default function RetailerManagement() {
         onOpenChange={handleCloseRetailerPaymentModal}
         retailerId={selectedRetailerForPayment?.id || ""}
         retailerName={selectedRetailerForPayment?.name}
-      />
-      
-      <ConfirmationDialog
-        open={deleteConfirm.open}
-        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, retailerId: "", retailerName: "" })}
-        title="Delete Retailer"
-        description={`Are you sure you want to delete "${deleteConfirm.retailerName}"? This action cannot be undone.`}
-        variant="destructive"
-        onConfirm={confirmDelete}
-        isLoading={deleteRetailerMutation.isPending}
       />
     </AppLayout>);}
