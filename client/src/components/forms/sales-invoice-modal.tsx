@@ -562,25 +562,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
 
             {/* Invoice items section */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Invoice Items</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => append({
-                    itemId: "",
-                    weight: 0,
-                    crates: 0,
-                    boxes: 0,
-                    rate: 0,
-                  })}
-                  data-testid="button-add-item"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Item
-                </Button>
-              </div>
+              <h3 className="text-lg font-medium">Invoice Items</h3>
 
               {fields.map((field, index) => (
                 <div key={field.id} className="border rounded-lg p-3 sm:p-4 space-y-4">
@@ -784,6 +766,24 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                   )}
                 </div>
               ))}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({
+                  itemId: "",
+                  weight: 0,
+                  crates: 0,
+                  boxes: 0,
+                  rate: 0,
+                })}
+                data-testid="button-add-item"
+                className="w-full sm:w-auto"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Item
+              </Button>
             </div>
 
             {/* Total amount display */}

@@ -729,20 +729,7 @@ export default function PurchaseInvoiceModal({ open, onOpenChange, invoice }: Pu
             {/* Invoice Items */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base sm:text-lg">Invoice Items</CardTitle>
-                  <Button 
-                    type="button" 
-                    onClick={addItem}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    data-testid="button-add-item"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Item</span>
-                  </Button>
-                </div>
+                <CardTitle className="text-base sm:text-lg">Invoice Items</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
@@ -897,6 +884,18 @@ export default function PurchaseInvoiceModal({ open, onOpenChange, invoice }: Pu
                     </div>
                   </div>
                 ))}
+
+                <Button 
+                  type="button" 
+                  onClick={addItem}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2 w-full sm:w-auto"
+                  data-testid="button-add-item"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Item</span>
+                </Button>
               </CardContent>
             </Card>
 
