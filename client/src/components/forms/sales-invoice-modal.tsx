@@ -1,6 +1,10 @@
 import React, { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useOptimisticMutation, optimisticCreate, optimisticUpdate } from "@/hooks/use-optimistic-mutation";
+import {
+  useOptimisticMutation,
+  optimisticCreate,
+  optimisticUpdate,
+} from "@/hooks/use-optimistic-mutation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
@@ -52,17 +57,21 @@ const salesInvoiceItemSchema = z.object({
   // amount field removed - it's derived from rate * quantity
 });
 
-const crateTransactionSchema = z.object({
-  enabled: z.boolean().default(false),
-  quantity: z.number().min(1, "Quantity must be at least 1").optional(),
-}).refine((data) => !data.enabled || data.quantity, {
-  message: "Quantity is required when crate transaction is enabled",
-  path: ["quantity"],
-});
+const crateTransactionSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    quantity: z.number().min(1, "Quantity must be at least 1").optional(),
+  })
+  .refine((data) => !data.enabled || data.quantity, {
+    message: "Quantity is required when crate transaction is enabled",
+    path: ["quantity"],
+  });
 
 const invoiceFormSchema = z.object({
   invoice: salesInvoiceSchema,
-  items: z.array(salesInvoiceItemSchema).min(1, "At least one item is required"),
+  items: z
+    .array(salesInvoiceItemSchema)
+    .min(1, "At least one item is required"),
   crateTransaction: crateTransactionSchema.optional(),
 });
 
@@ -75,7 +84,11 @@ interface SalesInvoiceModalProps {
   editingInvoice?: any;
 }
 
-export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }: SalesInvoiceModalProps) {
+export default function SalesInvoiceModal({
+  open,
+  onOpenChange,
+  editingInvoice,
+}: SalesInvoiceModalProps) {
   const queryClient = useQueryClient();
   const [showSuccessAnimation, setShowSuccessAnimation] = React.useState(false);
 
@@ -121,7 +134,9 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       form.reset({
         invoice: {
           retailerId: editingInvoice.retailerId || "",
-          invoiceDate: editingInvoice.invoiceDate ? format(new Date(editingInvoice.invoiceDate), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+          invoiceDate: editingInvoice.invoiceDate
+            ? format(new Date(editingInvoice.invoiceDate), "yyyy-MM-dd")
+            : format(new Date(), "yyyy-MM-dd"),
           totalAmount: Number(editingInvoice.totalAmount) || 0,
           paidAmount: Number(editingInvoice.paidAmount) || 0,
           balanceAmount: Number(editingInvoice.balanceAmount) || 0,
@@ -134,13 +149,15 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
           crates: Number(item.crates) || 0,
           boxes: Number(item.boxes) || 0,
           rate: Number(item.rate) || 0,
-        })) || [{
-          itemId: "",
-          weight: 0,
-          crates: 0,
-          boxes: 0,
-          rate: 0,
-        }],
+        })) || [
+          {
+            itemId: "",
+            weight: 0,
+            crates: 0,
+            boxes: 0,
+            rate: 0,
+          },
+        ],
         crateTransaction: {
           enabled: false,
           quantity: undefined,
@@ -185,7 +202,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         sortBy: "name",
         sortOrder: "asc",
       });
-      const response = await authenticatedApiRequest("GET", `/api/retailers?${params}`);
+      const response = await authenticatedApiRequest(
+        "GET",
+        `/api/retailers?${params}`
+      );
       return response.json() as Promise<PaginatedResult<any>>;
     },
     enabled: open,
@@ -200,7 +220,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         sortBy: "name",
         sortOrder: "asc",
       });
-      const response = await authenticatedApiRequest("GET", `/api/items?${params}`);
+      const response = await authenticatedApiRequest(
+        "GET",
+        `/api/items?${params}`
+      );
       return response.json() as Promise<PaginatedResult<any>>;
     },
     enabled: open,
@@ -209,7 +232,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
   const stockQuery = useQuery({
     queryKey: ["/api/stock"],
     queryFn: async () => {
-      const response = await authenticatedApiRequest("GET", "/api/stock?limit=1000");
+      const response = await authenticatedApiRequest(
+        "GET",
+        "/api/stock?limit=1000"
+      );
       return response.json();
     },
     enabled: open,
@@ -226,7 +252,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       const weight = Number(item.weight) || 0;
       const crates = Number(item.crates) || 0;
       const boxes = Number(item.boxes) || 0;
-      
+
       if (weight > 0) return weight;
       if (crates > 0 || boxes > 0) return crates + boxes;
       return 0; // Changed from 1 to 0 to prevent accidental charges
@@ -240,7 +266,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
     try {
       const numericRate = Number(rate) || 0;
       if (numericRate <= 0) return 0;
-      
+
       const quantity = getQuantityForCalculation(item);
       return numericRate * quantity;
     } catch (error) {
@@ -270,19 +296,19 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         return {
           crates: 0,
           boxes: 0,
-          kgs: 0
+          kgs: 0,
         };
       }
       return {
         crates: Number(stock.quantityInCrates) || 0,
         boxes: Number(stock.quantityInBoxes) || 0,
-        kgs: Number(stock.quantityInKgs) || 0
+        kgs: Number(stock.quantityInKgs) || 0,
       };
     } catch (error) {
       return {
         crates: 0,
         boxes: 0,
-        kgs: 0
+        kgs: 0,
       };
     }
   };
@@ -329,10 +355,10 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       // Calculate total amount
       const totalAmount = calculateTotalAmount();
       const paidAmount = Number(data.invoice.paidAmount) || 0;
-      
+
       // Clamp balance amount to minimum 0 (guard against overpayment)
       const balanceAmount = Math.max(0, totalAmount - paidAmount);
-      
+
       // Derive status from payment amounts
       let status: "Pending" | "Partial" | "Paid";
       if (paidAmount <= 0) {
@@ -376,12 +402,18 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
 
       // Determine endpoint and method
       const isEditing = !!editingInvoice;
-      const endpoint = isEditing ? `/api/sales-invoices/${editingInvoice.id}` : "/api/sales-invoices";
+      const endpoint = isEditing
+        ? `/api/sales-invoices/${editingInvoice.id}`
+        : "/api/sales-invoices";
       const method = isEditing ? "PUT" : "POST";
 
-      const response = await authenticatedApiRequest(method, endpoint, invoiceData);
+      const response = await authenticatedApiRequest(
+        method,
+        endpoint,
+        invoiceData
+      );
       if (!response.ok) {
-        throw new Error(`Failed to ${isEditing ? 'update' : 'create'} invoice`);
+        throw new Error(`Failed to ${isEditing ? "update" : "create"} invoice`);
       }
       return response.json();
     },
@@ -393,7 +425,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       const totalAmount = calculateTotalAmount();
       const paidAmount = Number(variables.invoice.paidAmount) || 0;
       const balanceAmount = Math.max(0, totalAmount - paidAmount);
-      
+
       let status: "Pending" | "Partial" | "Paid";
       if (paidAmount <= 0) {
         status = "Pending";
@@ -402,7 +434,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       } else {
         status = "Partial";
       }
-      
+
       const optimisticInvoice: any = {
         id: isEditing ? editingInvoice.id : `temp-${Date.now()}`,
         ...variables.invoice,
@@ -410,7 +442,9 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         paidAmount: paidAmount.toString(),
         balanceAmount: balanceAmount.toString(),
         status,
-        createdAt: isEditing ? editingInvoice.createdAt : new Date().toISOString(),
+        createdAt: isEditing
+          ? editingInvoice.createdAt
+          : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         items: variables.items.map((item: any) => ({
           ...item,
@@ -421,7 +455,7 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
           amount: calculateItemAmount(item.rate, item).toString(),
         })),
       };
-      
+
       // Always call optimistic helpers - they handle undefined old data
       if (isEditing) {
         return optimisticUpdate(old, optimisticInvoice);
@@ -437,21 +471,23 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
         {
           onRetry: () => {
             mutation.mutateAsync(variables);
-          }
+          },
         }
       );
     },
     onSuccess: (data) => {
       const isEditing = !!editingInvoice;
       const crateTransactionEnabled = form.watch("crateTransaction.enabled");
-      
+
       // Trigger success animation
       setShowSuccessAnimation(true);
       setTimeout(() => setShowSuccessAnimation(false), 500);
-      
+
       toast.success(
         "Success",
-        `Invoice ${isEditing ? 'updated' : 'created'} successfully${crateTransactionEnabled ? ' with crate transaction' : ''}`
+        `Invoice ${isEditing ? "updated" : "created"} successfully${
+          crateTransactionEnabled ? " with crate transaction" : ""
+        }`
       );
 
       // Invalidate all related queries to get fresh server data
@@ -485,87 +521,109 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
       fullScreenOnMobile={true}
     >
       <Form {...form}>
-        <form 
-          onSubmit={form.handleSubmit(onSubmit)} 
-          className={`space-y-6 ${showSuccessAnimation ? 'animate-success' : ''}`}
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className={`space-y-6 ${
+            showSuccessAnimation ? "animate-success" : ""
+          }`}
         >
           {/* Invoice details section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="invoice.retailerId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Retailer *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!!editingInvoice}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-retailer">
-                        <SelectValue placeholder="Select retailer" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {retailers.map((retailer: any) => (
-                        <SelectItem key={retailer.id} value={retailer.id}>
-                          {retailer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice.invoiceDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invoice Date *</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="date"
-                      {...field}
-                      data-testid="input-invoice-date"
-                      autoComplete="off"
-                      enterKeyHint="next"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice.paidAmount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Paid Amount</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">
+                Invoice Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="invoice.retailerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retailer *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
                       value={field.value}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                      data-testid="input-paid-amount"
-                      inputMode="decimal"
-                      enterKeyHint="done"
-                      autoComplete="off"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+                      disabled={!!editingInvoice}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-retailer">
+                          <SelectValue placeholder="Select retailer" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {retailers.map((retailer: any) => (
+                          <SelectItem key={retailer.id} value={retailer.id}>
+                            {retailer.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            {/* Invoice items section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Invoice Items</h3>
+              <FormField
+                control={form.control}
+                name="invoice.invoiceDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Invoice Date *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        data-testid="input-invoice-date"
+                        autoComplete="off"
+                        enterKeyHint="next"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
+              <FormField
+                control={form.control}
+                name="invoice.paidAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Paid Amount</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={field.value}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
+                        data-testid="input-paid-amount"
+                        inputMode="decimal"
+                        enterKeyHint="done"
+                        autoComplete="off"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Invoice items section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">
+                Invoice Items
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {fields.map((field, index) => (
-                <div key={field.id} className="border rounded-lg p-3 sm:p-4 space-y-4">
+                <div
+                  key={field.id}
+                  className="border rounded-lg p-3 sm:p-4 space-y-4"
+                >
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Item {index + 1}</h4>
                     {fields.length > 1 && (
@@ -588,16 +646,30 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Item *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
-                              <SelectTrigger data-testid={`select-item-${index}`}>
-                                <SelectValue placeholder={itemsQuery.isLoading ? "Loading..." : itemsQuery.error ? "Error" : "Select item"} />
+                              <SelectTrigger
+                                data-testid={`select-item-${index}`}
+                              >
+                                <SelectValue
+                                  placeholder={
+                                    itemsQuery.isLoading
+                                      ? "Loading..."
+                                      : itemsQuery.error
+                                      ? "Error"
+                                      : "Select item"
+                                  }
+                                />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {items.map((item: any) => (
                                 <SelectItem key={item.id} value={item.id}>
-                                  {item.name} - {item.quality} - {item.vendor?.name || 'Unknown Vendor'}
+                                  {item.name} - {item.quality} -{" "}
+                                  {item.vendor?.name || "Unknown Vendor"}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -620,9 +692,12 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               value={field.value}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value) || 0;
-                                const itemId = form.watch(`items.${index}.itemId`);
-                                const availableStock = getAvailableStock(itemId);
-                                
+                                const itemId = form.watch(
+                                  `items.${index}.itemId`
+                                );
+                                const availableStock =
+                                  getAvailableStock(itemId);
+
                                 if (value > availableStock.kgs) {
                                   toast({
                                     title: "Insufficient Stock",
@@ -657,16 +732,21 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               value={field.value}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value) || 0;
-                                const itemId = form.watch(`items.${index}.itemId`);
-                                const availableStock = getAvailableStock(itemId);
-                                
+                                const itemId = form.watch(
+                                  `items.${index}.itemId`
+                                );
+                                const availableStock =
+                                  getAvailableStock(itemId);
+
                                 if (value > availableStock.crates) {
                                   toast({
                                     title: "Insufficient Stock",
                                     description: `Only ${availableStock.crates} crates available. Cannot enter ${value} crates.`,
                                     variant: "destructive",
                                   });
-                                  field.onChange(Math.floor(availableStock.crates));
+                                  field.onChange(
+                                    Math.floor(availableStock.crates)
+                                  );
                                 } else {
                                   field.onChange(value);
                                 }
@@ -694,16 +774,21 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               value={field.value}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value) || 0;
-                                const itemId = form.watch(`items.${index}.itemId`);
-                                const availableStock = getAvailableStock(itemId);
-                                
+                                const itemId = form.watch(
+                                  `items.${index}.itemId`
+                                );
+                                const availableStock =
+                                  getAvailableStock(itemId);
+
                                 if (value > availableStock.boxes) {
                                   toast({
                                     title: "Insufficient Stock",
                                     description: `Only ${availableStock.boxes} boxes available. Cannot enter ${value} boxes.`,
                                     variant: "destructive",
                                   });
-                                  field.onChange(Math.floor(availableStock.boxes));
+                                  field.onChange(
+                                    Math.floor(availableStock.boxes)
+                                  );
                                 } else {
                                   field.onChange(value);
                                 }
@@ -730,7 +815,9 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                               type="number"
                               step="0.01"
                               value={field.value}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                field.onChange(parseFloat(e.target.value) || 0)
+                              }
                               data-testid={`input-rate-${index}`}
                               inputMode="decimal"
                               enterKeyHint="done"
@@ -745,7 +832,11 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                     <div className="flex flex-col justify-end">
                       <FormLabel>Amount</FormLabel>
                       <div className="h-11 flex items-center text-sm font-medium">
-                        ₹{calculateItemAmount(form.watch(`items.${index}.rate`), form.watch(`items.${index}`)).toFixed(2)}
+                        ₹
+                        {calculateItemAmount(
+                          form.watch(`items.${index}.rate`),
+                          form.watch(`items.${index}`)
+                        ).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -755,11 +846,29 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                     <div className="flex items-center gap-2 text-sm">
                       <Package className="w-4 h-4 text-muted-foreground" />
                       <div>
-                        <span className="font-medium">Available stock for {getItemName(form.watch(`items.${index}.itemId`))}: </span>
+                        <span className="font-medium">
+                          Available stock for{" "}
+                          {getItemName(form.watch(`items.${index}.itemId`))}:{" "}
+                        </span>
                         <span className="text-muted-foreground">
-                          {getAvailableStock(form.watch(`items.${index}.itemId`)).crates} crates, {' '}
-                          {getAvailableStock(form.watch(`items.${index}.itemId`)).boxes} boxes, {' '}
-                          {getAvailableStock(form.watch(`items.${index}.itemId`)).kgs} kgs
+                          {
+                            getAvailableStock(
+                              form.watch(`items.${index}.itemId`)
+                            ).crates
+                          }{" "}
+                          crates,{" "}
+                          {
+                            getAvailableStock(
+                              form.watch(`items.${index}.itemId`)
+                            ).boxes
+                          }{" "}
+                          boxes,{" "}
+                          {
+                            getAvailableStock(
+                              form.watch(`items.${index}.itemId`)
+                            ).kgs
+                          }{" "}
+                          kgs
                         </span>
                       </div>
                     </div>
@@ -771,30 +880,42 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({
-                  itemId: "",
-                  weight: 0,
-                  crates: 0,
-                  boxes: 0,
-                  rate: 0,
-                })}
+                onClick={() =>
+                  append({
+                    itemId: "",
+                    weight: 0,
+                    crates: 0,
+                    boxes: 0,
+                    rate: 0,
+                  })
+                }
                 data-testid="button-add-item"
                 className="w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Item
               </Button>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Total amount display */}
-            <div className="bg-muted p-3 sm:p-4 rounded-lg">
-              <div className="text-base sm:text-lg font-semibold">
-                Total Amount: ₹{calculateTotalAmount().toFixed(2)}
+          {/* Total amount display */}
+          <div className="bg-muted p-3 sm:p-4 rounded-lg">
+            <div className="text-base sm:text-lg font-semibold">
+              Total Amount: ₹{calculateTotalAmount().toFixed(2)}
+            </div>
+          </div>
+
+          {/* Crate Transaction Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Package className="h-5 w-5 text-muted-foreground" />
+                <CardTitle className="text-base sm:text-lg">
+                  Crate Transaction (Optional)
+                </CardTitle>
               </div>
-            </div>
-
-            {/* Crate transaction section */}
-            <div className="space-y-4">
+            </CardHeader>
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="crateTransaction.enabled"
@@ -805,85 +926,109 @@ export default function SalesInvoiceModal({ open, onOpenChange, editingInvoice }
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          data-testid="checkbox-crate-transaction"
                         />
                       </div>
                     </FormControl>
                     <div className="space-y-1 leading-none">
-                      <FormLabel>Add Crate Transaction</FormLabel>
+                      <FormLabel>
+                        Record crate transaction with this invoice
+                      </FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        Automatically track crates given to the retailer
+                      </p>
                     </div>
                   </FormItem>
                 )}
               />
 
               {form.watch("crateTransaction.enabled") && (
-                <div className="space-y-4 pl-4 sm:pl-6">
-                  <FormField
-                    control={form.control}
-                    name="crateTransaction.quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            value={field.value ?? ''}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
-                            data-testid="input-crate-quantity"
-                            inputMode="numeric"
-                            enterKeyHint="done"
-                            autoComplete="off"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Crates will be marked as "Given" to {getRetailerName(form.watch("invoice.retailerId"))}
-                  </p>
-                </div>
+                <FormField
+                  control={form.control}
+                  name="crateTransaction.quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Number of Crates *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          enterKeyHint="done"
+                          autoComplete="off"
+                          placeholder="Enter number of crates"
+                          {...field}
+                          value={field.value || ""}
+                          onChange={(e) =>
+                            field.onChange(
+                              parseInt(e.target.value) || undefined
+                            )
+                          }
+                          data-testid="input-crate-quantity"
+                        />
+                      </FormControl>
+                      <p className="text-sm text-muted-foreground">
+                        Crates will be marked as "Given" to{" "}
+                        {form.watch("invoice.retailerId")
+                          ? getRetailerName(form.watch("invoice.retailerId"))
+                          : "the selected retailer"}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Notes section */}
-            <FormField
-              control={form.control}
-              name="invoice.notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter notes (optional)"
-                      {...field}
-                      data-testid="textarea-notes"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          {/* Notes section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">
+                Additional Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="invoice.notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter notes (optional)"
+                        {...field}
+                        data-testid="textarea-notes"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
-            {/* Form actions */}
-            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                data-testid="button-cancel"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={mutation.isPending}
-                data-testid="button-submit"
-              >
-                {editingInvoice ? "Update Invoice" : "Create Invoice"}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </MobileDrawerModal>
+          {/* Form actions */}
+          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              data-testid="button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={mutation.isPending}
+              data-testid="button-submit"
+            >
+              {editingInvoice ? "Update Invoice" : "Create Invoice"}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </MobileDrawerModal>
   );
 }
