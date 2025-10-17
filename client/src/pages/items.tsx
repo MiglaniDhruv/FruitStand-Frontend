@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { useOptimisticMutation, optimisticDelete } from "@/hooks/use-optimistic-mutation";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2, Package } from "lucide-react";
+import { Search, Plus, Edit, Package } from "lucide-react";
 import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
@@ -22,7 +21,6 @@ import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/sche
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";
-import ConfirmationDialog from "@/components/ui/confirmation-dialog";
 
 type StatusFilter = "all" | "true" | "false";
 
@@ -39,15 +37,6 @@ export default function Items() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    open: boolean;
-    itemId: string;
-    itemName: string;
-  }>({
-    open: false,
-    itemId: "",
-    itemName: ""
-  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -72,27 +61,6 @@ export default function Items() {
     placeholderData: keepPreviousData,
   });
 
-
-
-  const deleteItemMutation = useOptimisticMutation<void, string>({
-    mutationFn: async (id) => { await authenticatedApiRequest("DELETE", `/api/items/${id}`); },
-    queryKey: ["/api/items", paginationOptions, statusFilter],
-    updateFn: (old, id) => optimisticDelete(old, id),
-    onSuccess: () => {
-      toast({
-        title: "Item deleted",
-        description: "Item has been deleted successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/items"] });
-    },
-    onError: (error) => {
-      logMutationError(error, 'deleteItem');
-      toast.error("Error", error.message || "Failed to delete item", {
-        onRetry: () => deleteItemMutation.mutateAsync(deleteItemMutation.variables!),
-      });
-    },
-  });
-
   const handlePageChange = (page: number) => {
     setPaginationOptions(prev => ({ ...prev, page }));
   };
@@ -113,12 +81,6 @@ export default function Items() {
 
   const handleRefresh = async () => {
     await queryClient.refetchQueries({ queryKey: ["/api/items"] });
-  };
-
-  const handleSwipeDelete = async (item: any) => {
-    if (item && item.id) {
-      handleDelete(item);
-    }
   };
   
   const handleSortChange = (sortBy: string, sortOrder: string) => {
@@ -143,32 +105,6 @@ export default function Items() {
       toast({
         title: "Error",
         description: "Failed to open item for editing",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = (item: any) => {
-    setDeleteConfirm({
-      open: true,
-      itemId: item.id,
-      itemName: item.name
-    });
-  };
-
-  const confirmDelete = async () => {
-    try {
-      if (!deleteConfirm.itemId) {
-        throw new Error('Invalid item ID');
-      }
-      
-      await deleteItemMutation.mutateAsync(deleteConfirm.itemId);
-      setDeleteConfirm({ open: false, itemId: "", itemName: "" });
-    } catch (error) {
-      logEventHandlerError(error, 'confirmDelete', { itemId: deleteConfirm.itemId });
-      toast({
-        title: "Error",
-        description: "Failed to delete item",
         variant: "destructive",
       });
     }
@@ -246,16 +182,6 @@ export default function Items() {
             title="Edit Item"
           >
             <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDelete(row)}
-            data-testid={`button-delete-${value}`}
-            title="Delete Item"
-            disabled={deleteItemMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -376,8 +302,6 @@ export default function Items() {
                 searchTerm={searchInput}
                 hasActiveFilters={statusFilter !== 'all'}
                 onRefresh={handleRefresh}
-                enableSwipeToDelete={true}
-                onSwipeDelete={handleSwipeDelete}
               />
             </CardContent>
           </Card>
@@ -388,15 +312,5 @@ export default function Items() {
         open={showForm}
         onOpenChange={handleCloseForm}
         item={editingItem}
-      />
-      
-      <ConfirmationDialog
-        open={deleteConfirm.open}
-        onOpenChange={(open) => !open && setDeleteConfirm({ open: false, itemId: "", itemName: "" })}
-        title="Delete Item"
-        description={`Are you sure you want to delete "${deleteConfirm.itemName}"? This action cannot be undone.`}
-        variant="destructive"
-        onConfirm={confirmDelete}
-        isLoading={deleteItemMutation.isPending}
       />
     </AppLayout>);}
