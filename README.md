@@ -552,4 +552,5 @@ Test the responsive design across different viewports:
 ## License
 
 MIT License - see LICENSE file for details.#   F r u i t S t a n d - F r o n t e n d  
+ #   F r u i t S t a n d - F r o n t e n d  
  
