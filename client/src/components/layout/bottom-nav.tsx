@@ -6,7 +6,7 @@ import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { PermissionGuard } from '@/components/ui/permission-guard';
-import { PERMISSIONS } from '@shared/permissions';
+import { PERMISSIONS } from '../../../shared/permissions';
 
 interface BottomNavProps {
   onCreateSalesInvoiceClick: () => void;

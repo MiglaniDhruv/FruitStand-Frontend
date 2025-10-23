@@ -28,9 +28,9 @@ import BankAccountForm from "@/components/forms/bank-account-form";
 import ManualBankTransactionForm from "@/components/forms/manual-bank-transaction-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { PaginationOptions, PaginatedResult, BankAccount } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, BankAccount } from "../../shared/schema";
 import { PermissionGuard } from "@/components/ui/permission-guard";
-import { PERMISSIONS } from "@shared/permissions";
+import { PERMISSIONS } from "../../shared/permissions";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
 

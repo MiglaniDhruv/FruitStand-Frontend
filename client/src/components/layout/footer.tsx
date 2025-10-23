@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { PermissionGuard } from "@/components/ui/permission-guard";
-import { PERMISSIONS } from "@shared/permissions";
+import { PERMISSIONS } from "../../../shared/permissions";
 import SalesInvoiceModal from "@/components/forms/sales-invoice-modal";
 import PurchaseInvoiceModal from "@/components/forms/purchase-invoice-modal";
 import RetailerPaymentForm from "@/components/forms/retailer-payment-form";

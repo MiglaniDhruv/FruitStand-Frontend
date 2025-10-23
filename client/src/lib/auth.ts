@@ -89,6 +89,8 @@ export interface AuthResponse {
   user: User;
 }
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export const authService = {
   async login(username: string, password: string): Promise<AuthResponse & { redirectTo?: string }> {
     // Extract tenant slug from URL path
@@ -107,19 +109,26 @@ export const authService = {
       throw new Error('Tenant context is required for authentication');
     }
 
-    // Always use tenant-scoped API endpoint
-    const apiEndpoint = `/${tenantSlug}/api/auth/login`;
-    
-    const response = await apiRequest("POST", apiEndpoint, {
-      username,
-      password,
+    // Use full base URL for tenant-scoped login
+    const apiEndpoint = `${BASE_URL}/${tenantSlug}/api/auth/login`;
+
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
     });
+
+    if (!response.ok) {
+      throw new Error(`${response.status}: ${await response.text()}`);
+    }
+
     const data = await response.json();
-    
+
     // Store token and user data (including tenantId) in localStorage
     localStorage.setItem("token", data.token);
     localStorage.setItem("user", JSON.stringify(data.user));
-    
+
     // Always redirect to tenant dashboard
     const redirectTo = `/${tenantSlug}/dashboard`;
     return { ...data, redirectTo };
@@ -161,7 +170,14 @@ export const authService = {
 
   async validateTenantStatus(): Promise<boolean> {
     try {
-      const response = await authenticatedApiRequest("GET", "/api/tenants/current");
+      const response = await fetch(`${BASE_URL}/api/tenants/current`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.getToken()}`,
+        },
+        credentials: 'include',
+      });
       const tenant = await response.json();
       return tenant.isActive;
     } catch (error) {
@@ -175,7 +191,7 @@ export const authService = {
     if (!user || !user.tenantId) {
       return null;
     }
-    
+
     return {
       user,
       tenantId: user.tenantId,
@@ -190,47 +206,31 @@ export const authService = {
   },
 
   async refreshToken(): Promise<AuthResponse> {
-    // Extract the tenant slug from localStorage
     const tenantSlug = localStorage.getItem('currentTenantSlug');
     if (!tenantSlug) {
       throw new Error('Tenant context required for token refresh');
     }
 
-    // Construct the tenant-scoped refresh endpoint URL
-    const refreshUrl = `/${tenantSlug}/api/auth/refresh`;
-    
-    // Make a POST request using fetch directly
+    const refreshUrl = `${BASE_URL}/${tenantSlug}/api/auth/refresh`;
+
     const res = await fetch(refreshUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // Send HttpOnly refresh token cookie
+      credentials: 'include',
     });
 
     if (!res.ok) {
-      if (res.status === 401) {
-        const errorDetails = await parseErrorResponse(res);
-        throw new AuthError(
-          errorDetails.message || 'Refresh token expired or invalid', 
-          401, 
-          undefined, 
-          errorDetails.code
-        );
-      }
-      throw new Error(`Token refresh failed: ${res.statusText}`);
+      const errorText = await res.text();
+      throw new Error(`Token refresh failed: ${res.status} - ${errorText}`);
     }
 
-    // Parse the JSON response to get { token, user }
     const data = await res.json();
-    
-    // Update localStorage with new token and user data
     this.applyNewToken(data.token, data.user);
-    
-    // Dispatch custom event to notify AuthProvider
     window.dispatchEvent(new CustomEvent('auth-token-refreshed'));
-    
     return data;
   },
 };
+
 
 export const authenticatedApiRequest = async (method: string, url: string, data?: unknown, isRetrying = false): Promise<Response> => {
   if (isRetrying) {
