@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/lib/auth";
 import { Apple } from "lucide-react";
-import api from "../api/apiclient"; 
+import api from "../api/apiClient"; 
 
 interface LoginProps {
   redirectTo?: string;
