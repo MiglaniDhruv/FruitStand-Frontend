@@ -32,6 +32,7 @@ const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // needed if your backend uses cookies
 });
+api.get('/api/vendors');
 
 export default api;
 
