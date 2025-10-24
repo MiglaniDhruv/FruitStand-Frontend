@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/lib/auth";
 import { Apple } from "lucide-react";
+import api from "../api/apiclient"; 
 
 interface LoginProps {
   redirectTo?: string;
@@ -13,30 +14,24 @@ interface LoginProps {
 
 export default function Login({ redirectTo }: LoginProps) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ username: "", password: "" });
   const [pageTitle, setPageTitle] = useState("APMC System");
   const [pageDescription, setPageDescription] = useState("Commission Merchant Accounting System");
+  const [apiTestData, setApiTestData] = useState<any>(null); // For testing API
   const { toast } = useToast();
 
   useEffect(() => {
     const match = typeof window !== 'undefined' ? window.location.pathname.match(/^\/([^\/]+)\/login\/?$/) : null;
     const slugFromUrl = match?.[1];
-
     const storedSlug = localStorage.getItem('currentTenantSlug');
     const effectiveSlug = slugFromUrl || storedSlug || null;
 
-    if (slugFromUrl && storedSlug !== slugFromUrl) {
-      localStorage.setItem('currentTenantSlug', slugFromUrl);
-    }
+    if (slugFromUrl && storedSlug !== slugFromUrl) localStorage.setItem('currentTenantSlug', slugFromUrl);
 
     if (effectiveSlug) {
       setPageTitle('Organization Login');
       setPageDescription(`Login to ${effectiveSlug} organization`);
     } else {
-      // Show error if no tenant context is available
       setPageTitle('Missing Organization Context');
       setPageDescription('Please access this page through a valid organization link');
     }
@@ -47,27 +42,31 @@ export default function Login({ redirectTo }: LoginProps) {
     setLoading(true);
 
     try {
+      // ✅ Test API connectivity before login
+      const testResponse = await api.get("/api/vendors");
+      console.log("Vendors API response:", testResponse.data);
+      setApiTestData(testResponse.data); // Optional: display on page
+
+      // Normal login
       const result = await authService.login(formData.username, formData.password);
-      
+
       let finalRedirectTo = redirectTo || result.redirectTo;
       if (!finalRedirectTo) {
         const match = window.location.pathname.match(/^\/([^\/]+)\/login\/?$/);
         const slug = match?.[1] || localStorage.getItem('currentTenantSlug');
         finalRedirectTo = slug ? `/${slug}/dashboard` : '/';
       }
-      
+
       toast({
         title: "Login successful",
         description: "Welcome to APMC System",
       });
-      
-      // Force a full page reload to ensure AuthProvider re-initializes with fresh token
+
       window.location.assign(finalRedirectTo);
     } catch (error) {
       let description = 'Invalid credentials';
       if (error instanceof Error) {
         const raw = error.message;
-        // Try to extract JSON payload after status prefix
         const idx = raw.indexOf(':');
         const maybeJson = idx >= 0 ? raw.slice(idx + 1).trim() : raw;
         try {
@@ -128,15 +127,18 @@ export default function Login({ redirectTo }: LoginProps) {
                 data-testid="input-password"
               />
             </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-              data-testid="button-login"
-            >
+            <Button type="submit" className="w-full" disabled={loading} data-testid="button-login">
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
+
+          {/* Optional: display API test response */}
+          {apiTestData && (
+            <div className="mt-4 p-2 bg-gray-100 rounded">
+              <h3 className="font-semibold">Vendors API Response:</h3>
+              <pre className="text-xs">{JSON.stringify(apiTestData, null, 2)}</pre>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
