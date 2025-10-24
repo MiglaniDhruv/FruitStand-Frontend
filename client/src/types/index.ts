@@ -23,18 +23,6 @@ export interface TenantContext {
   };
   tenant: TenantInfo;
 }
-import axios from 'axios';
-
-// Reads the backend URL from env variable
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-const api = axios.create({
-  baseURL: API_URL,
-  withCredentials: true, // needed if your backend uses cookies
-});
-api.get('/api/vendors');
-
-export default api;
 
 export interface TenantSessionContext {
   user: {

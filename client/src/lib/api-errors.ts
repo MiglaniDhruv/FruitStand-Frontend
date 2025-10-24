@@ -23,6 +23,20 @@ export class ApiError extends Error {
   }
 }
 
+import api from '../api/apiclient';
+
+export async function fetchVendors() {
+  try {
+    const response = await api.get('/api/vendors');
+    return response.data;
+  } catch (err: any) {
+    // Handle error globally
+    console.error('API Error:', err.message);
+    throw err;
+  }
+}
+
+
 export class NetworkError extends ApiError {
   constructor(message: string = 'Network error occurred', originalError?: Error) {
     super(message, 0, 'NETWORK_ERROR', originalError);
