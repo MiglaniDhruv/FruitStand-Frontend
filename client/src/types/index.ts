@@ -1,4 +1,4 @@
-import type { TenantSettings } from "../shared/schema.js";
+import type { TenantSettings } from "../../shared/schema.js";
 
 // Re-export TenantSettings from shared schema to centralize type definitions
 export type { TenantSettings };
@@ -23,6 +23,17 @@ export interface TenantContext {
   };
   tenant: TenantInfo;
 }
+import axios from 'axios';
+
+// Reads the backend URL from env variable
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true, // needed if your backend uses cookies
+});
+
+export default api;
 
 export interface TenantSessionContext {
   user: {
@@ -37,7 +48,7 @@ export interface TenantSessionContext {
 }
 
 // Re-export dashboard types from shared schema to keep server and client types in sync
-export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '../shared/schema.js';
+export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '../../shared/schema.js';
 
 // Re-export report types from shared schema to keep server and client types in sync
 export type { 
@@ -48,7 +59,7 @@ export type {
   ExpensesSummaryData, 
   VendorsListData, 
   RetailersListData 
-} from '../shared/schema.js';
+} from '../../shared/schema.js';
 
 export interface CreateInvoiceItem {
   commodityId: string;
