@@ -23,7 +23,7 @@ export class ApiError extends Error {
   }
 }
 
-import api from '../api/apiclient';
+import api from '../../src/api/apiclient';
 
 export async function fetchVendors() {
   try {
