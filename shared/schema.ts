@@ -1482,3 +1482,33 @@ export const reportDateRangeSchema = z.object({
 }).refine(({fromDate, toDate}) => !fromDate || !toDate || new Date(fromDate) <= new Date(toDate), {
   message: 'fromDate must be before or equal to toDate'
 });
+
+
+// Export everything as default for compatibility with tsx
+export default {
+  // Tables
+  users, tenants, vendors, items, bankAccounts, purchaseInvoices, invoiceItems, 
+  payments, stock, stockMovements, cashbook, bankbook, retailers, salesInvoices,
+  salesInvoiceItems, salesPayments, crateTransactions, expenseCategories, expenses,
+  whatsappMessages, whatsappCreditTransactions, invoiceShareLinks,
+  
+  // Constants
+  CRATE_TRANSACTION_TYPES, INVOICE_STATUS,
+  
+  // Schemas
+  insertUserSchema, insertTenantSchema, insertVendorSchema, insertItemSchema,
+  insertBankAccountSchema, updateBankAccountSchema, insertBankDepositSchema,
+  insertBankWithdrawalSchema, insertPurchaseInvoiceSchema, insertInvoiceItemSchema,
+  insertPaymentSchema, insertStockSchema, insertStockMovementSchema, insertRetailerSchema,
+  insertSalesInvoiceSchema, insertSalesInvoiceItemSchema, insertSalesPaymentSchema,
+  insertVendorPaymentSchema, insertRetailerPaymentSchema, insertCrateTransactionSchema,
+  insertExpenseCategorySchema, insertExpenseSchema, insertWhatsAppMessageSchema,
+  insertWhatsAppCreditTransactionSchema, insertInvoiceShareLinkSchema,
+  loginSchema, refreshTokenSchema, phoneNumberSchema, indianTenDigitPhone,
+  tenantSettingsSchema, reportDateRangeSchema,
+  
+  // Types (interfaces need to be re-exported differently)
+  PaginationOptions: {} as any,
+  PaginatedResult: {} as any,
+  // Add other interface types here
+};

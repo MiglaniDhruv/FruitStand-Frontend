@@ -1,7 +1,7 @@
-import { TenantSettings } from "@shared/schema";
+import type { TenantSettings } from "../../shared/schema.js";
 
 // Re-export TenantSettings from shared schema to centralize type definitions
-export { TenantSettings };
+export type { TenantSettings };
 
 export interface TenantInfo {
   id: string;
@@ -37,7 +37,7 @@ export interface TenantSessionContext {
 }
 
 // Re-export dashboard types from shared schema to keep server and client types in sync
-export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '@shared/schema';
+export type { DashboardKPIs, RecentPurchase, RecentSale, FavouriteRetailer, FavouriteVendor } from '../../shared/schema.js';
 
 // Re-export report types from shared schema to keep server and client types in sync
 export type { 
@@ -48,7 +48,7 @@ export type {
   ExpensesSummaryData, 
   VendorsListData, 
   RetailersListData 
-} from '@shared/schema';
+} from '../../shared/schema.js';
 
 export interface CreateInvoiceItem {
   commodityId: string;
