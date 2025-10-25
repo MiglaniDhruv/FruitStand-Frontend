@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://localhost:5000", // backend
+        target: "http://31.97.63.245:8080/", // VPS backend
         changeOrigin: true,
         secure: false,
       },
