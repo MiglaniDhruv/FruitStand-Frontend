@@ -45,7 +45,7 @@
 
 **Test Case**: Create item with missing required fields
 ```bash
-curl -X POST http://localhost:5000/api/items \
+curl -X POST http://localhost:8000/api/items \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": ""}'
@@ -80,7 +80,7 @@ curl -X POST http://localhost:5000/api/items \
 
 **Test Case**: Access protected route without token
 ```bash
-curl -X GET http://localhost:5000/api/items
+curl -X GET http://localhost:8000/api/items
 ```
 
 **Expected Response**:
@@ -103,7 +103,7 @@ curl -X GET http://localhost:5000/api/items
 
 **Test Case**: Access with invalid/expired token
 ```bash
-curl -X GET http://localhost:5000/api/items \
+curl -X GET http://localhost:8000/api/items \
   -H "Authorization: Bearer invalid_token"
 ```
 
@@ -129,7 +129,7 @@ curl -X GET http://localhost:5000/api/items \
 
 **Test Case**: Access resource without sufficient permissions
 ```bash
-curl -X DELETE http://localhost:5000/api/vendors/<id> \
+curl -X DELETE http://localhost:8000/api/vendors/<id> \
   -H "Authorization: Bearer <accountant_token>"
 ```
 
@@ -155,7 +155,7 @@ curl -X DELETE http://localhost:5000/api/vendors/<id> \
 
 **Test Case**: Get non-existent resource
 ```bash
-curl -X GET http://localhost:5000/api/vendors/00000000-0000-0000-0000-000000000000 \
+curl -X GET http://localhost:8000/api/vendors/00000000-0000-0000-0000-000000000000 \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -179,7 +179,7 @@ curl -X GET http://localhost:5000/api/vendors/00000000-0000-0000-0000-0000000000
 
 **Test Case**: Access non-existent API route
 ```bash
-curl -X GET http://localhost:5000/api/nonexistent
+curl -X GET http://localhost:8000/api/nonexistent
 ```
 
 **Expected Response**:
@@ -203,7 +203,7 @@ curl -X GET http://localhost:5000/api/nonexistent
 
 **Test Case**: Create duplicate resource (e.g., vendor with existing email)
 ```bash
-curl -X POST http://localhost:5000/api/vendors \
+curl -X POST http://localhost:8000/api/vendors \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Test", "email": "existing@example.com"}'
@@ -229,7 +229,7 @@ curl -X POST http://localhost:5000/api/vendors \
 
 **Test Case**: Delete item with existing stock
 ```bash
-curl -X DELETE http://localhost:5000/api/items/<id_with_stock> \
+curl -X DELETE http://localhost:8000/api/items/<id_with_stock> \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -420,7 +420,7 @@ kill -TERM <pid>
 
 **Simulation**: Send request with sensitive data
 ```bash
-curl -X POST http://localhost:5000/api/auth/login \
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "test", "password": "secret123"}'
 ```
@@ -436,7 +436,7 @@ curl -X POST http://localhost:5000/api/auth/login \
 
 **Simulation**: Make any API request
 ```bash
-curl -X GET http://localhost:5000/api/items \
+curl -X GET http://localhost:8000/api/items \
   -H "Authorization: Bearer <token>" \
   -v
 ```
@@ -449,7 +449,7 @@ curl -X GET http://localhost:5000/api/items \
 
 **Simulation**: Send custom request ID
 ```bash
-curl -X GET http://localhost:5000/api/items \
+curl -X GET http://localhost:8000/api/items \
   -H "Authorization: Bearer <token>" \
   -H "X-Request-ID: custom-id-123" \
   -v
@@ -465,7 +465,7 @@ curl -X GET http://localhost:5000/api/items \
 
 **Simulation**: Send malicious input
 ```bash
-curl -X POST http://localhost:5000/api/vendors \
+curl -X POST http://localhost:8000/api/vendors \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "<script>alert('xss')</script>"}'
@@ -480,7 +480,7 @@ curl -X POST http://localhost:5000/api/vendors \
 
 **Simulation**: Send SQL injection attempt
 ```bash
-curl -X GET "http://localhost:5000/api/items?search='; DROP TABLE items; --" \
+curl -X GET "http://localhost:8000/api/items?search='; DROP TABLE items; --" \
   -H "Authorization: Bearer <token>"
 ```
 

@@ -24,9 +24,9 @@ const {
   bankbook
 } = schema;
 
-import permissions from '../shared/permissions.js';
+import Permissions from '../shared/permissions';
 
-const { ROLE_PERMISSIONS } = permissions;
+const { ROLE_PERMISSIONS } = Permissions;
 import { ensureTenantInsert, withTenant } from './src/utils/tenant-scope';
 import { LedgerModel } from './src/modules/ledgers/model';
 import bcrypt from 'bcrypt';
@@ -922,7 +922,7 @@ async function seedTenantData() {
     console.log('   • Pune Fresh Produce (pune-fresh) - Growing business');
     console.log('   • Nashik Organic Hub (nashik-organic) - New business');
     console.log('\n🔑 All users have password: password123');
-    console.log('\n🌐 Access via: http://localhost:5000/{tenant-slug}');
+    console.log('\n🌐 Access via: http://localhost:8000/{tenant-slug}');
     
   } catch (error) {
     console.error('❌ Error seeding tenant data:', error);
