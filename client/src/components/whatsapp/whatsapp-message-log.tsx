@@ -10,7 +10,7 @@ import { MessageSquare, CheckCircle, XCircle, Clock, Search, Filter } from "luci
 import { format } from "date-fns";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { buildPaginationParams } from "@/lib/pagination";
-import { PaginationOptions, PaginatedResult } from "@shared/schema";
+import { PaginationOptions, PaginatedResult } from "../../../shared/schema";
 import { DataTable } from "@/components/ui/data-table";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@/lib/permissions";

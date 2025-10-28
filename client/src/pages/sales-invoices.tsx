@@ -9,7 +9,7 @@ import {
   type PaginationOptions,
   type PaginatedResult,
   type SalesInvoiceWithDetails,
-} from "@shared/schema";
+} from "../../../shared/schema";
 import { buildPaginationParams } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";

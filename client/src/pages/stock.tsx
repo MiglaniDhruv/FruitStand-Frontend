@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
-import { PaginationOptions, PaginatedResult, StockWithItem, ItemWithVendor } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, StockWithItem, ItemWithVendor } from "../../../shared/schema";
 import {
   Dialog,
   DialogContent,

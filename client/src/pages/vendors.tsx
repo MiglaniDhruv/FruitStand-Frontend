@@ -22,7 +22,7 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
-import { PaginationOptions, PaginatedResult, Vendor } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, Vendor } from "../../../shared/schema";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOptimisticMutation, optimisticUpdate } from "@/hooks/use-optimistic-mutation";

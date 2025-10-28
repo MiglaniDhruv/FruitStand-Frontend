@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertCircle, Building2, Download } from "lucide-react";
 import { publicApiRequest } from "@/lib/auth";
 import InvoiceDetailsView from "@/components/invoice/invoice-details-view";
-import { type PublicInvoiceData } from "@shared/schema";
+import { type PublicInvoiceData } from "../../../shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SharedInvoicePage() {

@@ -1,8 +1,9 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
-export default {
+const config: Config = {
   darkMode: ["class"],
-  // 👇 FIX: Update content paths so Tailwind scans the right files
   content: [
     "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
@@ -101,5 +102,7 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
-} satisfies Config;
+  plugins: [tailwindcssAnimate, typography],
+};
+
+export default config;

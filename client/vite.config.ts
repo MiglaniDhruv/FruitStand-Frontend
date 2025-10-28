@@ -13,7 +13,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:8000", // backend
+        target: "https://mandify-backend-production-5c4a.up.railway.app", // backend
         changeOrigin: true,
         secure: false,
       },

@@ -28,7 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
-import type { BankAccountSummary, VendorSummary, RetailerSummary } from "@shared/schema";
+import type { BankAccountSummary, VendorSummary, RetailerSummary } from "../../../shared/schema";
 import { 
   Download, 
   Book, 
@@ -53,7 +53,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PermissionGuard } from "@/components/ui/permission-guard";
-import { PERMISSIONS } from "@shared/permissions";
+import { PERMISSIONS } from "../../shared/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Ledgers() {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type PaginationOptions, type PaginatedResult, type CrateTransactionWithParty } from "@shared/schema";
+import { type PaginationOptions, type PaginatedResult, type CrateTransactionWithParty } from "../../../shared/schema";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";

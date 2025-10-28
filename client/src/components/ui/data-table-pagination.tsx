@@ -12,7 +12,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import { PaginationMetadata } from "@shared/schema";
+import { PaginationMetadata } from "../../../shared/schema";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface DataTablePaginationProps {

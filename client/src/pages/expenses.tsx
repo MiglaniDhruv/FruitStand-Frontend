@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOptimisticMutation, optimisticDelete, optimisticCreate } from "@/hooks/use-optimistic-mutation";
 import AppLayout from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "@shared/schema";
+import { type PaginationOptions, type PaginatedResult, type ExpenseWithCategory } from "../../../shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";

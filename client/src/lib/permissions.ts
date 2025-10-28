@@ -1,5 +1,5 @@
 import { authService } from "./auth";
-import { PERMISSIONS, ROLE_PERMISSIONS } from "@shared/permissions";
+import { PERMISSIONS, ROLE_PERMISSIONS } from "../../shared/permissions";
 
 // Re-export for compatibility
 export { PERMISSIONS, ROLE_PERMISSIONS };

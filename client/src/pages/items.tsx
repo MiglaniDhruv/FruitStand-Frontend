@@ -17,7 +17,7 @@ import { Search, Plus, Edit, Package } from "lucide-react";
 import ItemForm from "@/components/forms/item-form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { PaginationOptions, PaginatedResult, ItemWithVendor } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, ItemWithVendor } from "../../../shared/schema";
 import { logEventHandlerError, logMutationError } from "@/lib/error-logger";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/skeleton-loaders";
 import { Skeleton } from "@/components/ui/skeleton";

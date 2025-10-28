@@ -29,7 +29,7 @@ import { useTenant } from "@/hooks/use-tenant";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { InvoiceWithItems } from "@shared/schema";
+import { InvoiceWithItems } from "../../../shared/schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const invoiceItemSchema = z.object({

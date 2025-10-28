@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { PaginationOptions, PaginatedResult, InvoiceWithItems } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, InvoiceWithItems } from "../../../shared/schema";
 import { DataTable } from "@/components/ui/data-table";
 import {
   Select,

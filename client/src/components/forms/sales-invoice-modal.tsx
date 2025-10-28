@@ -35,7 +35,7 @@ import { logFormError, logCalculationError } from "@/lib/error-logger";
 import { buildPaginationParams } from "@/lib/pagination";
 import { Plus, Minus, Package } from "lucide-react";
 import { format } from "date-fns";
-import { PaginatedResult } from "@shared/schema";
+import { PaginatedResult } from "../../../shared/schema";
 
 // Define Zod schemas
 const salesInvoiceSchema = z.object({

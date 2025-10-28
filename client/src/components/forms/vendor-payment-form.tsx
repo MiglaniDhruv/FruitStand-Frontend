@@ -53,7 +53,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Alert as AlertComponent, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
-import { InsertVendorPayment, VendorPaymentDistributionResult, PurchaseInvoice } from "@shared/schema";
+import { InsertVendorPayment, VendorPaymentDistributionResult, PurchaseInvoice } from "../../../shared/schema";
 
 const vendorPaymentFormSchema = z.object({
   amount: z.string().min(1, "Amount is required").refine((val) => parseFloat(val) > 0, "Amount must be greater than 0"),

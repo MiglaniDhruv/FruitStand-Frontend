@@ -34,7 +34,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { authenticatedApiRequest } from '@/lib/auth';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { BankAccount, TenantSettings } from '@shared/schema';
+import { BankAccount, TenantSettings } from '../../../shared/schema';
 
 type ManualBankTransactionFormData = {
   transactionType: 'deposit' | 'withdrawal';

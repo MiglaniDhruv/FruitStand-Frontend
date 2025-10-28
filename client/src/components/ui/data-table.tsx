@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, LucideIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { PaginationMetadata } from "@shared/schema";
+import { PaginationMetadata } from "../../../shared/schema";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useIsMobile } from "@/hooks/use-mobile";

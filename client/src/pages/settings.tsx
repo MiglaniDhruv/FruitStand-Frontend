@@ -20,7 +20,7 @@ import { authenticatedApiRequest } from "@/lib/auth";
 import { logApiError, logEventHandlerError } from "@/lib/error-logger";
 import { PermissionGuard } from "@/components/ui/permission-guard";
 import { PERMISSIONS } from "@/lib/permissions";
-import { TenantSettings } from "@shared/schema";
+import { TenantSettings } from "../../../shared/schema";
 import { 
   Settings, 
   Building2, 

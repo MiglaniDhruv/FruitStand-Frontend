@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
-import { BankAccount } from "@shared/schema";
+import { BankAccount } from "../../../shared/schema";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/error-boundary";

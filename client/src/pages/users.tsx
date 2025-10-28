@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { authenticatedApiRequest } from "@/lib/auth";
 import { PERMISSIONS, ROLE_PERMISSIONS, permissionService } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/ui/permission-guard";
-import { PaginationOptions, PaginatedResult, User } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, User } from "../../../shared/schema";
 
 const userSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),

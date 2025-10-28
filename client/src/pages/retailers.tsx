@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { Separator } from "@/components/ui/separator";
-import { PaginationOptions, PaginatedResult, Retailer } from "@shared/schema";
+import { PaginationOptions, PaginatedResult, Retailer } from "../../../shared/schema";
 import { buildPaginationParams } from "@/lib/pagination";
 import {
   Dialog,
